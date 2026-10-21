@@ -1,0 +1,8 @@
+build/
+build-*/
+cmake-build-*/
+.vscode/
+.idea/
+compile_commands.json
+*.pcm
+*.o

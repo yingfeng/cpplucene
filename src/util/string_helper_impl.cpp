@@ -1,0 +1,259 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+module clucene:string_helper.impl;
+
+import :string_helper;
+import :bit_util;
+import :core_helper;
+
+import :types;
+import :debug;
+import std;
+
+namespace clucene {
+
+namespace {
+
+int32_t compute_good_fast_hash_seed() {
+    // rlucene reads the `tests.seed` system property and falls back to the
+    // current wall clock (milliseconds).
+    if (const char *prop = std::getenv("tests.seed"); prop != nullptr && *prop != '\0') {
+        int32_t hash = 0;
+        for (const char *p = prop; *p != '\0'; ++p) {
+            hash = static_cast<int32_t>(static_cast<uint32_t>(hash) * 31u + static_cast<uint8_t>(*p));
+        }
+        return hash;
+    }
+    const auto now = std::chrono::system_clock::now().time_since_epoch();
+    return static_cast<int32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(now).count());
+}
+
+/// Debug rendering of a byte range: `[61 62 63]`, matching rlucene's `Display`.
+std::string hex_view(std::span<const uint8_t> bytes) {
+    std::string result;
+    result.reserve(bytes.size() * 3 + 2);
+    result.push_back('[');
+    for (size_t i = 0; i < bytes.size(); ++i) {
+        if (i > 0) {
+            result.push_back(' ');
+        }
+        static constexpr char kHex[] = "0123456789abcdef";
+        result.push_back(kHex[bytes[i] >> 4]);
+        result.push_back(kHex[bytes[i] & 0x0f]);
+    }
+    result.push_back(']');
+    return result;
+}
+
+/// A 128-bit counter rendered big-endian, seeded once per process.
+struct IdState {
+    uint64_t high;
+    uint64_t low;
+};
+
+IdState make_initial_id_state() {
+    uint64_t x0 = 0;
+    uint64_t x1 = 0;
+    if (const char *prop = std::getenv("tests.seed"); prop != nullptr && *prop != '\0') {
+        std::string_view text(prop);
+        const std::string_view tail = text.size() > 8 ? text.substr(text.size() - 8) : text;
+        uint64_t seed = 0;
+        auto [ptr, ec] = std::from_chars(tail.data(), tail.data() + tail.size(), seed, 16);
+        seed = (ec == std::errc()) ? seed : 0;
+        x0 = seed;
+        x1 = seed;
+    } else {
+        std::random_device device;
+        std::mt19937_64 rng((static_cast<uint64_t>(device()) << 32) ^ device());
+        x0 = rng();
+        x1 = rng();
+    }
+    // scatter_id_seed: xorshift-based mixing, 10 rounds.
+    for (int i = 0; i < 10; ++i) {
+        uint64_t s1 = x0;
+        const uint64_t s0 = x1;
+        x0 = s0;
+        s1 ^= s1 << 23;
+        x1 = s1 ^ s0 ^ (s1 >> 17) ^ (s0 >> 26);
+    }
+    return IdState{x0, x1};
+}
+
+IdState &next_id_state() {
+    static IdState state = make_initial_id_state();
+    return state;
+}
+
+std::mutex next_id_mutex;
+
+} // namespace
+
+int32_t StringHelper::good_fast_hash_seed() noexcept {
+    static const int32_t seed = compute_good_fast_hash_seed();
+    return seed;
+}
+
+Result<size_t> StringHelper::bytes_difference(std::span<const uint8_t> prior_term, std::span<const uint8_t> current_term) {
+    const int32_t mismatch = CoreHelper::mismatch_u8(prior_term, current_term);
+    if (mismatch < 0) {
+        return err(LuceneError::illegal_argument(std::format("terms out of order: priorTerm={}, currentTerm={}",
+                                                             hex_view(prior_term),
+                                                             hex_view(current_term))));
+    }
+    return static_cast<size_t>(mismatch);
+}
+
+Result<size_t> StringHelper::sort_key_length(std::span<const uint8_t> prior_term, std::span<const uint8_t> current_term) {
+    auto difference = bytes_difference(prior_term, current_term);
+    if (!difference) {
+        return std::unexpected(std::move(difference.error()));
+    }
+    return difference.value() + 1;
+}
+
+bool StringHelper::starts_with(std::span<const uint8_t> ref, std::span<const uint8_t> prefix) noexcept {
+    return starts_with(ref, 0, ref.size(), prefix, 0, prefix.size());
+}
+
+bool StringHelper::starts_with(std::span<const uint8_t> ref,
+                               size_t ref_offset,
+                               size_t ref_length,
+                               std::span<const uint8_t> prefix,
+                               size_t prefix_offset,
+                               size_t prefix_length) noexcept {
+    // Not long enough to start with the prefix.
+    if (ref_length < prefix_length) {
+        return false;
+    }
+    debug_check(ref_offset + prefix_length <= ref.size());
+    debug_check(prefix_offset + prefix_length <= prefix.size());
+    return std::memcmp(ref.data() + ref_offset, prefix.data() + prefix_offset, prefix_length) == 0;
+}
+
+bool StringHelper::ends_with(std::span<const uint8_t> ref, std::span<const uint8_t> suffix) noexcept {
+    if (ref.size() < suffix.size()) {
+        return false;
+    }
+    const size_t start_at = ref.size() - suffix.size();
+    return std::memcmp(ref.data() + start_at, suffix.data(), suffix.size()) == 0;
+}
+
+int32_t StringHelper::murmurhash3_x86_32(std::span<const uint8_t> data, size_t offset, size_t len, int32_t seed) {
+    constexpr uint32_t c1 = 0xcc9e2d51u;
+    constexpr uint32_t c2 = 0x1b873593u;
+
+    debug_check(offset + len <= data.size());
+
+    uint32_t h1 = static_cast<uint32_t>(seed);
+    const size_t rounded_end = offset + (len & 0xfffffffcull);
+
+    size_t i = offset;
+    while (i < rounded_end) {
+        uint32_t k1 = static_cast<uint32_t>(BitUtil::get_i32_le(data, i));
+        k1 *= c1;
+        k1 = std::rotl(k1, 15);
+        k1 *= c2;
+
+        h1 ^= k1;
+        h1 = std::rotl(h1, 13);
+        h1 = h1 * 5u + 0xe6546b64u;
+
+        i += 4;
+    }
+
+    // Tail.
+    uint32_t k1 = 0;
+    switch (len & 0x03ull) {
+        case 3:
+            k1 ^= static_cast<uint32_t>(data[rounded_end + 2]) << 16;
+            [[fallthrough]];
+        case 2:
+            k1 ^= static_cast<uint32_t>(data[rounded_end + 1]) << 8;
+            [[fallthrough]];
+        case 1:
+            k1 ^= static_cast<uint32_t>(data[rounded_end]);
+            k1 *= c1;
+            k1 = std::rotl(k1, 15);
+            k1 *= c2;
+            h1 ^= k1;
+            break;
+        default:
+            break;
+    }
+
+    // Finalization.
+    debug_check(len <= static_cast<size_t>(std::numeric_limits<int32_t>::max()));
+    h1 ^= static_cast<uint32_t>(len);
+    h1 ^= h1 >> 16;
+    h1 *= 0x85ebca6bu;
+    h1 ^= h1 >> 13;
+    h1 *= 0xc2b2ae35u;
+    h1 ^= h1 >> 16;
+
+    return static_cast<int32_t>(h1);
+}
+
+std::array<uint8_t, StringHelper::ID_LENGTH> StringHelper::random_id() {
+    std::array<uint8_t, ID_LENGTH> result{};
+    {
+        std::lock_guard<std::mutex> guard(next_id_mutex);
+        IdState &state = next_id_state();
+        // Big-endian rendering of the 128-bit counter.
+        for (size_t i = 0; i < 8; ++i) {
+            result[i] = static_cast<uint8_t>(state.high >> (56 - 8 * i));
+            result[8 + i] = static_cast<uint8_t>(state.low >> (56 - 8 * i));
+        }
+        // Wrapping increment, low word first.
+        if (++state.low == 0) {
+            ++state.high;
+        }
+    }
+    return result;
+}
+
+std::string StringHelper::id_to_string(std::span<const uint8_t> id) {
+    if (id.empty()) {
+        return "(null)";
+    }
+    // Base-36 rendering of a big-endian unsigned integer, done with repeated
+    // division on a scratch copy.
+    std::vector<uint8_t> scratch(id.begin(), id.end());
+    std::string digits;
+    bool nonzero = std::any_of(scratch.begin(), scratch.end(), [](uint8_t b) { return b != 0; });
+    while (nonzero) {
+        uint32_t remainder = 0;
+        nonzero = false;
+        for (auto &byte : scratch) {
+            const uint32_t current = (remainder << 8) | byte;
+            byte = static_cast<uint8_t>(current / 36u);
+            remainder = current % 36u;
+            if (byte != 0) {
+                nonzero = true;
+            }
+        }
+        static constexpr char kDigits[] = "0123456789abcdefghijklmnopqrstuvwxyz";
+        digits.push_back(kDigits[remainder]);
+    }
+    if (digits.empty()) {
+        digits.push_back('0');
+    }
+    std::ranges::reverse(digits);
+    return digits;
+}
+
+} // namespace clucene
