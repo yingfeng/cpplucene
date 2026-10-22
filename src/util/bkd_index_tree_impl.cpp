@@ -59,11 +59,13 @@ namespace {
 /// from the ancestors.
 ///
 /// `is_left` says whether this subtree is its parent's left child, which decides
-/// whether a leaf block pointer delta is stored.
+/// whether a leaf block pointer delta is stored.  `parent_index` is recorded on
+/// the node so a [`PointTree`] cursor can walk back up.
 [[nodiscard]] Result<size_t> parse_node(IndexInput &in, const BkdMeta &meta, BkdIndexTree &tree, bool is_left,
-                                        size_t num_leaves, size_t min_block_fp, const std::vector<uint8_t> &split_values,
-                                        std::vector<uint8_t> min_value, std::vector<uint8_t> max_value,
-                                        std::vector<uint8_t> negative_deltas, std::optional<size_t> parent_dim) {
+                                        size_t parent_index, size_t num_leaves, size_t min_block_fp,
+                                        const std::vector<uint8_t> &split_values, std::vector<uint8_t> min_value,
+                                        std::vector<uint8_t> max_value, std::vector<uint8_t> negative_deltas,
+                                        std::optional<size_t> parent_dim) {
     const BKDConfig &config = meta.config;
     const size_t bytes_per_dim = config.bytes_per_dim;
 
@@ -84,6 +86,8 @@ namespace {
     node.leaf_block_fp = block_fp;
     node.min_value = std::move(min_value);
     node.max_value = std::move(max_value);
+    node.parent = parent_index;
+    node.is_left = parent_index == kNoBkdParent ? false : is_left;
 
     const size_t node_index = tree.nodes.size();
     tree.nodes.push_back(std::move(node));
@@ -161,7 +165,7 @@ namespace {
         return err(left_start.error());
     }
 
-    auto left = parse_node(in, meta, tree, /*is_left=*/true, num_left, block_fp, current,
+    auto left = parse_node(in, meta, tree, /*is_left=*/true, node_index, num_left, block_fp, current,
                            tree.nodes[node_index].min_value, std::move(left_max), negative_deltas, split_dim);
     if (!left.has_value()) {
         return err(left.error());
@@ -177,7 +181,7 @@ namespace {
         }
     }
 
-    auto right = parse_node(in, meta, tree, /*is_left=*/false, num_leaves - num_left, block_fp, current,
+    auto right = parse_node(in, meta, tree, /*is_left=*/false, node_index, num_leaves - num_left, block_fp, current,
                             std::move(right_min), tree.nodes[node_index].max_value, negative_deltas, split_dim);
     if (!right.has_value()) {
         return err(right.error());
@@ -318,7 +322,7 @@ Result<BkdIndexTree> BkdIndexTree::read(IndexInput &index_in, const BkdMeta &met
     std::vector<uint8_t> split_values(meta.config.packed_index_bytes_length(), 0);
     std::vector<uint8_t> negative_deltas(meta.config.num_index_dims, 0);
 
-    auto root = parse_node(index_in, meta, tree, /*is_left=*/false, meta.num_leaves, /*min_block_fp=*/0,
+    auto root = parse_node(index_in, meta, tree, /*is_left=*/false, kNoBkdParent, meta.num_leaves, /*min_block_fp=*/0,
                            split_values, meta.min_value, meta.max_value, negative_deltas, std::nullopt);
     if (!root.has_value()) {
         return err(root.error());

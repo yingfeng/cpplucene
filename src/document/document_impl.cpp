@@ -85,10 +85,13 @@ std::vector<const IndexableField *> Document::get_fields_with_name(std::string_v
     for (auto it = range.first; it != range.second; ++it) {
         result.push_back(fields_[it->second].get());
     }
-    // `multimap` keeps equivalent keys in insertion order, which already yields
-    // ascending positions; sorting makes the contract explicit.
-    std::ranges::sort(result,
-                      [](const IndexableField *lhs, const IndexableField *rhs) { return lhs < rhs; });
+    // `multimap` keeps equivalent keys in insertion order, which is the order the
+    // contract asks for, and the positions it holds are ascending.
+    //
+    // This used to sort the result by pointer value, which was both needlessly
+    // expensive and wrong: comparing two unrelated pointers is unspecified, so two
+    // fields with the same name came back in whatever order the allocator happened
+    // to produce.
     return result;
 }
 

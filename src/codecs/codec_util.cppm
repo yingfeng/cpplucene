@@ -55,6 +55,33 @@ export struct CodecUtil {
     /// characters, so the name length is a single-byte vint).
     [[nodiscard]] static size_t header_length(std::string_view codec);
 
+    /// Length of a segment id embedded in an index header.
+    static constexpr size_t ID_LENGTH = 16;
+
+    /// Writes `magic, codec, version, id, suffix`.
+    ///
+    /// Port of `CodecUtil::writeIndexHeader`.  Segment-level files carry the
+    /// segment id and a per-file suffix so a reader can tell which segment (and
+    /// which generation of a file) it opened.
+    [[nodiscard]] static VoidResult write_index_header(DataOutput &out, std::string_view codec, int32_t version,
+                                                      std::span<const uint8_t> id, std::string_view suffix);
+
+    /// Reads and validates an index header, including the `id` and `suffix`.
+    [[nodiscard]] static Result<int32_t> check_index_header(DataInput &input, std::string_view codec,
+                                                           int32_t min_version, int32_t max_version,
+                                                           std::span<const uint8_t> id, std::string_view suffix);
+
+    /// Copies the index header of `input` to `output`, validating that the
+    /// segment id is `expected_id`.
+    ///
+    /// Used when packing files into a compound file: the sub-file keeps its own
+    /// header (and therefore its own id), so the reader can still tell which
+    /// segment it came from.
+    ///
+    /// Port of `CodecUtil::verifyAndCopyIndexHeader`.
+    [[nodiscard]] static VoidResult verify_and_copy_index_header(IndexInput &input, DataOutput &output,
+                                                                 std::span<const uint8_t> expected_id);
+
     /// Writes `magic, algorithmId, crc32` where the CRC covers everything
     /// written so far.
     [[nodiscard]] static VoidResult write_footer(IndexOutput &out);
@@ -77,6 +104,17 @@ export struct CodecUtil {
     /// Seeks to `length - footer_length()` and returns the stored CRC without
     /// comparing it.
     [[nodiscard]] static Result<int64_t> retrieve_checksum(IndexInput &input);
+
+    /// Same as [`retrieve_checksum`], but first verifies that the file length is
+    /// exactly `expected_length` (rlucene's `retrieve_checksum_with_expected`).
+    [[nodiscard]] static Result<int64_t> retrieve_checksum_with_expected(IndexInput &input,
+                                                                        size_t expected_length);
+
+    /// Reads the whole file and verifies that its CRC32 matches the footer.
+    ///
+    /// The input is left untouched (a clone is checksummed), which is what
+    /// `check_integrity` implementations need.
+    [[nodiscard]] static Result<int64_t> checksum_entire_file(IndexInput &input);
 
     /// Reads a big-endian `int32_t`.
     [[nodiscard]] static Result<int32_t> read_be_int(DataInput &input);

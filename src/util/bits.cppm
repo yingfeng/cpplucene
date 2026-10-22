@@ -27,15 +27,15 @@ namespace lucene {
 /// Random access to a fixed-length bit set.  Port of the `Bits` trait
 /// (`util/bits.rs`).
 ///
-/// **Deviation:** rlucene's `copy_of()` returns a `FixedBitSet`; that type is
-/// not ported yet, so materializing a `Bits` into a mutable set is left to the
-/// caller (and will be added together with `FixedBitSet`).
+/// **Deviation:** rlucene's `copy_of()` returns a `FixedBitSet`; here the
+/// materialising type lives in `:fixed_bit_set` and implements `Bits`, so a
+/// `copy_of()` helper would only add a dependency cycle.
 export class Bits {
 public:
     virtual ~Bits() = default;
 
     /// Value of the bit at `index`, which must be below [`length`].
-    [[nodiscard]] virtual Result<bool> get(size_t index) = 0;
+    [[nodiscard]] virtual Result<bool> get(size_t index) const = 0;
 
     /// Number of bits in this set.
     [[nodiscard]] virtual size_t length() const = 0;
@@ -48,7 +48,7 @@ export class MatchAllBits final : public Bits {
 public:
     explicit MatchAllBits(size_t len) : len_(len) {}
 
-    [[nodiscard]] Result<bool> get(size_t index) override {
+    [[nodiscard]] Result<bool> get(size_t index) const override {
         if (index >= len_) {
             return err(LuceneError::array_index_out_of_bounds("index " + std::to_string(index) + " >= " +
                                                              std::to_string(len_)));
@@ -68,7 +68,7 @@ export class MatchNoBits final : public Bits {
 public:
     explicit MatchNoBits(size_t len) : len_(len) {}
 
-    [[nodiscard]] Result<bool> get(size_t index) override {
+    [[nodiscard]] Result<bool> get(size_t index) const override {
         if (index >= len_) {
             return err(LuceneError::array_index_out_of_bounds("index " + std::to_string(index) + " >= " +
                                                              std::to_string(len_)));

@@ -22,6 +22,7 @@ import :error;
 
 import std;
 
+import :check_sum_index_input;
 import :index_input;
 import :index_output;
 import :io_context;
@@ -99,6 +100,13 @@ public:
     [[nodiscard]] Result<std::unique_ptr<IndexInput>> open_input(std::string_view name) const {
         return open_input(name, io_context_default());
     }
+
+    /// Opens `name` for sequential reading while computing a CRC32 checksum.
+    ///
+    /// The provided method of rlucene's `Directory` trait: it opens the file
+    /// with the read-once IO context and wraps it in a
+    /// `BufferedChecksumIndexInput`.
+    [[nodiscard]] virtual Result<std::unique_ptr<CheckSumIndexInput>> open_checksum_input(std::string_view name);
 };
 
 } // namespace lucene

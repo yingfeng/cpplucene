@@ -53,6 +53,9 @@ export struct BkdMeta {
     [[nodiscard]] static Result<BkdMeta> read(DataInput &meta_in);
 };
 
+/// Marker for "this node has no parent" (the root of a [`BkdIndexTree`]).
+export inline constexpr size_t kNoBkdParent = std::numeric_limits<size_t>::max();
+
 /// One node of the parsed index.
 export struct BkdIndexNode {
     /// Whether the node points at a leaf block instead of two children.
@@ -75,6 +78,15 @@ export struct BkdIndexNode {
     /// Children node indices (inner nodes only).
     size_t left{0};
     size_t right{0};
+    /// Index of the parent node in `BkdIndexTree::nodes`, or [`kNoBkdParent`]
+    /// for the root.
+    ///
+    /// rlucene's `PointTree` keeps a cursor stack, so `move_to_parent` pops it;
+    /// with the tree expanded into a vector the cursor only needs this back
+    /// pointer.
+    size_t parent{kNoBkdParent};
+    /// Whether this node is its parent's left child (`false` for the root).
+    bool is_left{false};
 };
 
 /// A parsed BKD index: the tree in pre-order, with `nodes[0]` as the root.

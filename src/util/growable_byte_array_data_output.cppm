@@ -40,8 +40,19 @@ public:
     [[nodiscard]] VoidResult write_bytes(std::span<const uint8_t> b, size_t offset, size_t length) override;
 
     [[nodiscard]] size_t length() const noexcept { return bytes_.size(); }
+    /// rlucene's `ByteBuffersDataOutput::size`; same as [`length`].
+    [[nodiscard]] size_t size() const noexcept { return bytes_.size(); }
     [[nodiscard]] const std::vector<uint8_t> &bytes() const noexcept { return bytes_; }
     [[nodiscard]] std::vector<uint8_t> take_bytes() noexcept { return std::move(bytes_); }
+
+    /// Appends the buffered bytes to `out`.
+    ///
+    /// This is `ByteBuffersDataOutput::copy_to` of rlucene, which the Lucene101
+    /// postings writer uses to prepend length prefixes to an already encoded
+    /// block.
+    [[nodiscard]] VoidResult copy_to(DataOutput &out) const {
+        return out.write_bytes(bytes_, 0, bytes_.size());
+    }
 
     void reset() noexcept { bytes_.clear(); }
     [[nodiscard]] std::string to_string() const override { return "GrowableByteArrayDataOutput"; }

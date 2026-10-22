@@ -68,6 +68,22 @@ export struct StringHelper {
         return murmurhash3_x86_32(data, 0, data.size(), seed);
     }
 
+    // ---- UTF-8 ----
+
+    /// Decodes the code point starting at `pos` of `utf8`; `num_bytes` receives
+    /// how many bytes it occupies.  Mirrors `UnicodeUtil::code_point_at` of
+    /// rlucene and fails on malformed or truncated input.
+    [[nodiscard]] static Result<int32_t> utf8_code_point_at(std::span<const uint8_t> utf8, size_t pos, size_t &num_bytes);
+    /// [`utf8_code_point_at`] over UTF-8 text.
+    [[nodiscard]] static Result<int32_t> utf8_code_point_at(std::string_view text, size_t pos, size_t &num_bytes);
+
+    /// Appends `code_point` to `out`, encoded as UTF-8; fails when it is not a
+    /// Unicode scalar value.
+    [[nodiscard]] static VoidResult utf8_append(std::string &out, int32_t code_point);
+
+    /// Decodes all of `text` into code points; fails on malformed input.
+    [[nodiscard]] static Result<std::vector<int32_t>> utf8_to_code_points(std::string_view text);
+
     /// Length of a Lucene ID, in bytes.
     static constexpr size_t ID_LENGTH = 16;
 

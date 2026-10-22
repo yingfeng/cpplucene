@@ -41,7 +41,8 @@ Result<size_t> IndexOutput::align_file_pointer(size_t alignment_bytes) {
             return std::unexpected(std::move(r.error()));
         }
     }
-    return padding;
+    // Lucene's `alignFilePointer` returns the new position, not the padding.
+    return pos + padding;
 }
 
 } // namespace lucene

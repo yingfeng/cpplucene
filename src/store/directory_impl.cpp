@@ -17,7 +17,10 @@
 
 module lucene_core:directory.impl;
 
+import :buffered_checksum_index_input;
+import :check_sum_index_input;
 import :directory;
+import :io_context;
 import :types;
 import :error;
 
@@ -28,6 +31,15 @@ namespace lucene {
 namespace {
 constexpr size_t COPY_BUFFER_SIZE = 64 * 1024;
 } // namespace
+
+Result<std::unique_ptr<CheckSumIndexInput>> Directory::open_checksum_input(std::string_view name) {
+    auto input = open_input(name, io_context_read_once());
+    if (!input) {
+        return std::unexpected(std::move(input.error()));
+    }
+    return std::unique_ptr<CheckSumIndexInput>(
+            std::make_unique<BufferedChecksumIndexInput>(std::move(input.value())));
+}
 
 VoidResult Directory::copy_from(const Directory &from,
                                 std::string_view src,

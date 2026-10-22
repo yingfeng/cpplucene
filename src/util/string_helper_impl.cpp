@@ -23,11 +23,15 @@ import :core_helper;
 
 import :types;
 import :debug;
+import :error;
 import std;
 
 namespace lucene {
 
 namespace {
+
+/// `Character.MAX_CODE_POINT`.
+constexpr int32_t MAX_UNICODE_CODE_POINT = 0x10FFFF;
 
 int32_t compute_good_fast_hash_seed() {
     // rlucene reads the `tests.seed` system property and falls back to the
@@ -206,6 +210,99 @@ int32_t StringHelper::murmurhash3_x86_32(std::span<const uint8_t> data, size_t o
     h1 ^= h1 >> 16;
 
     return static_cast<int32_t>(h1);
+}
+
+Result<int32_t> StringHelper::utf8_code_point_at(std::span<const uint8_t> utf8, size_t pos, size_t &num_bytes) {
+    if (pos >= utf8.size()) {
+        return err(LuceneError::illegal_argument(
+                std::format("Position {} out of bounds for utf8 array of length {}", pos, utf8.size())));
+    }
+
+    const auto lead_byte = static_cast<uint32_t>(utf8[pos]);
+    size_t length = 0;
+    int32_t value = 0;
+    if (lead_byte < 0x80u) {
+        num_bytes = 1;
+        return static_cast<int32_t>(lead_byte);
+    }
+    if ((lead_byte & 0xE0u) == 0xC0u) {
+        length = 2;
+        value = static_cast<int32_t>(lead_byte & 0x1Fu);
+    } else if ((lead_byte & 0xF0u) == 0xE0u) {
+        length = 3;
+        value = static_cast<int32_t>(lead_byte & 0x0Fu);
+    } else if ((lead_byte & 0xF8u) == 0xF0u) {
+        length = 4;
+        value = static_cast<int32_t>(lead_byte & 0x07u);
+    } else {
+        return err(LuceneError::illegal_argument(std::format("Invalid UTF8 header byte: 0x{:X}", lead_byte)));
+    }
+
+    const size_t limit = pos + length;
+    for (size_t i = pos + 1; i < limit; ++i) {
+        if (i >= utf8.size()) {
+            return err(LuceneError::illegal_argument("UTF-8 sequence truncated"));
+        }
+        const auto byte = static_cast<uint32_t>(utf8[i]);
+        if ((byte & 0xC0u) != 0x80u) {
+            return err(LuceneError::illegal_argument(std::format("Invalid UTF-8 continuation byte: 0x{:X}", byte)));
+        }
+        value = (value << 6) | static_cast<int32_t>(byte & 0x3Fu);
+    }
+
+    const bool overlong = (length == 2 && value < 0x80) || (length == 3 && value < 0x800) ||
+                          (length == 4 && value < 0x10000);
+    if (overlong || value > MAX_UNICODE_CODE_POINT || (value >= 0xD800 && value <= 0xDFFF)) {
+        return err(LuceneError::illegal_argument("UTF-8 sequence is not a Unicode scalar value"));
+    }
+
+    num_bytes = length;
+    return value;
+}
+
+Result<int32_t> StringHelper::utf8_code_point_at(std::string_view text, size_t pos, size_t &num_bytes) {
+    return utf8_code_point_at(std::span<const uint8_t>(reinterpret_cast<const uint8_t *>(text.data()), text.size()),
+                              pos, num_bytes);
+}
+
+VoidResult StringHelper::utf8_append(std::string &out, int32_t code_point) {
+    if (code_point < 0 || code_point > MAX_UNICODE_CODE_POINT || (code_point >= 0xD800 && code_point <= 0xDFFF)) {
+        return err(LuceneError::illegal_state(
+                std::format("not a Unicode scalar value: {}", code_point)));
+    }
+    const auto value = static_cast<uint32_t>(code_point);
+    if (value < 0x80u) {
+        out.push_back(static_cast<char>(value));
+    } else if (value < 0x800u) {
+        out.push_back(static_cast<char>(0xC0u | (value >> 6)));
+        out.push_back(static_cast<char>(0x80u | (value & 0x3Fu)));
+    } else if (value < 0x10000u) {
+        out.push_back(static_cast<char>(0xE0u | (value >> 12)));
+        out.push_back(static_cast<char>(0x80u | ((value >> 6) & 0x3Fu)));
+        out.push_back(static_cast<char>(0x80u | (value & 0x3Fu)));
+    } else {
+        out.push_back(static_cast<char>(0xF0u | (value >> 18)));
+        out.push_back(static_cast<char>(0x80u | ((value >> 12) & 0x3Fu)));
+        out.push_back(static_cast<char>(0x80u | ((value >> 6) & 0x3Fu)));
+        out.push_back(static_cast<char>(0x80u | (value & 0x3Fu)));
+    }
+    return {};
+}
+
+Result<std::vector<int32_t>> StringHelper::utf8_to_code_points(std::string_view text) {
+    std::vector<int32_t> code_points;
+    code_points.reserve(text.size());
+    size_t pos = 0;
+    while (pos < text.size()) {
+        size_t num_bytes = 0;
+        auto code_point = utf8_code_point_at(text, pos, num_bytes);
+        if (!code_point) {
+            return std::unexpected(std::move(code_point.error()));
+        }
+        code_points.push_back(code_point.value());
+        pos += num_bytes;
+    }
+    return code_points;
 }
 
 std::array<uint8_t, StringHelper::ID_LENGTH> StringHelper::random_id() {

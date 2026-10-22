@@ -23,6 +23,7 @@ import :error;
 import :debug;
 import :data_input;
 import :data_output;
+import :buffered_checksum_index_input;
 import :index_input;
 import :index_output;
 
@@ -135,6 +136,49 @@ size_t CodecUtil::header_length(std::string_view codec) {
     return 4 + 1 + codec.size() + 4;
 }
 
+VoidResult CodecUtil::write_index_header(DataOutput &out, std::string_view codec, int32_t version,
+                                         std::span<const uint8_t> id, std::string_view suffix) {
+    if (id.size() != ID_LENGTH) {
+        return err(LuceneError::illegal_argument("the segment id must be " + std::to_string(ID_LENGTH) +
+                                                 " bytes long, got " + std::to_string(id.size())));
+    }
+    if (auto written = write_header(out, codec, version); !written.has_value()) {
+        return written;
+    }
+    if (auto written = out.write_bytes(id); !written.has_value()) {
+        return written;
+    }
+    return out.write_string(suffix);
+}
+
+Result<int32_t> CodecUtil::check_index_header(DataInput &input, std::string_view codec, int32_t min_version,
+                                             int32_t max_version, std::span<const uint8_t> id,
+                                             std::string_view suffix) {
+    auto version = check_header(input, codec, min_version, max_version);
+    if (!version.has_value()) {
+        return err(version.error());
+    }
+
+    std::vector<uint8_t> actual_id(ID_LENGTH, 0);
+    if (auto read = input.read_bytes(actual_id); !read.has_value()) {
+        return err(read.error());
+    }
+    if (id.size() == ID_LENGTH && !std::equal(actual_id.begin(), actual_id.end(), id.begin())) {
+        return err(LuceneError::corrupt_index("segment id mismatch (resource=" + std::string(input.to_string()) + ")"));
+    }
+
+    auto actual_suffix = input.read_string();
+    if (!actual_suffix.has_value()) {
+        return err(actual_suffix.error());
+    }
+    if (actual_suffix.value() != suffix) {
+        return err(LuceneError::corrupt_index("codec suffix mismatch: actual='" + actual_suffix.value() +
+                                              "' vs expected='" + std::string(suffix) + "' (resource=" +
+                                              std::string(input.to_string()) + ")"));
+    }
+    return version;
+}
+
 VoidResult CodecUtil::write_crc(IndexOutput &out) {
     const uint64_t value = out.get_checksum();
     if ((value & 0xFFFF'FFFF'0000'0000ULL) != 0) {
@@ -218,6 +262,67 @@ Result<int64_t> CodecUtil::check_footer(DataInput &input, int64_t actual_checksu
     return actual_checksum;
 }
 
+Result<int64_t> CodecUtil::retrieve_checksum_with_expected(IndexInput &input, size_t expected_length) {
+    if (expected_length < footer_length()) {
+        return err(LuceneError::illegal_argument("expectedLength cannot be less than the footer length"));
+    }
+    auto length = input.length();
+    if (!length) {
+        return err(length.error());
+    }
+    if (length.value() < expected_length) {
+        return err(LuceneError::corrupt_index(std::format(
+                "truncated file: length={} but expected_length={} (resource={})", length.value(), expected_length,
+                input.to_string())));
+    }
+    if (length.value() > expected_length) {
+        return err(LuceneError::corrupt_index(std::format(
+                "file too long: length={} but expected_length={} (resource={})", length.value(), expected_length,
+                input.to_string())));
+    }
+    return retrieve_checksum(input);
+}
+
+Result<int64_t> CodecUtil::checksum_entire_file(IndexInput &input) {
+    auto clone = input.clone();
+    if (!clone) {
+        return err(clone.error());
+    }
+    if (auto seek = clone.value()->seek(0); !seek) {
+        return err(seek.error());
+    }
+    BufferedChecksumIndexInput checksum_in{std::move(clone.value())};
+    auto length = checksum_in.length();
+    if (!length) {
+        return err(length.error());
+    }
+    if (length.value() < footer_length()) {
+        return err(LuceneError::corrupt_index(std::format(
+                "misplaced codec footer (file truncated?): length={} but footerLength=={} (resource={})",
+                length.value(), footer_length(), input.to_string())));
+    }
+    if (auto seek = checksum_in.seek(length.value() - footer_length()); !seek) {
+        return err(seek.error());
+    }
+    // The writer samples its checksum after it has written FOOTER_MAGIC and the
+    // algorithm id (`write_footer` writes them before `write_crc`), so the
+    // reader has to consume exactly those two ints before comparing.
+    if (auto validated = validate_footer(checksum_in); !validated) {
+        return err(validated.error());
+    }
+    const int64_t computed = checksum_in.get_checksum();
+    auto stored = read_crc(checksum_in);
+    if (!stored) {
+        return err(stored.error());
+    }
+    if (stored.value() != computed) {
+        return err(LuceneError::corrupt_index(std::format(
+                "checksum failed (hardware problem?): stored={} computed={} (resource={})", stored.value(), computed,
+                input.to_string())));
+    }
+    return stored.value();
+}
+
 Result<int64_t> CodecUtil::retrieve_checksum(IndexInput &input) {
     auto length = input.length();
     if (!length.has_value()) {
@@ -235,6 +340,84 @@ Result<int64_t> CodecUtil::retrieve_checksum(IndexInput &input) {
         return err(result.error());
     }
     return read_crc(input);
+}
+
+
+VoidResult CodecUtil::verify_and_copy_index_header(IndexInput &input, DataOutput &output,
+                                                   std::span<const uint8_t> expected_id) {
+    auto length = input.length();
+    if (!length.has_value()) {
+        return err(length.error());
+    }
+    if (length.value() < footer_length() + header_length("")) {
+        return err(LuceneError::corrupt_index("compound sub-files must have a valid codec header and footer: file is "
+                                              "too small (" +
+                                              std::to_string(length.value()) + " bytes)"));
+    }
+
+    auto actual_header = read_be_int(input);
+    if (!actual_header.has_value()) {
+        return err(actual_header.error());
+    }
+    if (actual_header.value() != CODEC_MAGIC) {
+        return err(LuceneError::corrupt_index("compound sub-files must have a valid codec header and footer: codec "
+                                              "header mismatch: actual header=" +
+                                              std::to_string(actual_header.value()) +
+                                              " vs expected header=" + std::to_string(CODEC_MAGIC)));
+    }
+
+    auto codec = input.read_string();
+    if (!codec.has_value()) {
+        return err(codec.error());
+    }
+    auto version = read_be_int(input);
+    if (!version.has_value()) {
+        return err(version.error());
+    }
+
+    std::vector<uint8_t> actual_id(ID_LENGTH);
+    if (auto read = input.read_bytes(actual_id); !read.has_value()) {
+        return err(read.error());
+    }
+    if (!std::ranges::equal(actual_id, expected_id)) {
+        return err(LuceneError::corrupt_index("compound sub-files must have a valid codec header and footer: segment "
+                                              "id mismatch (resource=" +
+                                              std::string(input.to_string()) + ")"));
+    }
+
+    auto suffix_length = input.read_byte();
+    if (!suffix_length.has_value()) {
+        return err(suffix_length.error());
+    }
+    std::vector<uint8_t> suffix(suffix_length.value());
+    if (!suffix.empty()) {
+        if (auto read = input.read_bytes(suffix); !read.has_value()) {
+            return err(read.error());
+        }
+    }
+
+    // Write the header, without changing anything.
+    if (auto write = write_be_int(output, CODEC_MAGIC); !write.has_value()) {
+        return write;
+    }
+    if (auto write = output.write_string(codec.value()); !write.has_value()) {
+        return write;
+    }
+    if (auto write = write_be_int(output, version.value()); !write.has_value()) {
+        return write;
+    }
+    if (auto write = output.write_bytes(expected_id); !write.has_value()) {
+        return write;
+    }
+    if (auto write = output.write_byte(suffix_length.value()); !write.has_value()) {
+        return write;
+    }
+    if (!suffix.empty()) {
+        if (auto write = output.write_bytes(suffix); !write.has_value()) {
+            return write;
+        }
+    }
+    return {};
 }
 
 } // namespace lucene
