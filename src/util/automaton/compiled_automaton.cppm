@@ -50,7 +50,7 @@ export enum class AutomatonType : uint8_t {
 ///
 /// Port of `AutomatonEnum` (`core/util/automation/compiled_automaton.rs`).
 ///
-/// **Deviations:** rlucene boxes the NFA variant; the C++ port stores the
+/// **Deviations:** the reference implementation boxes the NFA variant; the C++ port stores the
 /// alternatives in two optionals, of which exactly one is engaged, because the
 /// automaton is only an ephemeral accessor.
 export class AutomatonEnum {
@@ -91,9 +91,9 @@ private:
 ///     of which exists in this port so far.
 ///   * `get_terms_enum` lives on `Terms` as `terms_enum_for`, because
 ///     `:compiled_automaton` importing `:terms` would be a module cycle.
-///   * rlucene shares the common suffix through an `Arc`; the C++ port keeps an
+///   * the reference implementation shares the common suffix through an `Arc`; the C++ port keeps an
 ///     owned copy.
-///   * rlucene's `Accountable::ram_bytes_used` is not ported, as the C++ port
+///   * the reference implementation's `Accountable::ram_bytes_used` is not ported, as the C++ port
 ///     has no `Accountable` hierarchy.
 export class CompiledAutomaton {
 public:
@@ -145,7 +145,7 @@ public:
     /// first accepted term.
     [[nodiscard]] Result<std::optional<BytesRef>> floor(const BytesRef &input, BytesRefBuilder &output);
 
-    /// Structural equality, mirroring rlucene's `PartialEq`: the special cases
+    /// Structural equality, mirroring the reference implementation's `PartialEq`: the special cases
     /// compare by type only, [`AutomatonType::kSingle`] additionally by term and
     /// [`AutomatonType::kNormal`] additionally by DFA (or NFA) content.
     [[nodiscard]] bool operator==(const CompiledAutomaton &other) const;

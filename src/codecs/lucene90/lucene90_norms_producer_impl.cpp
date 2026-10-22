@@ -46,7 +46,7 @@ namespace {
 /// Reads the values of one field: either one constant, or a packed array indexed
 /// by the ordinal of the document among the documents that have a norm.
 ///
-/// This replaces rlucene's `DenseNormsIteratorBaseEnum` / `SparseNormsIteratorBaseEnum`,
+/// This replaces the reference implementation's `DenseNormsIteratorBaseEnum` / `SparseNormsIteratorBaseEnum`,
 /// whose variants only differ in the width of the value they read.
 class NormsValueReader {
 public:

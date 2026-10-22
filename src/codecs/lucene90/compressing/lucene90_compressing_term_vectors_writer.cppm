@@ -70,7 +70,7 @@ namespace lucene {
 /// The `dirty` flag marks a chunk that was flushed before it was full; the
 /// `finish` statistics count them so a merge can decide to recompress.
 ///
-/// **Deviation:** `merge` is not implemented, so the bulk-copy path of rlucene
+/// **Deviation:** `merge` is not implemented, so the bulk-copy path of the reference implementation
 /// (`copy_chunks` / `can_perform_bulk_merge` / `too_dirty`) does not exist here.
 /// The per-document statistics it needs are still written and readable.
 export class Lucene90CompressingTermVectorsWriter final : public TermVectorsWriter {

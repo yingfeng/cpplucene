@@ -48,7 +48,7 @@ TEST(MathUtilTest, Gcd) {
     EXPECT_EQ(MathUtil::gcd(-12, 18), 6);
     EXPECT_EQ(MathUtil::gcd(0, 0), 0);
     EXPECT_EQ(MathUtil::gcd(17, 5), 1);
-    // Overflow corner case documented in rlucene: gcd(INT64_MIN, 0) == INT64_MIN.
+    // Overflow corner case documented in the reference implementation: gcd(INT64_MIN, 0) == INT64_MIN.
     EXPECT_EQ(MathUtil::gcd(std::numeric_limits<int64_t>::min(), 0), std::numeric_limits<int64_t>::min());
 }
 

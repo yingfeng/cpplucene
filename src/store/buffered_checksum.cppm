@@ -44,7 +44,7 @@ public:
     [[nodiscard]] int64_t get_value() override;
     void reset() override;
 
-    // The primitives below mirror rlucene's `to_le_bytes`: the checksum of a
+    // The primitives below mirror the reference implementation's `to_le_bytes`: the checksum of a
     // read primitive is the checksum of its little-endian bytes, which is what
     // `BufferedChecksumIndexInput` has to reproduce.
 

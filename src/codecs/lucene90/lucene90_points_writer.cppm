@@ -45,7 +45,7 @@ namespace lucene {
 ///
 /// The tree itself is built by [`BkdWriter`] from this port's `util/bkd`
 /// package.  Fields whose tree ends up empty (no point at all) write nothing,
-/// which is what rlucene does by returning `None` from its BKD `finish`.
+/// which is what the reference implementation does by returning `None` from its BKD `finish`.
 export class Lucene90PointsWriter final : public PointsWriter {
 public:
     /// Creates the writer with Lucene's defaults: 512 points per leaf and a
@@ -55,7 +55,7 @@ public:
 
     /// Creates the writer with an explicit leaf size and heap budget.
     ///
-    /// `max_mb_sort_in_heap` is converted to a point count the same way rlucene
+    /// `max_mb_sort_in_heap` is converted to a point count the same way the reference implementation
     /// does (`max_mb * 1 MiB / bytes_per_doc`), so the BKD writer knows when to
     /// spill to a temporary file.
     [[nodiscard]] static Result<std::unique_ptr<Lucene90PointsWriter>> create(SegmentWriteState &state,

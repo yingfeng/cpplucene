@@ -38,8 +38,8 @@ export class IndexSearcher;
 ///    `std::unique_ptr<Scorer>` / `std::unique_ptr<BulkScorer>`; a null pointer
 ///    means "no bulk scorer";
 ///  * [`bulk_scorer`] defaults to wrapping `get(INT64_MAX)` in a
-///    [`DefaultBulkScorer`], which is what rlucene's `default_bulk_scorer` does
-///    (rlucene keeps both because the default one is also callable explicitly).
+///    [`DefaultBulkScorer`], which is what the reference implementation's `default_bulk_scorer` does
+///    (the reference implementation keeps both because the default one is also callable explicitly).
 export class ScorerSupplier {
 public:
     virtual ~ScorerSupplier() = default;

@@ -48,11 +48,11 @@ export struct BkdDecodedLeaf {
 
 /// Decodes leaf blocks written by [`BkdLeafWriter`].
 ///
-/// The leaf-reading half of rlucene's `BKDReader` (`read_doc_ids`,
+/// The leaf-reading half of the reference implementation's `BKDReader` (`read_doc_ids`,
 /// `read_common_prefixes`, `visit_doc_values*`) pulled out as a standalone step:
 /// the tree traversal only ever needs "give me the points stored in this block".
 ///
-/// All three encodings rlucene produces are decoded: `0xFF` (all equal), `0xFE`
+/// All three encodings the reference implementation produces are decoded: `0xFF` (all equal), `0xFE`
 /// (one run per distinct value) and the high-cardinality form, whose marker byte
 /// is the compressed dimension.
 export struct BkdLeafReader {

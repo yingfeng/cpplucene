@@ -31,7 +31,7 @@ namespace lucene {
 /// Port of `util/packed/packed64.rs` and `packed64_single_block.rs`, merged into
 /// one class.
 ///
-/// **Deviation:** rlucene (like Lucene) chooses between `Packed64` (values
+/// **Deviation:** the reference implementation (like Lucene) chooses between `Packed64` (values
 /// packed little-endian inside 64-bit words) and `Packed64SingleBlock`
 /// (big-endian inside words, only for bit widths that divide 64) purely as a
 /// speed optimization.  This port always uses the little-endian layout, which

@@ -33,7 +33,7 @@ namespace lucene {
 /// Port of `TopDocs` (`core/search/top_docs.rs`).
 ///
 /// **Deviations** (C++ mechanics only):
-///  * rlucene's `TopDocs<S>` is generic over `ScoreDocLike`; the port keeps one
+///  * the reference implementation's `TopDocs<S>` is generic over `ScoreDocLike`; the port keeps one
 ///    `TopDocs` over [`ScoreDoc`] until the sorting layer (which is what needs
 ///    `TopFieldScoreDoc`) is ported, and `TopDocsLike` disappears with it;
 ///  * `merge_top_field_docs*` / `MergeSortQueueCmp` are not ported: they sort by

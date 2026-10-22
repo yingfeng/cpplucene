@@ -363,7 +363,7 @@ VoidResult NFARunAutomaton::determinize(size_t index) {
                 "at most one transition per char class was computed");
 
     // Transitions after `char_class` may already have been explored; the rest of
-    // the table has no outgoing transition.  (rlucene fills `NOT_COMPUTED` here,
+    // the table has no outgoing transition.  (the reference implementation fills `NOT_COMPUTED` here,
     // which contradicts its own comment and makes `get_transition` report a
     // transition whose destination is `NOT_COMPUTED`; `MISSING` is what the
     // iteration contract needs.)

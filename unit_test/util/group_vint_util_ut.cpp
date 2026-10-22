@@ -28,7 +28,7 @@ using namespace lucene;
 namespace {
 
 /// A `DataInput` that also exposes random access reads, mirroring the
-/// `DI: DataInput + IntReader` trait bound of rlucene.
+/// `DI: DataInput + IntReader` trait bound of the reference implementation.
 class SpanIntReaderInput : public DataInput, public IntReader {
 public:
     explicit SpanIntReaderInput(std::span<const uint8_t> bytes) : bytes_(bytes) {}

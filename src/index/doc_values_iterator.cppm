@@ -34,7 +34,7 @@ public:
     /// `target` must be greater than or equal to the current [`doc_id`] and a
     /// valid doc id.  After the call [`doc_id`] returns `target`.
     ///
-    /// The default implementation mirrors rlucene and reports
+    /// The default implementation mirrors the reference implementation and reports
     /// `not_implemented`.
     [[nodiscard]] virtual Result<bool> advance_exact(int32_t target) {
         return err(LuceneError::not_implemented(std::format("advance_exact({}) is not supported", target)));

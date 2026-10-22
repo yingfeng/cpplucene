@@ -30,7 +30,7 @@ namespace lucene {
 ///
 /// Port of `LeafCollector` (`core/search/leaf_collector.rs`).
 ///
-/// **Deviation:** rlucene's `collect_stream` / `DocIdStream` bulk API is not
+/// **Deviation:** the reference implementation's `collect_stream` / `DocIdStream` bulk API is not
 /// ported — no collector in the ported code overrides it, so
 /// [`collect`] carries every hit.  The `CompetitiveIterator` associated type
 /// became a plain `DocIdSetIterator`.

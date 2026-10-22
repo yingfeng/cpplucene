@@ -17,7 +17,7 @@
 
 /// Character classification shared by the tokenizers.
 ///
-/// rlucene ports Lucene's `CharacterUtils`/`UnicodeProps` generated tables; the
+/// The reference implementation ports Lucene's `CharacterUtils`/`UnicodeProps` generated tables; the
 /// full UCD tables are not embedded yet, so these helpers combine exact tables
 /// for whitespace with a script-range approximation for letters and digits.
 /// Everything the codecs touch (offsets, term bytes) stays exact; only the

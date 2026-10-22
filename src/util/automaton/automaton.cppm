@@ -43,7 +43,7 @@ inline constexpr int32_t MAX_CODE_POINT = 0x10FFFF;
 /// [`finish_state`] was called) its transitions are sorted by min, max, dest and
 /// adjacent ranges going to the same destination are merged.
 ///
-/// **Deviation:** rlucene's `ram_bytes_used` (`Accountable`) is not ported, as
+/// **Deviation:** the reference implementation's `ram_bytes_used` (`Accountable`) is not ported, as
 /// the C++ port has no `Accountable` hierarchy.
 export class Automaton final : public TransitionAccessor {
 public:

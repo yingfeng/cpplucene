@@ -46,7 +46,7 @@ export struct BkdLeafBlockInfo {
 
 /// Encodes one leaf block of a BKD tree.
 ///
-/// Port of `write_leaf_block_*` in rlucene's `BKDWriter`
+/// Port of `write_leaf_block_*` in the reference implementation's `BKDWriter`
 /// (`util/bkd/bkd_writer.rs`).  A block is written as:
 ///
 /// ```text
@@ -73,10 +73,10 @@ export struct BkdLeafBlockInfo {
 /// repeated values, which is the common case for id-like fields.
 ///
 /// When more than one dimension is indexed, `min`/`max` suffixes for every
-/// indexed dimension are written first (the same "actual bounds" rlucene emits)
+/// indexed dimension are written first (the same "actual bounds" the reference implementation emits)
 /// so a reader can prune the block without materialising it.
 ///
-/// All three forms rlucene produces are written: the encoder costs the two
+/// All three forms the reference implementation produces are written: the encoder costs the two
 /// variable-length layouts first and picks the smaller one.  A block of distinct
 /// values always ends up in the run-length form (two bytes per run beats one byte
 /// plus a suffix per value), and a block with a few repeated values ends up in the

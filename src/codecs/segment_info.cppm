@@ -53,7 +53,7 @@ export [[nodiscard]] VoidResult check_file_name(std::string_view file_name, std:
 /// Metadata about one segment of an index.
 ///
 /// Port of `SegmentInfo` (`index/segment_info.rs`), reduced to what the codecs
-/// need: rlucene keeps the directory, the codec and the `Sort` object alive
+/// need: the reference implementation keeps the directory, the codec and the `Sort` object alive
 /// inside it, while this port keeps plain data and leaves the wiring to the
 /// caller.  That keeps the type copyable and free of ownership cycles.
 export struct SegmentInfo {
@@ -80,7 +80,7 @@ export struct SegmentInfo {
     std::map<std::string, std::string> attributes;
     /// Number of index-sort fields the segment was written with.
     ///
-    /// **Deviation:** rlucene serialises a real `Sort` here; this port has no
+    /// **Deviation:** the reference implementation serialises a real `Sort` here; this port has no
     /// sort subsystem yet, so only the count is modelled and the format rejects
     /// a non-zero count when reading.
     int32_t sort_field_count{0};

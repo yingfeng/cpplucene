@@ -36,11 +36,11 @@ namespace lucene {
 /// **Deviations** (C++ mechanics only):
 ///  * the associated `FieldsConsumer` / `FieldsProducer` types collapse into the
 ///    concrete type-erased interfaces;
-///  * rlucene also has `for_name`, a global registry of postings formats.  This
+///  * the reference implementation also has `for_name`, a global registry of postings formats.  This
 ///    port has a single postings format, so the lookup is the codec's job (see
 ///    [`Codec::postings_format`]);
 ///  * the states are passed as `const&` and the segment info separately, which is
-///    how the rest of the port threads them (rlucene takes the write state by
+///    how the rest of the port threads them (the reference implementation takes the write state by
 ///    reference and an extra `SegmentInfo`).
 export class PostingsFormat {
 public:

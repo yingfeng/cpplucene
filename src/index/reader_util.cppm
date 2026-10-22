@@ -28,7 +28,7 @@ namespace lucene {
 ///
 /// Port of `ReaderUtil` (`core/index/reader_util.rs`).
 ///
-/// **Deviation:** rlucene's `get_top_level_context` climbs the context tree; this
+/// **Deviation:** the reference implementation's `get_top_level_context` climbs the context tree; this
 /// port stores the top-level metadata in every [`LeafReaderContext`], so the
 /// lookup is a field access.
 export class ReaderUtil {

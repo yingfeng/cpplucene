@@ -118,7 +118,7 @@ VoidResult SegmentInfos::write(IndexOutput &out) const {
 
     std::vector<uint8_t> header_id = id;
     if (header_id.size() != ID_LENGTH) {
-        // rlucene writes a random id here; this port prefers the index id so the
+        // The reference implementation writes a random id here; this port prefers the index id so the
         // file is reproducible, and only falls back to random bytes when the
         // caller never assigned one.
         header_id = fresh_id();
@@ -385,6 +385,9 @@ Result<SegmentInfos> SegmentInfos::read_file(const Directory &dir, std::string_v
 
             SegmentCommitInfo segment;
             segment.info = std::move(segment_info.value());
+            // The `.si` file does not carry the codec name: it is recorded here,
+            // in the commit file, and every reader needs it to pick the formats.
+            segment.info.codec_name = codec_name.value();
 
             auto del_gen = CodecUtil::read_be_long(in);
             if (!del_gen.has_value()) {

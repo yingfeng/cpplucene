@@ -35,7 +35,7 @@ namespace lucene {
 /// get asked when the two leads agree.
 ///
 /// **Deviations** (C++ mechanics only):
-///  * rlucene wraps the sub-iterators in `DocIdSetIteratorEnum2` (plain,
+///  * the reference implementation wraps the sub-iterators in `DocIdSetIteratorEnum2` (plain,
 ///    two-phase approximation or bit set) and picks the implementation at
 ///    construction; here [`DocIdSetIterator`] is already the abstract base, so a
 ///    conjunction just holds pointers and the bit set fast path

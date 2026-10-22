@@ -37,7 +37,7 @@ export using BkdPointVisitor = std::function<VoidResult(int32_t doc_id, std::spa
 
 /// Walks a [`BkdIndexTree`] and reports the points that match a bounding box.
 ///
-/// Port of the traversal half of rlucene's `BKDReader`
+/// Port of the traversal half of the reference implementation's `BKDReader`
 /// (`add_all`/`visit_doc_values`/`read_leaf_block`): the index is walked with the
 /// pre-expanded tree instead of a cursor stack, and the leaves are decoded by
 /// [`BkdLeafReader`].

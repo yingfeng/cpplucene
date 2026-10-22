@@ -61,7 +61,7 @@ public:
 /// Port of `util/byte_block_pool.rs`.  Writes and reads transparently cross
 /// block boundaries, which is what the FST builders rely on.
 ///
-/// **Deviation:** rlucene returns a borrowed `BytesRef<Cow<Vec<u8>>>` from
+/// **Deviation:** the reference implementation returns a borrowed `BytesRef<Cow<Vec<u8>>>` from
 /// [`set_bytes_ref`] so an in-block value needs no copy; here the equivalent
 /// [`bytes_ref`] always returns an owned `BytesRef`, because C++ `std::span`
 /// cannot express "borrowed from a pool that may reallocate".
@@ -88,6 +88,21 @@ public:
     [[nodiscard]] uint8_t read_byte(size_t offset) const;
     /// An owned copy of `length` bytes at `offset`.
     [[nodiscard]] Result<BytesRef> bytes_ref(int64_t offset, size_t length) const;
+
+    // ---- raw cursors, used by the indexing slice pool ----
+    //
+    // The reference implementation exposes these as crate-visible fields (`byte_upto`, `byte_offset`,
+    // `get_buffer_mut`) because the slice pool writes terms and postings
+    // directly into the head block.  They are accessors here so the state stays
+    // encapsulated, but they carry the same meaning.
+
+    /// Write cursor inside the head block.
+    [[nodiscard]] int32_t byte_upto() const noexcept { return byte_upto_; }
+    void set_byte_upto(int32_t value) noexcept { byte_upto_ = value; }
+    /// Flat offset of the head block.
+    [[nodiscard]] int32_t byte_offset() const noexcept { return byte_offset_; }
+    /// Mutable access to a whole block.
+    [[nodiscard]] std::vector<uint8_t> &mutable_buffer(size_t index) { return buffers_.at(index); }
 
     /// The current write position: `byte_offset + byte_upto`.
     [[nodiscard]] int64_t get_position() const noexcept {

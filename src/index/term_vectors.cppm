@@ -39,7 +39,7 @@ namespace lucene {
 /// is why [`get`] takes no constness for granted and a reader is never shared
 /// between threads.
 ///
-/// **Deviation:** the `RawTermVectors` companion trait of rlucene exists to let
+/// **Deviation:** the `RawTermVectors` companion trait of the reference implementation exists to let
 /// the merge path reach the concrete reader's `IndexInput`; merging is not
 /// ported, so it is left out.
 export class TermVectors {

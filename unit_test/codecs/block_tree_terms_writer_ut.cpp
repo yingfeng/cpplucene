@@ -662,7 +662,7 @@ TEST(BlockTreeIntersectTest, FiltersByAutomaton) {
     EXPECT_EQ(texts, (std::vector<std::string>{"banana"}));
 }
 
-TEST(BlockTreeIntersectTest, SkipsStartTermLikeRlucene) {
+TEST(BlockTreeIntersectTest, SkipsStartTermLikeReference) {
     ByteBuffersDirectory directory;
     const std::vector<TermSpec> terms = sample_terms();
     auto opened = write_and_open(directory, terms, BlockTreeTermsWriter::DEFAULT_MIN_BLOCK_SIZE,

@@ -29,7 +29,7 @@ namespace lucene {
 
 /// Either sort of point sink the BKD writer builds a tree from.
 ///
-/// Port of `PointWriterEnum` (`util/bkd/point_writer.rs`).  rlucene wraps both
+/// Port of `PointWriterEnum` (`util/bkd/point_writer.rs`).  The reference implementation wraps both
 /// writers in an enum whose `PointWriter` impl dispatches by variant; C++ gets
 /// the same dispatch from a `std::variant` of pointers plus the free functions
 /// in [`PointWriters`], which keeps the two writers independent types (no shared

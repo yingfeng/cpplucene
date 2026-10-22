@@ -28,7 +28,7 @@ namespace lucene {
 /// Describes the properties of a field.  Port of `document/field_type.rs`.
 ///
 /// The type is mutable until `freeze()` is called; every setter checks the
-/// frozen flag first, exactly like rlucene.
+/// frozen flag first, exactly like the reference implementation.
 export class FieldType {
 public:
     FieldType() = default;
@@ -80,7 +80,7 @@ public:
     [[nodiscard]] VoidResult set_doc_values_skip_index_type(DocValuesSkipIndexType value);
 
     /// Sets the point dimensions, using `dimension_count` as the index
-    /// dimension count (`set_dimensions` in rlucene).
+    /// dimension count (`set_dimensions` in the reference implementation).
     [[nodiscard]] VoidResult set_dimensions(size_t dimension_count, size_t dimension_num_bytes);
 
     /// Sets the point dimensions; all three must be `0`, or `count/index_count`
@@ -106,7 +106,7 @@ public:
     /// Throws (`illegal_state`) when the combination of properties is invalid.
     [[nodiscard]] VoidResult validate() const;
 
-    /// Human readable rendering, identical to rlucene's `Display`.
+    /// Human readable rendering, identical to the reference implementation's `Display`.
     [[nodiscard]] std::string to_string() const;
 
     [[nodiscard]] bool operator==(const FieldType &other) const;

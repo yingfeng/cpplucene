@@ -39,7 +39,7 @@ namespace lucene {
 /// Port of `TermsReader`
 /// (`core/codecs/lucene90/block_tree/lucene90_block_tree_terms_reader.rs`).
 ///
-/// **Deviation:** rlucene's `TermsReader` is an `Arc` that the field readers
+/// **Deviation:** the reference implementation's `TermsReader` is an `Arc` that the field readers
 /// hold; here it implements [`BlockTreeTermsParent`], which keeps the field
 /// readers free of a dependency on this partition (no module cycle).
 export class TermsReader : public BlockTreeTermsParent {

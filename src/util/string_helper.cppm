@@ -26,7 +26,7 @@ namespace lucene {
 
 /// Methods for manipulating strings.  Port of `core/util/string_helper.rs`.
 ///
-/// The rlucene signatures are generic over [`BytesRef`]; here the borrowed form
+/// The reference implementation signatures are generic over [`BytesRef`]; here the borrowed form
 /// is `std::span<const uint8_t>` so the helpers stay allocation free.
 export struct StringHelper {
     /// A deterministic-per-run seed used for hashing, which prevents hash key
@@ -72,7 +72,7 @@ export struct StringHelper {
 
     /// Decodes the code point starting at `pos` of `utf8`; `num_bytes` receives
     /// how many bytes it occupies.  Mirrors `UnicodeUtil::code_point_at` of
-    /// rlucene and fails on malformed or truncated input.
+    /// The reference implementation and fails on malformed or truncated input.
     [[nodiscard]] static Result<int32_t> utf8_code_point_at(std::span<const uint8_t> utf8, size_t pos, size_t &num_bytes);
     /// [`utf8_code_point_at`] over UTF-8 text.
     [[nodiscard]] static Result<int32_t> utf8_code_point_at(std::string_view text, size_t pos, size_t &num_bytes);

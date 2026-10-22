@@ -52,7 +52,7 @@ constexpr std::string_view kEntryCodec = "Lucene90CompoundEntries";
 constexpr int32_t kVERSION_START = 0;
 constexpr int32_t kVERSION_CURRENT = kVERSION_START;
 
-/// rlucene's one-argument `IndexFileNames::strip_segment_name`: everything from
+/// The reference implementation's one-argument `IndexFileNames::strip_segment_name`: everything from
 /// the first `_` on, without the `_` itself.  The two-argument overload in
 /// `:index_file_names` does something else (it removes a known base).
 std::string strip_segment_name(std::string_view name) {
@@ -192,7 +192,7 @@ Result<std::vector<std::string>> Lucene90CompoundReader::list_all() const {
     names.reserve(entries_.size());
     for (const auto &[id, entry] : entries_) {
         static_cast<void>(entry);
-        // **Deviation:** rlucene concatenates `segment_name + id`, which loses
+        // **Deviation:** the reference implementation concatenates `segment_name + id`, which loses
         // the separator (the id already starts with the segment's digits); this
         // port restores it so the names match the files in the parent
         // directory.

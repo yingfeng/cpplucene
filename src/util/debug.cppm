@@ -29,7 +29,7 @@ export void report_assertion_failure(std::string_view expression, const std::sou
 /// The `debug_assert!(..)` of the port.
 ///
 /// Macros are not exported by modules, so the port uses this function instead of
-/// `assert`.  It compiles away when `NDEBUG` is defined, which matches rlucene's
+/// `assert`.  It compiles away when `NDEBUG` is defined, which matches the reference implementation's
 /// `debug_assert!` semantics.
 export inline void debug_check(bool condition,
                                std::string_view expression = {},

@@ -38,7 +38,7 @@ inline constexpr std::string_view TERMS_CODEC_NAME = "BlockTreeTermsDict";
 
 /// Version that switched the term dictionary outputs to MSB vlongs.
 ///
-/// **Deviation:** rlucene reaches these as
+/// **Deviation:** the reference implementation reaches these as
 /// `lucene90_block_tree_terms_reader::VERSION_CURRENT`; in this port they live
 /// in the flat `lucene` namespace next to the FST `VERSION_CURRENT` of
 /// `:version`, so they carry a `BLOCK_TREE_` prefix.
@@ -54,9 +54,9 @@ inline constexpr std::string_view TERMS_INDEX_CODEC_NAME = "BlockTreeTermsIndex"
 inline constexpr std::string_view TERMS_META_EXTENSION = "tmd";
 inline constexpr std::string_view TERMS_META_CODEC_NAME = "BlockTreeTermsMeta";
 
-/// rlucene's `NO_OUTPUT`: the empty output of the byte sequence FST algebra.
+/// The reference implementation's `NO_OUTPUT`: the empty output of the byte sequence FST algebra.
 ///
-/// **Deviation:** rlucene has a `LazyLock<BytesRef<Arc<Vec<u8>>>>` static; the
+/// **Deviation:** the reference implementation has a `LazyLock<BytesRef<Arc<Vec<u8>>>>` static; the
 /// port returns a reference to a function local static, which avoids a
 /// module-initialization order problem.
 [[nodiscard]] const BytesRef &no_output();

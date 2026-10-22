@@ -15,15 +15,15 @@
  * limitations under the License.
  */
 
-/// Primary interface of the `lucene_core` module: a C++23 port of rlucene.
+/// Primary interface of the `lucene_core` module: a C++23 port of the reference implementation.
 ///
-/// Subsystem partitions mirror the rlucene tree:
-///   rlucene `core/util`        -> `lucene_core:bit_util`, `:bytes_ref`, ...
-///   rlucene `core/store`       -> `lucene_core:data_input`, `:data_output`, ...
-///   rlucene `core/document`    -> `lucene_core:document`, ...
-///   rlucene `core/analysis`    -> `lucene_core:analyzer`, ...
-///   rlucene `core/index`       -> `lucene_core:index_writer`, ...
-///   rlucene `core/search`      -> `lucene_core:index_searcher`, ...
+/// Subsystem partitions mirror the reference implementation tree:
+///   The reference implementation `core/util`        -> `lucene_core:bit_util`, `:bytes_ref`, ...
+///   The reference implementation `core/store`       -> `lucene_core:data_input`, `:data_output`, ...
+///   The reference implementation `core/document`    -> `lucene_core:document`, ...
+///   The reference implementation `core/analysis`    -> `lucene_core:analyzer`, ...
+///   The reference implementation `core/index`       -> `lucene_core:index_writer`, ...
+///   The reference implementation `core/search`      -> `lucene_core:index_searcher`, ...
 export module lucene_core;
 
 // ---- util ----
@@ -52,6 +52,10 @@ export import :bits;
 export import :fixed_bit_set;
 export import :bytes_ref_comparator;
 export import :collection_util;
+export import :sorter;
+export import :intro_sorter;
+export import :msb_radix_sorter;
+export import :string_sorter;
 export import :packed_ints;
 export import :direct_writer;
 export import :direct_reader;
@@ -61,6 +65,7 @@ export import :packed_stream;
 export import :block_packed_writer;
 export import :block_packed_reader_iterator;
 export import :packed64;
+export import :packed_long_values;
 export import :long_heap;
 export import :priority_queue;
 export import :growable_writer;
@@ -70,6 +75,11 @@ export import :fst_byte_sequence_outputs;
 export import :fst_positive_int_outputs;
 export import :fst_int_sequence_outputs;
 export import :byte_block_pool;
+export import :bytes_ref_block_pool;
+export import :int_block_pool;
+export import :byte_slice_pool;
+export import :bytes_ref_hash;
+export import :byte_slice_reader;
 export import :fst_bytes_reader;
 export import :reverse_bytes_reader;
 export import :growable_byte_array_data_output;
@@ -197,6 +207,31 @@ export import :lucene101_codec;
 export import :codec_formats;
 
 // ---- index ----
+export import :docs_with_field_set;
+export import :field_infos_builder;
+export import :doc_values_writer;
+export import :numeric_doc_values_writer;
+export import :binary_doc_values_writer;
+export import :sorted_numeric_doc_values_writer;
+export import :sorted_doc_values_writer;
+export import :sorted_set_doc_values_writer;
+export import :norm_values_writer;
+export import :stored_fields_consumer;
+export import :parallel_postings_array;
+export import :terms_hash;
+export import :terms_hash_per_field;
+export import :indexing_context;
+export import :freq_prox_terms_writer_per_field;
+export import :freq_prox_fields;
+export import :freq_prox_terms_writer;
+export import :term_vectors_consumer_per_field;
+export import :term_vectors_consumer;
+export import :field_schema;
+export import :indexing_chain;
+export import :index_writer_config;
+export import :documents_writer_per_thread;
+export import :documents_writer;
+export import :index_writer;
 export import :impact;
 export import :impacts;
 export import :impacts_source;
@@ -233,10 +268,26 @@ export import :index_reader;
 export import :leaf_reader;
 export import :codec_reader;
 export import :reader_util;
+export import :doc_map;
+export import :merge_state;
+export import :segment_merger;
+export import :merge_trigger;
+export import :merge_scheduler;
+export import :merge_policy;
+export import :log_merge_policy;
+export import :tiered_merge_policy;
+export import :doc_id_merger;
+export import :doc_values_merge;
+export import :multi_fields;
+export import :mapped_multi_fields;
 export import :term_states;
 export import :index_file_names;
 export import :segment_commit_info;
 export import :segment_infos;
+export import :segment_core_readers;
+export import :segment_reader;
+export import :base_composite_reader;
+export import :standard_directory_reader;
 
 // ---- store ----
 export import :io_context;
@@ -298,12 +349,21 @@ export import :disjunction_disi_approximation;
 export import :disjunction_scorer;
 export import :req_opt_sum_scorer;
 export import :req_excl_scorer;
+export import :match_no_docs_query;
+export import :match_all_docs_query;
+export import :boolean_clause;
+export import :minimum_should_match_scorer;
+export import :boolean_scorer_supplier;
+export import :boolean_weight;
+export import :boolean_query;
 
 // ---- document ----
 export import :index_types;
 export import :field_type;
 export import :term;
 export import :field_invert_state;
+export import :invertable_field;
+export import :field_token_streams;
 export import :indexable_field;
 export import :document;
 export import :field_kinds;

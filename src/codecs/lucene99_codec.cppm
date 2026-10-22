@@ -68,7 +68,7 @@ private:
 /// Resolves a codec from the name recorded in `segments_N`.
 ///
 /// **Scope:** the registry holds a single entry, because this port only writes
-/// one generation.  rlucene additionally resolves every codec it can read.
+/// one generation.  The reference implementation additionally resolves every codec it can read.
 [[nodiscard]] Result<const Codec *> codec_for_name(std::string_view name);
 
 } // namespace lucene

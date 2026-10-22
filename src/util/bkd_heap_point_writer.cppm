@@ -98,7 +98,7 @@ private:
 /// that, and the big-endian doc id terminates the record.  Comparisons use the
 /// unsigned byte order of these fields.
 ///
-/// **Deviation:** rlucene returns `Result` from the accessors because
+/// **Deviation:** the reference implementation returns `Result` from the accessors because
 /// `point_value` may hold an offline writer.  With a single flavour the accessors
 /// assert instead, which keeps the BKD writer readable.
 export class HeapPointWriter {
@@ -146,7 +146,7 @@ public:
     /// A reader over `[start, start + length)`; transfers the block to it.
     [[nodiscard]] Result<HeapPointReader> make_reader(size_t start, size_t length);
 
-    /// Moves the (already closed) block out, mirroring `mem::take` in rlucene.
+    /// Moves the (already closed) block out, mirroring `mem::take` in the reference implementation.
     [[nodiscard]] std::vector<uint8_t> take_block() noexcept { return std::move(block_); }
 
     [[nodiscard]] std::string to_string() const;

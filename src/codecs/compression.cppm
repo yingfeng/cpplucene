@@ -78,7 +78,7 @@ export enum class CompressionModeType : uint8_t {
 /// (`codecs/compression/compression_mode.rs`).  Both modes are LZ4: `Fast` picks
 /// matches greedily, `FastDecompression` searches harder while writing.
 ///
-/// **Deviation:** rlucene also offers `HIGH_COMPRESSION`, which is Deflate; this
+/// **Deviation:** the reference implementation also offers `HIGH_COMPRESSION`, which is Deflate; this
 /// port keeps only the LZ4 modes, because the index formats use them exclusively
 /// and the Deflate code would need a zlib port that nothing else uses.
 export class CompressionMode {
@@ -96,7 +96,7 @@ public:
 
     [[nodiscard]] CompressionModeType type() const noexcept { return type_; }
 
-    /// `"FAST"` or `"FAST_DECOMPRESSION"`, as rlucene displays them.
+    /// `"FAST"` or `"FAST_DECOMPRESSION"`, as the reference implementation displays them.
     [[nodiscard]] std::string_view name() const noexcept;
 
     [[nodiscard]] std::unique_ptr<Compressor> new_compressor() const;

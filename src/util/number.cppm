@@ -25,7 +25,7 @@ namespace lucene {
 
 /// A numeric field value.  Port of `core/util/number.rs`.
 ///
-/// rlucene's `BigInt` variant is not ported: nothing in the codec layer needs
+/// The reference implementation's `BigInt` variant is not ported: nothing in the codec layer needs
 /// it, and it would drag in an arbitrary-precision dependency.
 export using Number = std::variant<uint8_t, int16_t, int32_t, int64_t, float, double>;
 
@@ -44,7 +44,7 @@ export using Number = std::variant<uint8_t, int16_t, int32_t, int64_t, float, do
 /// `true` when the value fits into an `int32_t` without loss.
 [[nodiscard]] bool number_fits_i32(const Number &value);
 
-/// Human readable rendering (`Display` in rlucene).
+/// Human readable rendering (`Display` in the reference implementation).
 [[nodiscard]] std::string number_to_string(const Number &value);
 
 } // namespace lucene

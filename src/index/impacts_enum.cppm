@@ -32,7 +32,7 @@ namespace lucene {
 /// (`core/index/impacts_enum.rs`, `PostingsEnum + ImpactsSource`).
 export class ImpactsEnum : public PostingsEnum, public ImpactsSource {};
 
-/// The `either_impactsenum_named!` variants of rlucene (`ImpactsEnumEnum2`,
+/// The `either_impactsenum_named!` variants of the reference implementation (`ImpactsEnumEnum2`,
 /// ...), expressed as one variadic type.
 export template <class... Ts>
 class ImpactsEnumEnum : public ImpactsEnum {

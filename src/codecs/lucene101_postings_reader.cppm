@@ -74,7 +74,7 @@ export struct MutableImpactList {
 /// Turns `buffer[0 .. count)` into a prefix sum, starting from `base`.
 export void prefix_sum(std::span<int32_t> buffer, size_t count, int32_t base);
 
-/// `sum(arr[start .. end])`, as rlucene computes it for skip-data validation.
+/// `sum(arr[start .. end])`, as the reference implementation computes it for skip-data validation.
 [[nodiscard]] int32_t sum_over_range(std::span<const int32_t> arr, size_t start, size_t end);
 
 /// Prefetches the postings of `state` unless `doc_in` is already positioned
@@ -100,7 +100,7 @@ public:
     [[nodiscard]] int32_t get_doc_id_upto(size_t level) const override;
     [[nodiscard]] Result<std::vector<Impact>> get_impacts(size_t level) const override;
 
-    /// The fallback impact rlucene returns when the field has no frequencies.
+    /// The fallback impact the reference implementation returns when the field has no frequencies.
     [[nodiscard]] static Impact default_impact() noexcept { return Impact{std::numeric_limits<int32_t>::max(), 1}; }
 
 private:
@@ -120,7 +120,7 @@ private:
 ///
 /// **Deviations** (C++ mechanics only):
 ///  * the `I: IndexInput` type parameter becomes `std::unique_ptr<IndexInput>`;
-///  * rlucene's `panic::catch_unwind` + `IOUtils::close_while_handling_exception`
+///  * the reference implementation's `panic::catch_unwind` + `IOUtils::close_while_handling_exception`
 ///    error handling becomes "close what was opened and return the first
 ///    error", because neither mechanism exists in this port yet;
 ///  * the `ReadAdvice::Normal` IO context of the docs file is not distinguished.
@@ -193,8 +193,8 @@ private:
 ///
 /// **Deviations:** the `I: IndexInput` parameter becomes
 /// `std::unique_ptr<IndexInput>` inputs owned by a
-/// `PostingDecodingUtil`; rlucene's `Identity` becomes the address of the
-/// reader's docs input; rlucene's `BytesRef` for the serialized impacts /
+/// `PostingDecodingUtil`; the reference implementation's `Identity` becomes the address of the
+/// reader's docs input; the reference implementation's `BytesRef` for the serialized impacts /
 /// payload becomes a `std::vector<uint8_t>` whose `size()` is the valid
 /// length (`resize` is only called with the decoded length).
 export class BlockPostingsEnum : public ImpactsEnum {
@@ -284,7 +284,7 @@ private:
     std::vector<int32_t> pos_delta_buffer_;
     std::vector<int32_t> payload_length_buffer_;
     std::vector<uint8_t> payload_bytes_;
-    /// Snapshot of the payload a caller may still hold across a refill; rlucene
+    /// Snapshot of the payload a caller may still hold across a refill; the reference implementation
     /// keeps it in `payload: Option<BytesRef>`.
     std::vector<uint8_t> payload_value_;
     std::optional<std::pair<size_t, size_t>> payload_position_;

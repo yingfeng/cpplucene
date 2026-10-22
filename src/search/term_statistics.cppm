@@ -35,7 +35,7 @@ namespace lucene {
 /// * `total_term_freq` — occurrences of the term, in `[doc_freq .. sum_total_term_freq]`.
 export class TermStatistics {
 public:
-    /// Validates the statistics, mirroring rlucene's checks.
+    /// Validates the statistics, mirroring the reference implementation's checks.
     [[nodiscard]] static Result<TermStatistics> create(Term term, int64_t doc_freq, int64_t total_term_freq);
 
     [[nodiscard]] const Term &term() const noexcept { return term_; }

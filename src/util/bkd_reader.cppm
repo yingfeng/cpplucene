@@ -33,7 +33,7 @@ namespace lucene {
 /// One cursor over a [`BkdReader`]'s index: a [`PointTree`] positioned at some
 /// node of the pre-expanded [`BkdIndexTree`].
 ///
-/// Port of rlucene's `BKDPointTree` (`util/bkd/bkd_reader.rs`), minus the cursor
+/// Port of the reference implementation's `BKDPointTree` (`util/bkd/bkd_reader.rs`), minus the cursor
 /// stacks: the packed index is decoded once into [`BkdIndexTree`], so every
 /// position is just a node index and the cell bounds of a node are its stored
 /// subtree bounds.  The leaf blocks themselves are still read on demand, through
@@ -89,7 +89,7 @@ private:
 ///
 /// Port of `BKDReader` (`util/bkd/bkd_reader.rs`), which is both the
 /// [`PointValues`] of one point field and the factory for its [`PointTree`]
-/// cursors.  rlucene keeps the packed index on disk and walks it with a stack of
+/// cursors.  The reference implementation keeps the packed index on disk and walks it with a stack of
 /// cursors; this port decodes it up front into a [`BkdIndexTree`], so a cursor
 /// is a node index and [`BkdTreeReader`] stays a plain traversal helper.
 ///

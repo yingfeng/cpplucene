@@ -34,7 +34,7 @@ namespace lucene {
 /// (`core/search/disjunction_disi_approximation.rs`).
 ///
 /// **Deviation:** the sub-scorers are borrowed (`Scorer *`), not owned, exactly
-/// like rlucene's `DisiWrapper` array; the owning scorer
+/// like the reference implementation's `DisiWrapper` array; the owning scorer
 /// ([`DisjunctionSumScorer`](lucene_core:disjunction_scorer)) keeps them alive.
 /// The bit set fast path (`BitSetIterator` sub-iterators) is not ported.
 export class DisjunctionDISIApproximation final : public DocIdSetIterator {

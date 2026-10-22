@@ -51,7 +51,7 @@ namespace lucene {
 /// footer
 /// ```
 ///
-/// **Deviation:** rlucene writes these ints with `DataOutput::write_int`, which is
+/// **Deviation:** the reference implementation writes these ints with `DataOutput::write_int`, which is
 /// little endian in both projects.  This port writes them big endian — Lucene's
 /// own byte order — so a `.si` here matches a Java written one.  Maps, sets,
 /// strings and vints are endian-independent either way.

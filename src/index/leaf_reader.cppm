@@ -46,10 +46,10 @@ namespace lucene {
 /// **Deviations** (C++ mechanics only):
 ///  * the associated types collapse into the concrete type-erased interfaces
 ///    (`std::unique_ptr<Terms>`, `std::unique_ptr<NumericDocValues>`, ...);
-///  * a null pointer means "absent" where rlucene returns `None`;
+///  * a null pointer means "absent" where the reference implementation returns `None`;
 ///  * the float/byte vector accessors and `search_nearest_vectors*` are not
 ///    ported (vector formats are out of scope for this port);
-///  * points are exposed through [`point_values`] only; rlucene's
+///  * points are exposed through [`point_values`] only; the reference implementation's
 ///    `get_point_values` returns an associated `PointValues` type.
 export class LeafReader : public IndexReader {
 public:
@@ -103,7 +103,7 @@ public:
 
     /// The point values of `field`, or null when the field has no points.
     ///
-    /// **Deviation:** handed out as `std::shared_ptr` (rlucene's `Arc`), because
+    /// **Deviation:** handed out as `std::shared_ptr` (the reference implementation's `Arc`), because
     /// [`PointsReader`] shares one instance between the reader and every caller.
     [[nodiscard]] virtual Result<std::shared_ptr<PointValues>> point_values(std::string_view field);
 

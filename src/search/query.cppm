@@ -35,11 +35,11 @@ export class IndexSearcher;
 /// Port of `QueryBase` + the `Query` enum (`core/search/query.rs`).
 ///
 /// **Deviations** (C++ mechanics only):
-///  * rlucene models the query tree as one `Query` enum with a variant per
+///  * the reference implementation models the query tree as one `Query` enum with a variant per
 ///    concrete query and dispatches with `match`; here `Query` is an abstract
 ///    base and every concrete query is a subclass, which is the same
 ///    type erasure the rest of the port uses;
-///  * `create_weight` takes `const Query&` (rlucene consumes `self` into an
+///  * `create_weight` takes `const Query&` (the reference implementation consumes `self` into an
 ///    `Arc`, which the `Weight` then owns): the caller must keep the query alive
 ///    while its weight is in use;
 ///  * `rewrite` returns a `shared_ptr` (null when the query is unchanged);
@@ -71,7 +71,7 @@ public:
     /// This query instance's identity; see [`Identity`].
     [[nodiscard]] const Identity &identity() const noexcept { return identity_; }
 
-    /// Value equality, the counterpart of rlucene's `PartialEq` on the enum.
+    /// Value equality, the counterpart of the reference implementation's `PartialEq` on the enum.
     [[nodiscard]] virtual bool equals(const Query &other) const = 0;
 
     /// Hash consistent with [`equals`].

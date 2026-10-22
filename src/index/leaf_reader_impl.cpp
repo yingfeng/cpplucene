@@ -109,7 +109,7 @@ Result<int64_t> LeafReader::sum_total_term_freq(std::string_view field) {
 }
 
 Result<std::shared_ptr<PointValues>> LeafReader::point_values(std::string_view /*field*/) {
-    // rlucene leaves this abstract; readers that do not override it report
+    // The reference implementation leaves this abstract; readers that do not override it report
     // "absent" instead of failing.
     return std::shared_ptr<PointValues>{};
 }

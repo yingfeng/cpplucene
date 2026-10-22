@@ -72,7 +72,7 @@ TEST(BufferedChecksumTest, BufferingDoesNotChangeTheDigest) {
     Crc32Checksum reference;
     reference.update_bytes(CHECK_VECTOR, 0, CHECK_VECTOR.size());
 
-    // A buffer smaller than a long forces rlucene's direct-update path too.
+    // A buffer smaller than a long forces the reference implementation's direct-update path too.
     for (size_t buffer_size : {size_t{3}, size_t{8}, size_t{1024}}) {
         BufferedChecksum buffered{std::make_unique<Crc32Checksum>(), buffer_size};
         for (uint8_t byte : CHECK_VECTOR) {
@@ -87,7 +87,7 @@ TEST(BufferedChecksumTest, BufferingDoesNotChangeTheDigest) {
 }
 
 TEST(BufferedChecksumTest, PrimitiveUpdatesUseLittleEndianBytes) {
-    // rlucene updates the digest with `value.to_le_bytes()`.
+    // The reference implementation updates the digest with `value.to_le_bytes()`.
     const std::vector<uint8_t> little_endian{0x04, 0x03, 0x02, 0x01};
     Crc32Checksum reference;
     reference.update_bytes(little_endian, 0, little_endian.size());

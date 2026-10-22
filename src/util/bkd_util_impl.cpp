@@ -31,7 +31,7 @@ namespace lucene {
 namespace {
 
 /// Big-endian byte order turns "count leading zero bits" into "count leading
-/// common bytes", which is exactly what rlucene's `swap_bytes` trick does: the
+/// common bytes", which is exactly what the reference implementation's `swap_bytes` trick does: the
 /// values are read little endian, so the *first* byte lives in the low bits and
 /// must be moved to the top before counting.
 /// (`<bit>` is not re-exported by `import std`, so the compiler builtins are

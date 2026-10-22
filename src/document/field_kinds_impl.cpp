@@ -63,7 +63,10 @@ Result<Field> KeywordField::create(std::string name,
     std::ignore = type.set_doc_values_type(DocValuesType::SortedSet);
     std::ignore = type.set_doc_values_skip_index_type(skip_index);
     type.freeze();
-    return Field::from_string(std::move(name), std::move(value), std::move(type));
+    // Lucene's `KeywordField` holds a `BytesRef`, not a `String`: the sorted-set
+    // doc values writer (and the binary inversion path) read `binaryValue()`.
+    std::vector<uint8_t> bytes(value.begin(), value.end());
+    return Field::from_bytes(std::move(name), std::move(bytes), std::move(type));
 }
 
 namespace {

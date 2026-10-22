@@ -81,7 +81,7 @@ export struct BkdIndexNode {
     /// Index of the parent node in `BkdIndexTree::nodes`, or [`kNoBkdParent`]
     /// for the root.
     ///
-    /// rlucene's `PointTree` keeps a cursor stack, so `move_to_parent` pops it;
+    /// The reference implementation's `PointTree` keeps a cursor stack, so `move_to_parent` pops it;
     /// with the tree expanded into a vector the cursor only needs this back
     /// pointer.
     size_t parent{kNoBkdParent};
@@ -91,7 +91,7 @@ export struct BkdIndexNode {
 
 /// A parsed BKD index: the tree in pre-order, with `nodes[0]` as the root.
 ///
-/// rlucene keeps the index on disk and walks it with a stack of cursors
+/// The reference implementation keeps the index on disk and walks it with a stack of cursors
 /// (`BKDReader` inner node state).  Expanding it into nodes trades memory for a
 /// much smaller traversal surface: every query then just walks a vector, and the
 /// packed-index decoding lives in one place.

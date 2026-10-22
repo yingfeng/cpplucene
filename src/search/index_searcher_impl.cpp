@@ -91,7 +91,7 @@ Result<std::optional<CollectionStatistics>> IndexSearcher::collection_statistics
             return std::unexpected(std::move(terms.error()));
         }
         if (terms.value() == nullptr) {
-            // rlucene's `get_terms` substitutes `EmptyTerms` here, which adds
+            // The reference implementation's `get_terms` substitutes `EmptyTerms` here, which adds
             // nothing to the sums.
             continue;
         }
@@ -224,6 +224,13 @@ Result<TopDocs> IndexSearcher::search_with_collector_manager(const Query &query,
     }
 
     std::vector<std::unique_ptr<Collector>> collectors;
+    if (leaves.value().empty()) {
+        // An index without segments has no leaf to search: reduce the single
+        // collector without ever calling `search_leaf` (the reference implementation's
+        // `leaf_slices.is_empty()` branch).
+        collectors.push_back(std::move(first.value()));
+        return manager.reduce(std::move(collectors));
+    }
     collectors.reserve(leaves.value().size());
     collectors.push_back(std::move(first.value()));
     for (size_t i = 1; i < leaves.value().size(); ++i) {
@@ -325,7 +332,7 @@ VoidResult IndexSearcher::search_leaf(int32_t ord, int32_t min_doc_id, int32_t m
         auto scored = bulk_scorer.value()->score(*leaf_collector.value(), live_docs.value(), min_doc_id, max_doc_id);
         if (!scored.has_value() && scored.error().kind() != ErrorKind::kCollectionTerminated) {
             // A collection-terminated error just means "this leaf is done
-            // early"; `finish` is still called, as in rlucene.
+            // early"; `finish` is still called, as in the reference implementation.
             return std::unexpected(std::move(scored.error()));
         }
     }

@@ -157,10 +157,10 @@ export struct SortedSetEntry {
 /// fresh cursor over the shared data file.
 ///
 /// **Deviations** (C++ mechanics only):
-///  * rlucene's per-compression-strategy reader classes collapse into one
+///  * the reference implementation's per-compression-strategy reader classes collapse into one
 ///    [`LongValues`] implementation per strategy, selected at construction time;
 ///  * `get_merge_instance` clones the data input and shares the entries, because
-///    the only difference in rlucene is the merge-optimized direct reader, which
+///    the only difference in the reference implementation is the merge-optimized direct reader, which
 ///    this port does not have;
 ///  * `terms_enum` is not implemented (it needs the search layer), so
 ///    `lookup_term` uses the generic binary search over `lookup_ord`.

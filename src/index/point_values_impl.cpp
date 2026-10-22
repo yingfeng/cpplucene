@@ -191,7 +191,7 @@ Result<int64_t> PointValues::estimate_doc_count(const IntersectVisitor &visitor)
     }
 
     // In case of multi values, estimate the number of docs with the urn problem
-    // solution (see the rlucene comment for the derivation), approximated for
+    // solution (see the reference implementation comment for the derivation), approximated for
     // points per doc << size().
     const double estimated = static_cast<double>(estimated_point_count.value());
     const double size_as_double = static_cast<double>(total);

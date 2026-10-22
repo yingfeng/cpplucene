@@ -38,7 +38,7 @@ public:
     [[nodiscard]] virtual VoidResult check_integrity() = 0;
 
     /// The point values of `field_name`, or `nullptr` when the reader holds none
-    /// for it (rlucene's `Ok(None)`).
+    /// for it (the reference implementation's `Ok(None)`).
     ///
     /// Fails when the field is unknown or does not index points at all.
     [[nodiscard]] virtual Result<std::shared_ptr<PointValues>> get_values(std::string_view field_name) const = 0;
@@ -49,7 +49,7 @@ public:
 
     /// Closes the files this reader opened.
     ///
-    /// **Deviation:** rlucene gets this from the separate `Closeable` trait; the
+    /// **Deviation:** the reference implementation gets this from the separate `Closeable` trait; the
     /// port keeps it on the reader so callers can release it deterministically
     /// instead of relying on the destructor.
     [[nodiscard]] virtual VoidResult close() = 0;

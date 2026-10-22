@@ -46,7 +46,7 @@ namespace lucene {
 ///    `unsupported_operation` instead of silently writing LZ4 data under the
 ///    "high" format name;
 ///  * the mode is read and written through `SegmentInfo::attributes` directly
-///    (rlucene has `get_attribute` / `put_attribute` helpers on `SegmentInfo`).
+///    (the reference implementation has `get_attribute` / `put_attribute` helpers on `SegmentInfo`).
 export class Lucene90StoredFieldsFormat final : public StoredFieldsFormat {
 public:
     /// Compression mode of the stored fields.

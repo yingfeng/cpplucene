@@ -98,7 +98,7 @@ constexpr uint8_t kLowCardinality = 0xFE;
 
 /// Writes the min and max suffix of every indexed dimension.
 ///
-/// rlucene only does this when more than one dimension is indexed: with a
+/// The reference implementation only does this when more than one dimension is indexed: with a
 /// single indexed dimension the common prefix already pins the block down well
 /// enough for the reader, and the extra bytes would be pure overhead.
 [[nodiscard]] VoidResult write_actual_bounds(HeapPointWriter &points, const BkdLeaf &leaf,
@@ -203,7 +203,7 @@ Result<BkdLeafBlockInfo> BkdLeafWriter::write_leaf_block(HeapPointWriter &points
 
     // ---- packed values ----
     //
-    // Three forms are possible (rlucene's `write_leaf_block_packed_values`):
+    // Three forms are possible (the reference implementation's `write_leaf_block_packed_values`):
     //   * `0xFF`              every value equal;
     //   * `0xFE`              one `(vint runLength, suffix)` pair per distinct value;
     //   * `sorted_dim` (< numDims)  run-length over the byte at

@@ -34,7 +34,7 @@ namespace lucene {
 /// * `sum_doc_freq` — posting-list entries of the field.
 export class CollectionStatistics {
 public:
-    /// Validates the statistics, mirroring rlucene's checks.
+    /// Validates the statistics, mirroring the reference implementation's checks.
     [[nodiscard]] static Result<CollectionStatistics> create(std::string field, int64_t max_doc, int64_t doc_count,
                                                              int64_t sum_total_term_freq, int64_t sum_doc_freq);
 

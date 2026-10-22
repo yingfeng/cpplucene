@@ -87,7 +87,7 @@ Result<IntersectTermsEnumFrame> IntersectTermsEnumFrame::create(size_t ord, Fiel
 
     frame.ord = ord;
 
-    // rlucene pre-sizes the buffers the same way; they grow on demand.
+    // The reference implementation pre-sizes the buffers the same way; they grow on demand.
     frame.suffix_bytes.assign(128, 0);
     frame.suffix_length_bytes.assign(32, 0);
     frame.stats_bytes.assign(64, 0);
@@ -690,7 +690,7 @@ VoidResult IntersectTermsEnum::seek_to_start_term(const BytesRef &target) {
     const auto target_bytes = target.as_slice();
 
     // NOTE: this is a seekFloor: the first `next()` returns the term *after*
-    // the requested one, matching rlucene.
+    // the requested one, matching the reference implementation.
     for (size_t i = 0; i <= target.length(); ++i) {
         while (true) {
             const size_t frame_idx = current_frame_;

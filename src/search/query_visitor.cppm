@@ -33,7 +33,7 @@ export class Query;
 ///
 /// **Deviations** (C++ mechanics only):
 ///  * `consume_terms` takes a `std::span<const Term>` instead of a generic
-///    `&[T] where T: Borrow<Term>`; every call site in rlucene passes terms;
+///    `&[T] where T: Borrow<Term>`; every call site in the reference implementation passes terms;
 ///  * `consume_terms_matching` is not ported yet — it needs an automaton
 ///    supplier, and no ported query uses it (the automaton queries land later);
 ///  * `get_sub_visitor` / `Occur` are not ported yet: they exist for

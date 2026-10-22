@@ -17,7 +17,7 @@
 
 /// Leaf metadata types shared by `document` and `index`.
 ///
-/// In rlucene these live under `core/index` (`index_options.rs`,
+/// In the reference implementation these live under `core/index` (`index_options.rs`,
 /// `doc_values_type.rs`, ...).  They are collected in one dependency-free
 /// partition here so `FieldType` can use them without a partition cycle
 /// between the `document` and `index` subsystems.

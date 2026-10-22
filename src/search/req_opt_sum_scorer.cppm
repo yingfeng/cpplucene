@@ -34,7 +34,7 @@ namespace lucene {
 /// Port of `ReqOptSumScorer` (`core/search/req_opt_sum_scorer.rs`).
 ///
 /// **Deviations** (C++ mechanics only):
-///  * rlucene keeps a `min_score` and a required-clause block upper bound so that
+///  * the reference implementation keeps a `min_score` and a required-clause block upper bound so that
 ///    it can turn the optional clause into a second required one
 ///    (`advance_impacts`/`move_to_next_block`); those need impacts and
 ///    `advance_shallow`, which the port does not have, so the scorer implements

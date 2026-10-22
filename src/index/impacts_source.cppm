@@ -44,7 +44,7 @@ public:
     /// Information about upcoming impacts for doc ids greater than or equal to
     /// the max of the current doc id and the last `advance_shallow` target.
     ///
-    /// rlucene models the return type as the GAT `Self::Impacts<'a>`; the port
+    /// The reference implementation models the return type as the GAT `Self::Impacts<'a>`; the port
     /// type-erases it to `Impacts` because C++ has no generic associated types.
     [[nodiscard]] virtual Result<std::unique_ptr<Impacts>> get_impacts() const = 0;
 };

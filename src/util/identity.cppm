@@ -25,10 +25,10 @@ namespace lucene {
 /// A lightweight identity token: two values compare equal only when one was
 /// copied from the other.
 ///
-/// Port of `Identity` (`core/index/index_reader.rs`).  rlucene wraps an
+/// Port of `Identity` (`core/index/index_reader.rs`).  The reference implementation wraps an
 /// `Arc<IdentityTag>` and compares the allocation address; here the tag is a
 /// `std::shared_ptr` to an empty object and the comparison is the pointer
-/// comparison `std::shared_ptr` already implements.  Following rlucene, a
+/// comparison `std::shared_ptr` already implements.  Following the reference implementation, a
 /// default constructed value is a *fresh* identity, not a shared "null" one.
 ///
 /// Used for "same instance" checks that must not depend on value equality:

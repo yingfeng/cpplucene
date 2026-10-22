@@ -29,7 +29,7 @@ namespace lucene {
 ///
 /// Port of `CompressionAlgorithm` (`core/codecs/lucene90/block_tree/compression_algorithm.rs`).
 ///
-/// **Deviation:** rlucene attaches `code`, `by_code` and `read` as methods;
+/// **Deviation:** the reference implementation attaches `code`, `by_code` and `read` as methods;
 /// scoped enums cannot have members in C++, so they are free functions below.
 export enum class CompressionAlgorithm : uint8_t {
     NoCompression = 0x00,
@@ -45,7 +45,7 @@ export enum class CompressionAlgorithm : uint8_t {
 /// The algorithm for the on-disk `code`.
 [[nodiscard]] Result<CompressionAlgorithm> compression_algorithm_by_code(uint8_t code);
 
-/// The `Debug` name rlucene prints in the block tree statistics.
+/// The `Debug` name the reference implementation prints in the block tree statistics.
 [[nodiscard]] std::string_view compression_algorithm_name(CompressionAlgorithm algorithm) noexcept;
 
 /// Reads `out[0..len)`, which was written with `algorithm`.

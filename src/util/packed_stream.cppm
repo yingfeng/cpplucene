@@ -30,7 +30,7 @@ namespace lucene {
 /// header, i.e. as a bare bit stream whose value count and bit width the caller
 /// already knows.
 ///
-/// rlucene reaches these layouts through
+/// The reference implementation reaches these layouts through
 /// `PackedInts::get_writer_no_header` / `get_reader_iterator_no_header`
 /// (`PackedFormat::Packed`) and through `DirectReader` over an in-memory
 /// `ByteBuffersDataInput`.  This port keeps the byte layouts but spells the

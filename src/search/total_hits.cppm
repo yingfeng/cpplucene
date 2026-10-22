@@ -31,7 +31,7 @@ namespace lucene {
 /// bound such as "more than 1000 hits", which is why the count can stop early
 /// (see `TopScoreDocCollector`'s total-hits threshold).
 ///
-/// **Deviation:** rlucene's `Relation` is a top-level enum.  This port already
+/// **Deviation:** the reference implementation's `Relation` is a top-level enum.  This port already
 /// has a top-level `Relation` for point queries (`:point_values`), so the hit
 /// relation is nested here, the way Java nests `TotalHits.Relation`.
 export struct TotalHits {

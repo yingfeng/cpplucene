@@ -28,7 +28,7 @@ namespace lucene {
 
 /// Creates the locks used by a [`Directory`].  Port of the `LockFactory` trait.
 ///
-/// rlucene passes the `Directory` to `obtain_lock`; here the concrete factories
+/// The reference implementation passes the `Directory` to `obtain_lock`; here the concrete factories
 /// capture what they need (a filesystem path) at construction time, which keeps
 /// `Directory` and `LockFactory` free of a circular dependency.
 export class LockFactory {

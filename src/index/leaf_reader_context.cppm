@@ -48,7 +48,7 @@ export struct TopParentMeta {
 ///  * the reader is a borrowed pointer: the reader tree owns its leaves, and a
 ///    context never outlives the tree it came from;
 ///  * `doc_base` / `ord` use `int32_t`, Lucene's own document-number type
-///    (rlucene uses `usize`).
+///    (the reference implementation uses `usize`).
 export class LeafReaderContext {
 public:
     LeafReaderContext(LeafReader *reader, int32_t ord, int32_t doc_base, TopParentMeta top_parent)

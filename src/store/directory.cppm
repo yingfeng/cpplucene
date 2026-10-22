@@ -103,7 +103,7 @@ public:
 
     /// Opens `name` for sequential reading while computing a CRC32 checksum.
     ///
-    /// The provided method of rlucene's `Directory` trait: it opens the file
+    /// The provided method of the reference implementation's `Directory` trait: it opens the file
     /// with the read-once IO context and wraps it in a
     /// `BufferedChecksumIndexInput`.
     [[nodiscard]] virtual Result<std::unique_ptr<CheckSumIndexInput>> open_checksum_input(std::string_view name);

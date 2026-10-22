@@ -173,7 +173,7 @@ VoidResult OfflinePointWriter::append_bytes(std::span<const uint8_t> packed_valu
         return written;
     }
     // `write_int` is little endian here (like the rest of this port), while the
-    // BKD record stores its doc id big endian, matching rlucene's
+    // BKD record stores its doc id big endian, matching the reference implementation's
     // `write_int(i32::to_be(docId))`.
     std::array<uint8_t, BitUtil::INT_BYTES> doc_bytes{};
     BitUtil::set_i32_be(doc_bytes, 0, doc_id);

@@ -17,12 +17,10 @@
 
 export module lucene_core:points_writer;
 
-import :types;
-import :error;
-
 import std;
 
 import :field_infos;
+import :merge_state;
 import :points_reader;
 
 namespace lucene {
@@ -31,13 +29,10 @@ namespace lucene {
 ///
 /// Port of the `PointsWriter` trait (`codecs/points_writer.rs`).
 ///
-/// **Deviations:**
-///  * rlucene's `write_field` also takes the directory and the segment info,
-///    because its BKD writer needs them for temporary files.  Here the concrete
-///    writer already holds both, so `write_field` matches Lucene's Java signature
-///    and only needs the field and the values to copy;
-///  * `merge` is not part of this interface yet: it would need `MergeState`,
-///    which the index package of this port does not have.
+/// **Deviation:** the reference implementation's `write_field` also takes the directory and the
+/// segment info, because its BKD writer needs them for temporary files.  Here the
+/// concrete writer already holds both, so `write_field` matches Lucene's Java
+/// signature and only needs the field and the values to copy.
 export class PointsWriter {
 public:
     virtual ~PointsWriter() = default;
@@ -50,6 +45,16 @@ public:
 
     /// Closes the files this writer created.
     [[nodiscard]] virtual VoidResult close() = 0;
+
+    /// Merges the points of every segment in `merge_state`, then calls
+    /// [`finish`].
+    ///
+    /// Port of `default_merge`.
+    [[nodiscard]] virtual VoidResult merge(const MergeState &merge_state);
+
+    /// Merges one point field by presenting the per-segment point trees as one
+    /// virtual reader and letting [`write_field`] copy it.
+    [[nodiscard]] virtual VoidResult merge_one_field(const MergeState &merge_state, const FieldInfo &field_info);
 };
 
 } // namespace lucene

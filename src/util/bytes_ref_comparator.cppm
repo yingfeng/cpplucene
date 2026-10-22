@@ -31,7 +31,7 @@ namespace lucene {
 ///
 /// Port of the `BytesRefComparator` trait (`util/bytes_ref_comparator.rs`).
 ///
-/// **Deviation:** rlucene's `byte_at`/`compare_with_offset` return `Result`
+/// **Deviation:** the reference implementation's `byte_at`/`compare_with_offset` return `Result`
 /// because the Rust `ByteSource` abstraction can fail; here a `BytesRef` always
 /// owns contiguous bytes, so the methods are infallible and `-1` is used for
 /// "past the end", like Lucene's Java interface.

@@ -34,7 +34,7 @@ namespace lucene {
 /// **Deviations** (C++ mechanics only):
 ///  * The `NumericDocValues` / `MergeInstance` associated types become
 ///    `std::unique_ptr<NumericDocValues>` / `std::unique_ptr<NormsProducer>`.
-///  * `get_merge_instance() -> Option<MergeInstance>` keeps rlucene's "no new
+///  * `get_merge_instance() -> Option<MergeInstance>` keeps the reference implementation's "no new
 ///    instance required" meaning: a null pointer says the current instance
 ///    should be used for merging.
 export class NormsProducer : public CloseableRef {
@@ -60,7 +60,7 @@ public:
     }
 };
 
-/// The `either_normsproducer!` variants of rlucene (`NormsProducerEnum2`, ...),
+/// The `either_normsproducer!` variants of the reference implementation (`NormsProducerEnum2`, ...),
 /// expressed as one variadic type.
 export template <class... Ts>
 class NormsProducerEnum : public NormsProducer {
@@ -75,11 +75,11 @@ public:
         return std::visit([](const auto &producer) { return producer.check_integrity(); }, inner_);
     }
 
-    /// **Deviation:** rlucene re-wraps the inner merge instance into
+    /// **Deviation:** the reference implementation re-wraps the inner merge instance into
     /// `Enum<A::MergeInstance, B::MergeInstance>`.  A type-erased
     /// `std::unique_ptr<NormsProducer>` cannot be put back into a concrete
     /// variant alternative, so this reports "use the current instance", which
-    /// is rlucene's own default.
+    /// is the reference implementation's own default.
     [[nodiscard]] Result<std::unique_ptr<NormsProducer>> get_merge_instance() const override {
         return std::unique_ptr<NormsProducer>(nullptr);
     }

@@ -48,7 +48,7 @@ namespace lucene {
 
 namespace {
 
-/// `wrapping_add` for the signed arithmetic rlucene relies on.
+/// `wrapping_add` for the signed arithmetic the reference implementation relies on.
 int32_t wrapping_add32(int32_t left, int32_t right) {
     return static_cast<int32_t>(static_cast<uint32_t>(left) + static_cast<uint32_t>(right));
 }
@@ -128,7 +128,7 @@ VoidResult read_impacts(ByteArrayDataInput &in, MutableImpactList &reuse) {
         } else {
             norm = wrapping_add64(norm, 1);
         }
-        // rlucene keeps a fixed decode bound so that corrupt input cannot make
+        // The reference implementation keeps a fixed decode bound so that corrupt input cannot make
         // the list grow without bound; `reserve()` in `decode` provides it.
         reuse.impacts.push_back(Impact{freq, norm});
     }
@@ -334,7 +334,7 @@ Lucene101PostingsReader::create(const SegmentReadState &state, const SegmentInfo
 
     const std::string doc_name = Lucene101PostingsFormat::file_name(
             segment_info.name, state.segment_suffix, Lucene101PostingsFormat::DOC_EXTENSION);
-    // Postings are read forward only, so rlucene's `ReadAdvice::Normal` is what
+    // Postings are read forward only, so the reference implementation's `ReadAdvice::Normal` is what
     // the port gets by default.
     auto doc = state.directory.open_input(doc_name, state.context);
     if (!doc) {
@@ -572,7 +572,7 @@ namespace {
 
 constexpr size_t BLOCK_SIZE = Lucene101PostingsFormat::BLOCK_SIZE;
 
-/// `VECTOR_UTIL.find_next_geq` of rlucene, scalar.
+/// `VECTOR_UTIL.find_next_geq` of the reference implementation, scalar.
 size_t find_next_geq(std::span<const int32_t> buffer, int32_t target, size_t from, size_t to) {
     for (size_t i = from; i < to; ++i) {
         if (buffer[i] >= target) {
@@ -842,6 +842,9 @@ VoidResult BlockPostingsEnum::refill_docs() {
 }
 
 VoidResult BlockPostingsEnum::skip_level1_to(int32_t target) {
+    if (doc_in_clone_ == nullptr) {
+        return err(LuceneError::illegal_state("documents input is missing"));
+    }
     auto &doc_in = *doc_in_clone_;
     while (true) {
         prev_doc_id_ = level1_last_doc_id_;
@@ -986,7 +989,9 @@ VoidResult BlockPostingsEnum::skip_level0_to(int32_t target) {
     int32_t pos_upto = 0;
     int64_t pay_fp = 0;
     int32_t pay_upto = 0;
-    auto &doc_in = *doc_in_clone_;
+    // The reference implementation dereferences the documents input lazily, inside the block loop:
+    // a term with a single document never touches it (the singleton document
+    // id lives in the term state), so the input may legitimately be null here.
     while (true) {
         prev_doc_id_ = level0_last_doc_id_;
 
@@ -996,6 +1001,10 @@ VoidResult BlockPostingsEnum::skip_level0_to(int32_t target) {
         pay_upto = level0_block_pay_upto_;
 
         if (static_cast<size_t>(doc_count_left_) >= BLOCK_SIZE) {
+            if (doc_in_clone_ == nullptr) {
+                return err(LuceneError::illegal_state("documents input is missing"));
+            }
+            auto &doc_in = *doc_in_clone_;
             auto num_skip_bytes = doc_in.read_vlong();
             if (!num_skip_bytes) {
                 return std::unexpected(std::move(num_skip_bytes.error()));
@@ -1720,7 +1729,7 @@ VoidResult BlockPostingsEnum::advance_shallow(int32_t target) {
 Result<std::unique_ptr<Impacts>> BlockPostingsEnum::get_impacts() const {
     debug_check(needs_impacts_);
 
-    // rlucene keeps `None` when the serialized impacts were not allocated.
+    // The reference implementation keeps `None` when the serialized impacts were not allocated.
     std::optional<std::span<const uint8_t>> level0_serialized;
     std::optional<std::span<const uint8_t>> level1_serialized;
     if (needs_freq_ && needs_impacts_) {

@@ -38,7 +38,7 @@ namespace lucene {
 ///
 /// A new manager must be created for each search: it carries the cross-leaf
 /// state.  [`create`] builds first-page collectors (no search-after cursor,
-/// which is rlucene's `CHECK_AFTER = false`); [`with_after`] keeps the cursor
+/// which is the reference implementation's `CHECK_AFTER = false`); [`with_after`] keeps the cursor
 /// support.
 export class TopScoreDocCollectorManager final : public CollectorManager {
 public:

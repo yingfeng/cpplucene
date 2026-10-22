@@ -28,7 +28,7 @@ namespace lucene {
 
 namespace {
 
-/// `value.to_le_bytes()` of rlucene.
+/// `value.to_le_bytes()` of the reference implementation.
 template <class T>
 std::array<uint8_t, sizeof(T)> to_le_bytes(T value) {
     using Unsigned = std::make_unsigned_t<T>;
@@ -110,7 +110,7 @@ void BufferedChecksum::update_long(int64_t value) {
 
 void BufferedChecksum::update_longs(std::span<const int64_t> values, size_t offset, size_t len) {
     debug_check(offset + len <= values.size());
-    // rlucene keeps the direct path when the buffer cannot hold a whole long.
+    // The reference implementation keeps the direct path when the buffer cannot hold a whole long.
     if (buffer_.size() < sizeof(int64_t)) {
         for (size_t i = offset; i < offset + len; ++i) {
             update_long(values[i]);

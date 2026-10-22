@@ -28,7 +28,7 @@ namespace lucene {
 /// Utility struct to decode postings.  Port of `PostingDecodingUtil`
 /// (`core/internal/vectorization/posting_decoding_util.rs`).
 ///
-/// rlucene has `wide`-based SIMD fast paths in both methods.  The port keeps
+/// The reference implementation has `wide`-based SIMD fast paths in both methods.  The port keeps
 /// the scalar reference semantics only: the specialised branches decode the
 /// same bits into the same planes, they are just structured for automatic
 /// vectorisation.  clang vectorises the loops below on the hot sizes

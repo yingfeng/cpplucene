@@ -41,7 +41,7 @@ namespace lucene {
 /// Port of `FiniteStringsIterator`
 /// (`core/util/automation/finite_strings_iterator.rs`).
 ///
-/// **Deviation:** rlucene returns `Cow<'_, IntsRef>`, a borrowed view of the
+/// **Deviation:** the reference implementation returns `Cow<'_, IntsRef>`, a borrowed view of the
 /// builder's buffer that is only valid until the next call.  The C++ port has no
 /// borrowed `IntsRef` (the type always owns its storage), so `next` hands out a
 /// copy in a `std::optional`; `nullopt` means "no more strings".

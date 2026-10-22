@@ -54,8 +54,8 @@ export enum class AcceptStatus : uint8_t {
 /// Port of the `FilteredTermsEnumBase` trait (`core/index/filtered_terms_enum.rs`).
 ///
 /// **Deviation:** `next_seek_term` takes the current term as a possibly-null
-/// pointer (rlucene's `Option<&BytesRef>`) and returns an owned [`BytesRef`]:
-/// rlucene's `Cow` is not needed, because the only borrowed case points into
+/// pointer (the reference implementation's `Option<&BytesRef>`) and returns an owned [`BytesRef`]:
+/// The reference implementation's `Cow` is not needed, because the only borrowed case points into
 /// the implementation itself and the caller copies it anyway.
 export class FilteredTermsEnumBase {
 public:
@@ -84,7 +84,7 @@ public:
 ///
 /// Port of `FilteredTermsEnum` (`core/index/filtered_terms_enum.rs`).
 ///
-/// **Deviations:** rlucene's `<T, F>` type parameters become two type-erased
+/// **Deviations:** the reference implementation's `<T, F>` type parameters become two type-erased
 /// pointers, and `FilteredTermsEnumHook::Default` becomes a null `hook` (which
 /// is what [`unfiltered`] creates).
 export class FilteredTermsEnum final : public TermsEnum {
@@ -132,14 +132,14 @@ public:
 private:
     FilteredTermsEnum(std::unique_ptr<TermsEnum> tenum, std::unique_ptr<FilteredTermsEnumBase> hook, bool do_seek);
 
-    /// `next_seek_term`, with rlucene's fallback to the initial seek term.
+    /// `next_seek_term`, with the reference implementation's fallback to the initial seek term.
     [[nodiscard]] Result<std::optional<BytesRef>> hook_next_seek_term(const BytesRef *current);
 
     std::optional<BytesRef> initial_seek_term_{};
     bool do_seek_{true};
     bool has_actual_term_{false};
     std::unique_ptr<TermsEnum> tenum_;
-    /// Null means "not filtered" (rlucene's `FilteredTermsEnumHook::Default`).
+    /// Null means "not filtered" (the reference implementation's `FilteredTermsEnumHook::Default`).
     std::unique_ptr<FilteredTermsEnumBase> hook_;
 };
 

@@ -57,7 +57,7 @@ struct StatePairKeyHash {
 
 /// The automaton accepting the empty language (`Automata::make_empty`).
 ///
-/// rlucene's `Operations` calls `Automata` for these two automata, but
+/// The reference implementation's `Operations` calls `Automata` for these two automata, but
 /// `Automata` itself needs `Operations` for its debug assertions, so the C++
 /// port keeps the two constructions local to break the module cycle.
 Automaton make_empty_language() {
@@ -630,7 +630,7 @@ Result<std::optional<Automaton>> Operations::minus(const Automaton &a1, const Au
         return err(std::move(complement_a2.error()));
     }
 
-    // `nullopt` means "the first argument", which is what rlucene's
+    // `nullopt` means "the first argument", which is what the reference implementation's
     // `Cow::Borrowed(a1)` arm returns; the second borrowed arm of the Rust
     // version is materialised by `intersection` itself.
     auto common = intersection(a1, complement_a2.value());
@@ -648,7 +648,7 @@ Result<std::optional<Automaton>> Operations::intersection(const Automaton &a1, c
         return std::optional<Automaton>{};
     }
     if (a2.get_num_states() == 0) {
-        // rlucene borrows the second automaton here; `nullopt` means "the first
+        // The reference implementation borrows the second automaton here; `nullopt` means "the first
         // one", so the (state free) result is materialised instead.
         return std::optional<Automaton>(Automaton());
     }

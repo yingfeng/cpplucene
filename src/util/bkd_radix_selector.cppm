@@ -36,14 +36,14 @@ namespace lucene {
 /// descends into the single bucket that can still contain the answer.  One
 /// level is `O(n)` with at most `n` swaps, so a partition costs `O(bytesPerDim)`
 /// passes instead of the `O(n log n)` comparisons quicksort needs — this is the
-/// 256-way histogram optimisation rlucene uses.
+/// 256-way histogram optimisation the reference implementation uses.
 ///
 ///  * `select(from, to, partition_point, dim)` guarantees that every point in
 ///    `[from, partition_point)` is `<=` the returned value on `dim`, and every
 ///    point in `[partition_point, to)` is `>=` it;
 ///  * `sort(from, to, dim)` orders the slice by `dim`.
 ///
-/// **Deviation:** rlucene also partitions the offline (spilled) point writer.
+/// **Deviation:** the reference implementation also partitions the offline (spilled) point writer.
 /// This port partitions the heap only; [`BkdWriter`] materialises each spilled
 /// leaf before encoding it, so the selector never sees an offline slice.
 export class BkdRadixSelector {

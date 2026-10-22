@@ -79,7 +79,7 @@ public:
     [[nodiscard]] const Similarity &similarity() const noexcept { return *similarity_; }
 
     /// The similarity, as a shared pointer: a `Weight` outlives the call that
-    /// created it, so it keeps the similarity alive (rlucene clones the `Arc`).
+    /// created it, so it keeps the similarity alive (the reference implementation clones the `Arc`).
     [[nodiscard]] const std::shared_ptr<Similarity> &similarity_ptr() const noexcept { return similarity_; }
 
     /// Builds the searcher-dependent state of `query`.
@@ -96,7 +96,7 @@ public:
     /// no document has a term for it.
     [[nodiscard]] Result<std::optional<CollectionStatistics>> collection_statistics(std::string_view field) const;
 
-    /// Statistics of one term.  Kept as a method (like rlucene) so that a
+    /// Statistics of one term.  Kept as a method (like the reference implementation) so that a
     /// subclass can answer from a distributed collection.
     [[nodiscard]] Result<TermStatistics> term_statistics(const Term &term, int32_t doc_freq,
                                                          int64_t total_term_freq) const;
@@ -110,7 +110,7 @@ public:
     // ---- searching ----
 
     /// How many hits are counted exactly by default; above this the reported
-    /// total becomes a lower bound.  rlucene's `TOTAL_HITS_THRESHOLD`.
+    /// total becomes a lower bound.  The reference implementation's `TOTAL_HITS_THRESHOLD`.
     static constexpr size_t TOTAL_HITS_THRESHOLD = 1000;
 
     /// The top `n` hits for `query`, sorted by score.
@@ -130,7 +130,7 @@ public:
 
     /// Rewrites `query` until it reaches its final form.
     ///
-    /// **Deviation:** rlucene's `rewrite_with_needs_scores` wraps the query in a
+    /// **Deviation:** the reference implementation's `rewrite_with_needs_scores` wraps the query in a
     /// `ConstantScoreQuery` when scores are not needed, to take advantage of its
     /// extra rewrite rules; that query is not ported, so this always rewrites
     /// directly.

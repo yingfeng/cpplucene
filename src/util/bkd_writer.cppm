@@ -55,7 +55,7 @@ export struct BkdWriteResult {
 /// Builds a BKD tree and writes it to a point values file plus its index.
 ///
 /// Port of `BKDWriter` (`util/bkd/bkd_writer.rs`).  The split shape, the leaf
-/// layout and the packed index mirror rlucene; the differences are the ones
+/// layout and the packed index mirror the reference implementation; the differences are the ones
 /// [`BkdTreePlanner`] and [`BkdLeafWriter`] already document (leaf ordering,
 /// split-dimension choice).
 ///
@@ -65,7 +65,7 @@ export struct BkdWriteResult {
 /// a bounded working set: each partition is a radix pass over the spilled file,
 /// and each leaf is materialised into a heap block of at most
 /// `max_points_in_leaf` points.  Peak memory is therefore O(maxPointsInLeaf)
-/// instead of O(totalPointCount).  rlucene decides per `finish` whether to
+/// instead of O(totalPointCount).  The reference implementation decides per `finish` whether to
 /// spill; here the decision is made up front from `total_point_count`, which is
 /// known at construction time.
 export class BkdWriter {
@@ -95,13 +95,13 @@ public:
     /// Writes every leaf block into `data_out` and packs the index.
     ///
     /// Returns an empty result (no leaves) when no point was added, matching
-    /// rlucene's `finish` returning `None`.  Calling it twice fails.
+    /// The reference implementation's `finish` returning `None`.  Calling it twice fails.
     [[nodiscard]] Result<BkdWriteResult> finish(IndexOutput &data_out);
 
     /// Writes the `.kdm`/`.kdi` pair for a finished tree.
     ///
     /// `index_out` may be `nullptr`, in which case the packed index is appended
-    /// to `meta_out` (rlucene's single-file layout).  The index file pointer is
+    /// to `meta_out` (the reference implementation's single-file layout).  The index file pointer is
     /// recorded in the meta file either way.
     [[nodiscard]] VoidResult write_index(IndexOutput &meta_out, IndexOutput *index_out,
                                          const BkdWriteResult &data);

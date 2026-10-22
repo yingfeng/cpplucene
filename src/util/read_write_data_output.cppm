@@ -34,7 +34,7 @@ namespace lucene {
 /// [`ReverseBytesReader`] to the FST (in-memory), or copies the bytes forward
 /// into the real index file.
 ///
-/// **Deviation:** rlucene wraps `ByteBuffersDataOutput` and chooses between a
+/// **Deviation:** the reference implementation wraps `ByteBuffersDataOutput` and chooses between a
 /// paged reader and a contiguous reader depending on `block_bits`.  This port
 /// keeps a single contiguous `std::vector`, which is simpler and has the same
 /// observable behaviour for the FST use case; the `block_bits` parameter is

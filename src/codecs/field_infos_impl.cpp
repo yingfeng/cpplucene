@@ -220,6 +220,18 @@ bool FieldInfos::has_term_vectors() const {
     return any_field(fields_, [](const FieldInfo &field) { return field.has_term_vectors(); });
 }
 
+bool FieldInfos::has_postings() const {
+    return any_field(fields_, [](const FieldInfo &field) { return field.is_indexed(); });
+}
+
+bool FieldInfos::has_doc_values() const {
+    return any_field(fields_, [](const FieldInfo &field) { return field.has_doc_values(); });
+}
+
+bool FieldInfos::has_point_values() const {
+    return any_field(fields_, [](const FieldInfo &field) { return field.has_point_values(); });
+}
+
 std::string Lucene94FieldInfosFormat::file_name(std::string_view segment, std::string_view suffix) {
     return segment_file_name(segment, suffix, FNM_EXTENSION);
 }

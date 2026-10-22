@@ -40,7 +40,7 @@ namespace lucene {
 ///    types; the port has one `TopDocs` over [`ScoreDoc`] and a [`HitQueue`], so
 ///    the base is a plain class (the field-sorting collector, which is what
 ///    needs the genericity, is not ported yet);
-///  * `pq` / `total_hits` / `total_hits_relation` are public, like rlucene's
+///  * `pq` / `total_hits` / `total_hits_relation` are public, like the reference implementation's
 ///    `pub(crate)` fields: the leaf collectors live in their own translation unit
 ///    and update them.
 export class TopDocsCollectorBase {
@@ -67,7 +67,7 @@ public:
 
     /// Builds the result from `results` (`std::nullopt` = "nothing to return").
     ///
-    /// **Deviation:** rlucene's `TopScoreDocCollector` overrides this to keep
+    /// **Deviation:** the reference implementation's `TopScoreDocCollector` overrides this to keep
     /// the total hit count even when there are no hits to return, while the trait
     /// default answers "no hits at all".  The port has no other `TopDocs`
     /// collector yet, so the base carries the `TopScoreDocCollector` semantics.

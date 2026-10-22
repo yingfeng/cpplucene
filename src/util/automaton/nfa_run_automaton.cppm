@@ -37,7 +37,7 @@ namespace lucene {
 /// Port of `NFARunAutomaton` (`core/util/automation/nfa_run_automaton.rs`),
 /// implemented after <https://swtch.com/~rsc/regexp/regexp1.html>.
 ///
-/// **Deviations:** rlucene shares the automaton and the class tables through
+/// **Deviations:** the reference implementation shares the automaton and the class tables through
 /// `Arc` so that the type is cheap to clone; the C++ port owns them, and the
 /// DFA state map keeps a copy of the NFA state set instead of an `Arc<Vec>`.
 export class NFARunAutomaton final : public ByteRunnable {

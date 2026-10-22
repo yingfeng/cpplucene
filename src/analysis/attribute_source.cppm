@@ -86,7 +86,7 @@ public:
     /// Resets every attribute to its default value.
     void clear_attributes();
 
-    /// Alias used at the end of a stream (`end_attributes` in rlucene).
+    /// Alias used at the end of a stream (`end_attributes` in the reference implementation).
     void end_attributes() { clear_attributes(); }
 
     [[nodiscard]] size_t size() const noexcept { return attributes_.size(); }

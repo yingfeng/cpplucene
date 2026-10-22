@@ -37,7 +37,7 @@ namespace lucene {
 /// writer continues from.
 ///
 /// Port of `SegmentInfos` (`index/segment_infos.rs`), minus the directory and
-/// codec ownership rlucene keeps inside the type: here the file is read and
+/// codec ownership the reference implementation keeps inside the type: here the file is read and
 /// written explicitly, so `SegmentInfos` stays plain data.  The file is
 /// `segments_<base36 generation>`:
 ///

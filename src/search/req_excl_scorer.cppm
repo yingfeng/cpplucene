@@ -34,10 +34,10 @@ namespace lucene {
 /// The document set is the required clause's approximation; confirmation
 /// ([`matches`]) advances the excluded clause to the same document and rejects
 /// it.  Which confirmation runs first (`check_req`) is chosen at construction
-/// from the approximated match costs, exactly like rlucene's two
+/// from the approximated match costs, exactly like the reference implementation's two
 /// `TwoPhaseIteratorImpl`s.
 ///
-/// **Deviation:** rlucene wraps the two impls in `TwoPhaseIteratorEnum2` and
+/// **Deviation:** the reference implementation wraps the two impls in `TwoPhaseIteratorEnum2` and
 /// keeps a `TwoPhaseIteratorAsDocIdSetIterator`; the port folds both into one
 /// class plus a `check_req_` flag, because the two only differ in the order of
 /// the `matches` calls.

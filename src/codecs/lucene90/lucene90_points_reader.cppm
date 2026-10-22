@@ -69,7 +69,7 @@ private:
     Lucene90PointsReader(std::unique_ptr<IndexInput> index_in, std::unique_ptr<IndexInput> data_in,
                          std::shared_ptr<const FieldInfos> field_infos);
 
-    /// rlucene reads through the metadata file once, collecting readers; an error
+    /// The reference implementation reads through the metadata file once, collecting readers; an error
     /// half way leaves this reader closing its inputs, so the work is done here.
     [[nodiscard]] VoidResult read_meta(SegmentReadState &state, const SegmentInfo &segment_info);
 

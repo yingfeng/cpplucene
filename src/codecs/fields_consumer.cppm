@@ -23,6 +23,7 @@ import std;
 import :close;
 import :error;
 import :fields;
+import :merge_state;
 import :norms_producer;
 import :segment_info;
 import :segment_write_state;
@@ -35,10 +36,9 @@ namespace lucene {
 ///
 /// Port of the `FieldsConsumer` trait (`core/codecs/fields_consumer.rs`).
 ///
-/// **Deviation:** rlucene's `merge` has a default implementation built on
-/// `MultiFields` / `MappedMultiFields`, and the merge subsystem is not ported
-/// yet, so `merge` is absent for now; callers use [`write`] on the already
-/// merged `Fields`.
+/// **Deviation:** the reference implementation's `merge` receives a `MergeStateAccess` trait object;
+/// the port takes the concrete [`MergeState`], which is the only implementation
+/// it has.
 export class FieldsConsumer : public Closeable {
 public:
     ~FieldsConsumer() override = default;
@@ -59,6 +59,14 @@ public:
     /// `state` and `segment_info` must describe the segment being written.
     [[nodiscard]] virtual VoidResult write(const SegmentWriteState &state, const SegmentInfo &segment_info,
                                            Fields &fields, NormsProducer *norms) = 0;
+
+    /// Merges the postings of every segment in `merge_state`.
+    ///
+    /// Port of `FieldsConsumer::merge`: it builds a [`MultiFields`] over the
+    /// participating segments, wraps it in a [`MappedMultiFields`] so the doc ids
+    /// are rebased and the deleted documents dropped, and then writes that view.
+    [[nodiscard]] virtual VoidResult merge(const SegmentWriteState &state, const SegmentInfo &segment_info,
+                                           const MergeState &merge_state, NormsProducer *norms);
 };
 
 } // namespace lucene

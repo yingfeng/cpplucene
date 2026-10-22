@@ -24,6 +24,7 @@ import :close;
 import :doc_values_producer;
 import :error;
 import :field_infos;
+import :merge_state;
 
 namespace lucene {
 
@@ -31,12 +32,9 @@ namespace lucene {
 ///
 /// Port of the `DocValuesConsumer` trait (`core/codecs/doc_values_consumer.rs`).
 ///
-/// **Deviations:**
-///  * rlucene passes the write state and the segment info to every `add_*_field`;
-///    the concrete consumer already holds both here, so the methods only need the
-///    field and its source, like Lucene's Java API;
-///  * `merge` is not part of the interface yet, because merging needs
-///    `MergeState`.
+/// **Deviation:** the reference implementation passes the write state and the segment info to every
+/// `add_*_field`; the concrete consumer already holds both here, so the methods
+/// only need the field and its source, like Lucene's Java API.
 export class DocValuesConsumer : public Closeable {
 public:
     ~DocValuesConsumer() override = default;
@@ -56,6 +54,28 @@ public:
 
     /// Copies the sorted set values of `field`.
     [[nodiscard]] virtual VoidResult add_sorted_set_field(const FieldInfo &field, DocValuesProducer &producer) = 0;
+
+    /// Merges the doc values of every segment in `merge_state`.
+    ///
+    /// Port of `DocValuesConsumer::merge`: one `merge_*_field` per field of the
+    /// merged segment that has doc values.
+    [[nodiscard]] virtual VoidResult merge(const MergeState &merge_state);
+
+    /// Merges the numeric values of one field.
+    [[nodiscard]] virtual VoidResult merge_numeric_field(const FieldInfo &merge_field_info,
+                                                         const MergeState &merge_state);
+    /// Merges the binary values of one field.
+    [[nodiscard]] virtual VoidResult merge_binary_field(const FieldInfo &merge_field_info,
+                                                        const MergeState &merge_state);
+    /// Merges the sorted values of one field.
+    [[nodiscard]] virtual VoidResult merge_sorted_field(const FieldInfo &merge_field_info,
+                                                        const MergeState &merge_state);
+    /// Merges the sorted numeric values of one field.
+    [[nodiscard]] virtual VoidResult merge_sorted_numeric_field(const FieldInfo &merge_field_info,
+                                                                const MergeState &merge_state);
+    /// Merges the sorted set values of one field.
+    [[nodiscard]] virtual VoidResult merge_sorted_set_field(const FieldInfo &merge_field_info,
+                                                            const MergeState &merge_state);
 };
 
 } // namespace lucene

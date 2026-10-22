@@ -29,9 +29,9 @@ namespace lucene {
 ///
 /// Port of the `Fields::FieldIter` GAT (`core/index/fields.rs`).
 ///
-/// **Deviation:** rlucene's `IteratorExt` yields `&String` borrowed from the
+/// **Deviation:** the reference implementation's `IteratorExt` yields `&String` borrowed from the
 /// `Fields`; the type-erased version here yields a borrowed `const std::string *`
-/// that stays valid as long as the owning `Fields` (rlucene's `Arc` keeps it
+/// that stays valid as long as the owning `Fields` (the reference implementation's `Arc` keeps it
 /// alive for the same reason).  A null pointer means "end of iteration", like
 /// `BytesRefIterator::next`.
 export class FieldNameIterator {

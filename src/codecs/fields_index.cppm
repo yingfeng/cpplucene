@@ -60,7 +60,7 @@ public:
 
     /// A reader over the same file with its own cursor.
     ///
-    /// rlucene gets this from `TryClone`; C++ needs it in the interface, because
+    /// The reference implementation gets this from `TryClone`; C++ needs it in the interface, because
     /// the callers only hold a [`FieldsIndex`].
     [[nodiscard]] virtual Result<std::unique_ptr<FieldsIndex>> clone() const = 0;
 };

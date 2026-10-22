@@ -242,7 +242,7 @@ Result<Stats> compute_block_stats(SegmentTermsEnum &ste) {
                 if (auto finished = stats.finish(); !finished) {
                     return std::unexpected(std::move(finished.error()));
                 }
-                // Rewind to the root block, as rlucene leaves the enumerator.
+                // Rewind to the root block, as the reference implementation leaves the enumerator.
                 ste.current_frame_idx() = SegmentTermsEnum::STATIC_FRAME_IDX;
                 std::optional<size_t> root_arc;
                 if (FST *index = fr.index(); index != nullptr) {
@@ -306,7 +306,7 @@ Result<Stats> compute_block_stats(SegmentTermsEnum &ste) {
     }
 }
 
-// `FieldReader::get_stats` lives here: rlucene implements it in terms of
+// `FieldReader::get_stats` lives here: the reference implementation implements it in terms of
 // `compute_block_stats`, and this partition is the one that can see both.
 Result<std::string> FieldReader::get_stats() const {
     auto copy = clone_for_enum();

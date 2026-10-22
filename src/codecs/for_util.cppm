@@ -37,7 +37,7 @@ namespace lucene {
 ///  - if `bits_per_value <= 16`, 2 integers per `int32_t` (short lanes),
 ///  - otherwise one integer per `int32_t`.
 ///
-/// Deviation from rlucene: the hand-unrolled `decode1` .. `decode16` SIMD
+/// Deviation from the reference implementation: the hand-unrolled `decode1` .. `decode16` SIMD
 /// kernels and the `bits_per_value == 18` packed-tail special case of the
 /// encoder are not ported.  They only reshuffle the same bits into the same
 /// planes; [`decode`] therefore always uses the scalar reference algorithm
@@ -99,7 +99,7 @@ public:
     // One entry per bit width.  Unlike `decode`, they leave the values in the
     // lane layout (`ForDeltaUtil` exploits that by prefix-summing whole lanes).
     // They are public because `ForUtil` and `ForDeltaUtil` live in different
-    // translation units (rlucene can use `pub(crate)`).
+    // translation units (the reference implementation can use `pub(crate)`).
 
     [[nodiscard]] static VoidResult decode1(PostingDecodingUtil &pdu, std::span<int32_t> ints);
     [[nodiscard]] static VoidResult decode2(PostingDecodingUtil &pdu, std::span<int32_t> ints);

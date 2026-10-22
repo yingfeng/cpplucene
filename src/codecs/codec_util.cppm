@@ -91,7 +91,7 @@ export struct CodecUtil {
 
     /// Reads the footer structure and returns the stored CRC.
     ///
-    /// **Deviation:** rlucene takes a `ChecksumIndexInput` that recomputes the
+    /// **Deviation:** the reference implementation takes a `ChecksumIndexInput` that recomputes the
     /// CRC while reading; clucene has no checksum-tracking input yet, so this
     /// overload only validates the structure.  Use the two-argument overload to
     /// actually compare against a checksum.
@@ -106,7 +106,7 @@ export struct CodecUtil {
     [[nodiscard]] static Result<int64_t> retrieve_checksum(IndexInput &input);
 
     /// Same as [`retrieve_checksum`], but first verifies that the file length is
-    /// exactly `expected_length` (rlucene's `retrieve_checksum_with_expected`).
+    /// exactly `expected_length` (the reference implementation's `retrieve_checksum_with_expected`).
     [[nodiscard]] static Result<int64_t> retrieve_checksum_with_expected(IndexInput &input,
                                                                         size_t expected_length);
 

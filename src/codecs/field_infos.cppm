@@ -74,10 +74,13 @@ export struct FieldInfo {
     [[nodiscard]] bool has_vector_values() const noexcept { return vector_dimension != 0; }
     /// Vectors can only be stored with norms when the field is indexed.
     [[nodiscard]] bool has_norms() const noexcept { return is_indexed() && !omit_norms; }
-    /// Term vectors require frequencies, so they imply postings.
-    [[nodiscard]] bool has_term_vectors() const noexcept {
-        return is_indexed() && (store_term_vector || (index_options >= IndexOptions::DocsAndFreqs));
-    }
+    /// `true` only when the field explicitly stores term vectors.
+    ///
+    /// Port of `FieldInfo::has_term_vectors` (`field_info.rs`), which is just
+    /// `store_term_vector`: a field that merely stores frequencies has no
+    /// `.tvd`/`.tvx`/`.tvm` files, so the segment reader must not try to open
+    /// them.
+    [[nodiscard]] bool has_term_vectors() const noexcept { return is_indexed() && store_term_vector; }
     /// Positions are only available when the field records them.
     [[nodiscard]] bool has_positions() const noexcept {
         return index_options >= IndexOptions::DocsAndFreqsAndPositions;
@@ -92,7 +95,7 @@ export struct FieldInfo {
 /// All [`FieldInfo`]s of a segment, sorted by field number.
 ///
 /// Port of `FieldInfos` (`index/field_infos.rs`).  This port keeps the list
-/// immutable once built: rlucene's `FieldInfosBuilder` is what
+/// immutable once built: the reference implementation's `FieldInfosBuilder` is what
 /// `SegmentWriter` uses, and none of the readers need to mutate it.
 export class FieldInfos {
 public:
@@ -118,11 +121,11 @@ public:
     /// Names of all indexed fields.
     [[nodiscard]] std::set<std::string> indexed_fields() const;
 
-    // ---- segment level predicates (rlucene caches these on FieldInfos) ----
+    // ---- segment level predicates (the reference implementation caches these on FieldInfos) ----
 
     /// `true` when at least one field stores term frequencies.
     [[nodiscard]] bool has_freqs() const;
-    /// `true` when at least one field stores positions (rlucene's `has_prox`).
+    /// `true` when at least one field stores positions (the reference implementation's `has_prox`).
     [[nodiscard]] bool has_positions() const;
     /// `true` when at least one field stores payloads.
     [[nodiscard]] bool has_payloads() const;
@@ -132,6 +135,12 @@ public:
     [[nodiscard]] bool has_norms() const;
     /// `true` when at least one field stores term vectors.
     [[nodiscard]] bool has_term_vectors() const;
+    /// `true` when at least one field indexes postings (the reference implementation's `has_postings`).
+    [[nodiscard]] bool has_postings() const;
+    /// `true` when at least one field has doc values.
+    [[nodiscard]] bool has_doc_values() const;
+    /// `true` when at least one field has point values.
+    [[nodiscard]] bool has_point_values() const;
 
 private:
     FieldInfos() = default;
@@ -172,11 +181,11 @@ private:
 /// order (`SortedNumeric` and `SortedSet` are swapped), so the two are mapped
 /// explicitly.
 ///
-/// **Deviation:** `docValuesGen` is written big endian here, while rlucene writes
+/// **Deviation:** `docValuesGen` is written big endian here, while the reference implementation writes
 /// it with `DataOutput::write_long`, which is little endian in both projects.
 /// This port keeps every codec metadata payload big endian so a `.fnm`/`.si` pair
 /// matches what Java Lucene writes; the data formats (BKD, postings) still follow
-/// the port's little endian `DataOutput`, exactly like rlucene.
+/// the port's little endian `DataOutput`, exactly like the reference implementation.
 export struct Lucene94FieldInfosFormat {
     static constexpr std::string_view CODEC_NAME = "Lucene94FieldInfos";
     /// Only the current format version is written and read; an older header is

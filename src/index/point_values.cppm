@@ -30,7 +30,7 @@ namespace lucene {
 /// Used by [`PointValues::intersect`] to check how each recursive cell
 /// corresponds to the query.
 ///
-/// The ordinals match rlucene's `Relation::ordinal`, and are what the BKD
+/// The ordinals match the reference implementation's `Relation::ordinal`, and are what the BKD
 /// `IntersectState` stores.
 export enum class Relation : uint8_t {
     /// Return this if the query fully contains the cell.
@@ -41,7 +41,7 @@ export enum class Relation : uint8_t {
     kCellCrossesQuery = 2,
 };
 
-/// The ordinal of `relation`, as rlucene's `Relation::ordinal` reports it.
+/// The ordinal of `relation`, as the reference implementation's `Relation::ordinal` reports it.
 [[nodiscard]] constexpr int32_t relation_ordinal(Relation relation) noexcept {
     return static_cast<int32_t>(relation);
 }
@@ -121,7 +121,7 @@ public:
 ///
 /// Port of the `PointTree` trait (`core/index/point_values.rs`).
 ///
-/// **Deviation:** rlucene's `TryClone` becomes [`try_clone`]; the `Cow` return
+/// **Deviation:** the reference implementation's `TryClone` becomes [`try_clone`]; the `Cow` return
 /// values become owned [`BytesRef`], which is what `Cow::Owned` held anyway.
 export class PointTree {
 public:

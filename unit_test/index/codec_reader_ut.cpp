@@ -486,7 +486,7 @@ TEST(CodecReaderTest, DocValuesAreGatedByTheFieldInfoType) {
     reader.doc_values = &doc_values;
 
     // A field with a different doc values type answers "absent" rather than
-    // failing, as rlucene's `get_dv_field` does.
+    // failing, as the reference implementation's `get_dv_field` does.
     auto sorted = reader.get_sorted_doc_values("num");
     ASSERT_TRUE(sorted.has_value());
     EXPECT_EQ(sorted.value(), nullptr);

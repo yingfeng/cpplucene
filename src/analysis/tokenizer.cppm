@@ -32,11 +32,11 @@ namespace lucene {
 /// Base class of every token stream that consumes raw text.
 ///
 /// Port of `analysis/tokenizer.rs`.  The reader is a `std::string_view`
-/// (rlucene's `ReaderEnum` only exists because Rust needs a type-erased reader;
+/// (the reference implementation's `ReaderEnum` only exists because Rust needs a type-erased reader;
 /// `std::string_view` is the natural C++ currency and every caller in the
 /// codecs has the whole field value in memory).
 ///
-/// Offsets are **UTF-8 byte offsets** into the input, matching rlucene's
+/// Offsets are **UTF-8 byte offsets** into the input, matching the reference implementation's
 /// `usize` offsets (Java would use UTF-16 code units).
 export class Tokenizer : public TokenStream {
 public:

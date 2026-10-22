@@ -31,7 +31,7 @@ namespace lucene {
 ///
 /// Port of `util/packed/direct_reader.rs` (Lucene's `DirectReader`).
 ///
-/// **Deviation:** rlucene dispatches to a specialized reader per bit width
+/// **Deviation:** the reference implementation dispatches to a specialized reader per bit width
 /// (`DirectPackedReader1/2/4/12/20/28`, plus a buffered merge reader for
 /// decoding 128 values at once).  Here one generic decoder reads exactly the
 /// bytes that hold the requested value and reassembles them little endian

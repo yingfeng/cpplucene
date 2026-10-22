@@ -31,7 +31,7 @@ namespace lucene {
 /// Port of `FixedBitSet` (`util/fixed_bit_set.rs`), reduced to the operations the
 /// codecs need: construction from words (the on-disk form), single bit
 /// get/set/clear/flip, population count, and the set operations deletions use.
-/// rlucene's separate read-only `FixedBit` wrapper is not needed here because
+/// The reference implementation's separate read-only `FixedBit` wrapper is not needed here because
 /// [`FixedBitSet`] already implements [`Bits`].
 export class FixedBitSet final : public Bits {
 public:
@@ -56,7 +56,11 @@ public:
     bool set(size_t index) noexcept;
     /// Clears the bit at `index` and returns whether it was set before.
     bool clear(size_t index) noexcept;
-    /// Clears every bit, keeping the length; the `clear` of rlucene's `BitSet`.
+    /// Grows the set so that `index` fits, keeping the existing bits.
+    [[nodiscard]] VoidResult ensure_capacity(size_t index);
+    /// Sets every bit in `[from, to)`; `to` must not be past the length.
+    [[nodiscard]] VoidResult set_with_range(size_t from, size_t to);
+    /// Clears every bit, keeping the length; the `clear` of the reference implementation's `BitSet`.
     void clear_all() noexcept;
     /// Flips the bit at `index` and returns whether it was set before.
     bool flip(size_t index) noexcept;

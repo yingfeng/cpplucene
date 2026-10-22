@@ -54,7 +54,7 @@ public:
 /// hash, in about 16kB of memory.  This is the table used for all inputs whose
 /// size is at most 64kB.
 ///
-/// **Deviation:** rlucene stores 16-bit offsets in a `Vec<u16>`; here one
+/// **Deviation:** the reference implementation stores 16-bit offsets in a `Vec<u16>`; here one
 /// `int32_t` slot is used for both the 16- and 32-bit variants, trading 2 bytes
 /// per slot for a single code path.
 export class FastCompressionHashTable final : public Lz4HashTable {

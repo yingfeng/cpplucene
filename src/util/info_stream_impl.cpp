@@ -27,7 +27,7 @@ namespace lucene {
 
 namespace {
 
-/// Guards [`default_stream`].  rlucene uses a `RwLock`, but the stream is
+/// Guards [`default_stream`].  The reference implementation uses a `RwLock`, but the stream is
 /// swapped rarely and read once per `IndexWriter`, so a plain mutex is enough.
 std::mutex &default_stream_mutex() {
     static std::mutex mutex;

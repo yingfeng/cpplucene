@@ -99,7 +99,7 @@ TEST(DataOutputTest, ZigZagAndVLong) {
         EXPECT_EQ(in.read_zlong().value(), value);
     }
 
-    // Negative vlongs are rejected, matching rlucene.
+    // Negative vlongs are rejected, matching the reference implementation.
     ScratchBuffer bad;
     auto result = bad.out.write_vlong(-1);
     ASSERT_FALSE(result.has_value());

@@ -49,7 +49,7 @@ public:
 
     /// Payload at the current position, or `nullopt` when no payload was
     /// indexed.  The returned bytes are borrowed and must not be modified:
-    /// rlucene returns `Option<BytesRefValueEnum<'_>>`, which the port spells
+    /// The reference implementation returns `Option<BytesRefValueEnum<'_>>`, which the port spells
     /// as a span into the reader's payload buffer.
     [[nodiscard]] virtual Result<std::optional<std::span<const uint8_t>>> get_payload() const = 0;
 };
@@ -67,7 +67,7 @@ inline constexpr int16_t ALL = OFFSETS | PAYLOADS;
     return (flags & static_cast<int32_t>(feature)) == static_cast<int32_t>(feature);
 }
 
-/// The `either_postingsenum_named!` variants of rlucene
+/// The `either_postingsenum_named!` variants of the reference implementation
 /// (`PostingsEnumEnum2`, ...), expressed as one variadic type.
 export template <class... Ts>
 class PostingsEnumEnum : public PostingsEnum {

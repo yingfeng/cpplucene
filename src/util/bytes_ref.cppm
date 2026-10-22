@@ -29,7 +29,7 @@ namespace lucene {
 ///
 /// Port of `core/index/bytes_ref.rs` (`BytesRef<Vec<u8>>`).
 ///
-/// rlucene makes `BytesRef` generic over its byte container so it can model both
+/// The reference implementation makes `BytesRef` generic over its byte container so it can model both
 /// owned (`Vec<u8>`) and borrowed (`&[u8]`) references.  In C++ the borrowed
 /// form is spelled `std::span<const uint8_t>` at API boundaries, so `BytesRef`
 /// here always owns its storage; functions that accept either take a span.
@@ -100,7 +100,7 @@ public:
     /// MurmurHash3_x86_32 of the active range, using `GOOD_FAST_HASH_SEED`.
     [[nodiscard]] int32_t hash_code() const;
 
-    /// Debug rendering identical to rlucene's `Display`, e.g. `[61 62 63]`.
+    /// Debug rendering identical to the reference implementation's `Display`, e.g. `[61 62 63]`.
     [[nodiscard]] std::string to_display_string() const;
 
     [[nodiscard]] bool operator==(const BytesRef &other) const { return std::ranges::equal(as_slice(), other.as_slice()); }

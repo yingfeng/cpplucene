@@ -26,7 +26,7 @@ namespace lucene {
 
 /// A view over a range of `int32_t` values: `(ints, offset, length)`.
 ///
-/// Port of `util/ints_ref.rs`.  Unlike rlucene, which parametrizes the container
+/// Port of `util/ints_ref.rs`.  Unlike the reference implementation, which parametrizes the container
 /// (`Vec<i32>` or `Arc<Vec<i32>>`), the C++ version always owns a
 /// `std::vector<int32_t>`; borrowed views are spelled `std::span<const int32_t>`
 /// at API boundaries.

@@ -31,7 +31,7 @@ namespace lucene {
 namespace {
 
 /// The estimated cost of one `advance` call, used to weigh the excluded clause's
-/// confirmation (rlucene's `ADVANCE_COST`).
+/// confirmation (the reference implementation's `ADVANCE_COST`).
 constexpr int32_t kAdvanceCost = 10;
 
 /// Estimated number of operations needed to confirm a candidate; drives the

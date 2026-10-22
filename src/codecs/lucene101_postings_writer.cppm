@@ -48,7 +48,7 @@ namespace lucene {
 /// (`core/codecs/lucene101/lucene101_postings_writer.rs`).
 ///
 /// It implements the *push* API of [`PushPostingsWriterBaseAbstract`], which is
-/// what the block tree terms writer drives.  rlucene also implements
+/// what the block tree terms writer drives.  The reference implementation also implements
 /// `PostingsWriterBase` for it, but with `write_term` returning
 /// `not_implemented` and `encode_term` returning `unreachable`, so those two
 /// methods are not ported.

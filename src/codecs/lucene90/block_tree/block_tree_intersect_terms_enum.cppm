@@ -57,7 +57,7 @@ export class IntersectTermsEnumFrame {
 public:
     IntersectTermsEnumFrame() = default;
 
-    /// **Deviation:** rlucene's `new` returns `Result<Self>`; a C++ constructor
+    /// **Deviation:** the reference implementation's `new` returns `Result<Self>`; a C++ constructor
     /// cannot, so this is a factory.
     [[nodiscard]] static Result<IntersectTermsEnumFrame> create(size_t ord, FieldReader &fr);
 
@@ -161,13 +161,13 @@ public:
 ///
 /// **Deviations** (C++ mechanics only):
 ///  * as for [`SegmentTermsEnum`], the `FieldReader` is owned through a
-///    `std::unique_ptr` and the FST exposes its own bytes reader, so rlucene's
+///    `std::unique_ptr` and the FST exposes its own bytes reader, so the reference implementation's
 ///    `fst_reader` field is dropped;
 ///  * the term is kept in a [`BytesRefBuilder`] so that its length can be set
-///    explicitly, which is what rlucene's `BytesRef` fields do.
+///    explicitly, which is what the reference implementation's `BytesRef` fields do.
 export class IntersectTermsEnum final : public TermsEnum {
 public:
-    /// **Deviation:** rlucene's `new` returns `Result<Self>`; a C++ constructor
+    /// **Deviation:** the reference implementation's `new` returns `Result<Self>`; a C++ constructor
     /// cannot, so this is a factory.
     [[nodiscard]] static Result<std::unique_ptr<IntersectTermsEnum>> create(std::unique_ptr<FieldReader> fr,
                                                                            AutomatonEnum automaton,

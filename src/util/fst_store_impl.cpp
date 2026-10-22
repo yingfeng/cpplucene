@@ -135,7 +135,7 @@ std::unique_ptr<FstBytesReader> OffHeapFstStore::make_reader() const {
 }
 
 VoidResult OffHeapFstStore::write_to(DataOutput &out) const {
-    // The bytes already exist in the index file; rlucene rejects this too.
+    // The bytes already exist in the index file; the reference implementation rejects this too.
     (void)out;
     return err(LuceneError::unsupported_operation("write_to is not supported by OffHeapFstStore"));
 }

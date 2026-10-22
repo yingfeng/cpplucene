@@ -43,7 +43,7 @@ std::vector<BytesRef> to_terms(std::initializer_list<std::string_view> texts) {
     return terms;
 }
 
-/// Mirrors rlucene's `build` test helper: a string union compiled into the
+/// Mirrors the reference implementation's `build` test helper: a string union compiled into the
 /// "normal" form so that [`CompiledAutomaton::floor`] can be exercised.
 CompiledAutomaton build(const std::vector<std::string> &strings) {
     std::vector<BytesRef> terms;

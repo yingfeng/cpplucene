@@ -34,10 +34,10 @@ namespace lucene {
 ///
 /// **Deviations** (C++ mechanics only):
 ///  * the associated `TermsEnum` / `IntersectIter` types collapse into
-///    `std::unique_ptr<TermsEnum>`: type erasure replaces rlucene's GATs;
+///    `std::unique_ptr<TermsEnum>`: type erasure replaces the reference implementation's GATs;
 ///  * `get_min` / `get_max` return an owned [`BytesRef`] instead of a `Cow`
 ///    (the iterator's term is copied, which is what `Cow::Owned` did anyway);
-///  * rlucene's `CompiledAutomaton::get_terms_enum` becomes
+///  * the reference implementation's `CompiledAutomaton::get_terms_enum` becomes
 ///    [`Terms::terms_enum_for`], because `:compiled_automaton` importing
 ///    `:terms` would be a module cycle.
 export class Terms {
@@ -80,13 +80,13 @@ public:
     /// Human readable debug statistics.
     [[nodiscard]] virtual Result<std::string> get_stats() const;
 
-    /// rlucene's `default_intersect`: an enum over the terms accepted by
+    /// The reference implementation's `default_intersect`: an enum over the terms accepted by
     /// `compiled`, built by filtering [`iterator`] with an automaton.
     ///
     /// `start_term` is the term to start enumerating from, when non-null.  Note
-    /// that rlucene's `AutomatonTermsEnum` treats it as **exclusive**: a term
+    /// that the reference implementation's `AutomatonTermsEnum` treats it as **exclusive**: a term
     /// equal to `start_term` is never returned, even when the automaton accepts
-    /// it (compare `test_intersect` in rlucene, where `start_term = "aaa"` and
+    /// it (compare `test_intersect` in the reference implementation, where `start_term = "aaa"` and
     /// the terms `aaa, bbb, ccc` yield `bbb` first).  This port keeps that
     /// behavior.
     ///
@@ -95,7 +95,7 @@ public:
     [[nodiscard]] virtual Result<std::unique_ptr<TermsEnum>> intersect(const CompiledAutomaton &compiled,
                                                                       const BytesRef *start_term) const;
 
-    /// rlucene's `CompiledAutomaton::get_terms_enum`: an enum over the terms
+    /// The reference implementation's `CompiledAutomaton::get_terms_enum`: an enum over the terms
     /// accepted by `compiled`, taking the specialized form for the simple cases
     /// (nothing, everything, a single term).
     [[nodiscard]] Result<std::unique_ptr<TermsEnum>> terms_enum_for(const CompiledAutomaton &compiled) const;

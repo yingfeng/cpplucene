@@ -145,7 +145,7 @@ TEST(NormsProducerEnumTest, DispatchesPerAlternative) {
     ASSERT_TRUE(other.has_value());
     EXPECT_EQ(other.value()->long_value().value(), 9);
 
-    // rlucene's default: no separate merge instance.
+    // The reference implementation's default: no separate merge instance.
     auto merge = second.get_merge_instance();
     ASSERT_TRUE(merge.has_value());
     EXPECT_EQ(merge.value(), nullptr);

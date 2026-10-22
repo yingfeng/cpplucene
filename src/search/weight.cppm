@@ -48,7 +48,7 @@ export class Query;
 ///  * `matches` / `QueryWeightMatches` are not ported yet: they need the
 ///    `Matches` / `MatchesIterator` machinery, which no ported query needs so
 ///    far;
-///  * `get_query` returns a borrowed reference: rlucene's `create_weight`
+///  * `get_query` returns a borrowed reference: the reference implementation's `create_weight`
 ///    consumes the query into an `Arc`, so the weight owns it, while here the
 ///    caller keeps the query alive for as long as the weight is used (the same
 ///    contract Java's `Weight` has);
@@ -88,7 +88,7 @@ public:
         return default_count(context);
     }
 
-    /// rlucene's `default_count`: the "unknown" answer.
+    /// The reference implementation's `default_count`: the "unknown" answer.
     [[nodiscard]] virtual Result<int32_t> default_count(const LeafReaderContext &context) {
         (void)context;
         return -1;

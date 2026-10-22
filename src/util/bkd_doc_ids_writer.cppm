@@ -42,7 +42,7 @@ namespace lucene {
 /// | `32` | raw 32-bit ids |
 /// | `0`  | legacy delta vints (read only) |
 ///
-/// **Encoding choice** (same heuristics as rlucene and Java Lucene):
+/// **Encoding choice** (same heuristics as the reference implementation and Java Lucene):
 ///
 /// * `-2` continuous ids, when the block is strictly ascending and spans
 ///   exactly `count` values;
@@ -53,8 +53,8 @@ namespace lucene {
 /// * `24` when every id fits in 24 bits; `32` otherwise.
 ///
 /// Because `DataOutput::write_int` is little endian in this port (as it is in
-/// rlucene), the multi-byte encodings here are self-consistent with rlucene but
-/// not byte-compatible with a Java written leaf — the same trade-off rlucene
+/// The reference implementation), the multi-byte encodings here are self-consistent with the reference implementation but
+/// not byte-compatible with a Java written leaf — the same trade-off the reference implementation
 /// already made.  The one-byte and `vint` fields are identical either way.
 export struct BkdDocIdsWriter {
     static constexpr int8_t CONTINUOUS_IDS = -2;

@@ -41,13 +41,13 @@ namespace lucene {
 
 namespace {
 
-/// rlucene's `DEFAULT_MAX_MB_SORT_IN_HEAP`.
+/// The reference implementation's `DEFAULT_MAX_MB_SORT_IN_HEAP`.
 constexpr double DEFAULT_MAX_MB_SORT_IN_HEAP = 16.0;
 
 /// Feeds every point of a reader into a [`BkdWriter`].
 ///
 /// The visitor never reports "cell outside" or "cell inside", so a point tree
-/// always hands over the individual points (rlucene's `IntersectVisitorImpl` in
+/// always hands over the individual points (the reference implementation's `IntersectVisitorImpl` in
 /// `lucene90_points_writer.rs` does the same).
 class AddPointsVisitor final : public IntersectVisitor {
 public:
@@ -186,7 +186,7 @@ VoidResult Lucene90PointsWriter::write_field(const FieldInfo &field_info, Points
     }
     if (total_point_count.value() == 0) {
         // A field that contributed no point gets no entry in the metadata, so the
-        // reader reports no values for it.  rlucene reaches the same state through
+        // reader reports no values for it.  The reference implementation reaches the same state through
         // its BKD writer's empty `finish`; the BKD writer of this port rejects an
         // empty tree up front, so the skip happens here instead.
         return {};

@@ -44,7 +44,7 @@ namespace {
 
 /// Prefix-codes the split values of a [`BkdPlan`] into the packed index.
 ///
-/// Port of `pack_index`/`recurse_pack_index` in rlucene.  The byte layout of one
+/// Port of `pack_index`/`recurse_pack_index` in the reference implementation.  The byte layout of one
 /// inner node is:
 ///
 /// ```text
@@ -62,7 +62,7 @@ namespace {
 /// `negativeDeltas` records that a dimension is descending inside the left
 /// subtree, which flips the sign of the changed-byte delta.
 ///
-/// **Deviation:** rlucene buffers the left subtree in a block list to learn its
+/// **Deviation:** the reference implementation buffers the left subtree in a block list to learn its
 /// length before writing `leftNumBytes`.  Returning each subtree as a byte vector
 /// is the same layout with simpler bookkeeping, at the cost of O(size * depth)
 /// copying.
@@ -149,7 +149,7 @@ private:
         }
 
         // `saved` is the value inherited from the ancestors (what the parent's
-        // sibling needs back), `own` is this node's value.  rlucene keeps a
+        // sibling needs back), `own` is this node's value.  The reference implementation keeps a
         // per-level stack of split values; with a single array the two snapshots
         // reproduce the same thing: the left subtree is encoded against `own`
         // (negative delta), the right subtree against `own` too (positive delta),
@@ -260,7 +260,7 @@ template <typename Visitor>
 
 /// Builds leaves out of a spilled point set, one bounded heap block at a time.
 ///
-/// Port of the `build`/`select` half of rlucene's `BKDWriter` for the offline
+/// Port of the `build`/`select` half of the reference implementation's `BKDWriter` for the offline
 /// case: a slice is split by an MSD radix pass over one dimension until the
 /// boundary between the two children is a real byte boundary, and every leaf is
 /// then materialised into a heap writer of at most `max_points_in_leaf` points
@@ -742,7 +742,7 @@ Result<BkdWriteResult> BkdWriter::finish(IndexOutput &data_out) {
     result.count_per_leaf = config_.max_points_in_leaf_node;
 
     if (point_count_ == 0) {
-        // rlucene returns `None` here; an empty result carries the same meaning.
+        // The reference implementation returns `None` here; an empty result carries the same meaning.
         return result;
     }
 

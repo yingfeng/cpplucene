@@ -32,7 +32,7 @@ namespace lucene {
 ///
 /// Port of `Operations` (`core/util/automation/operations.rs`).
 ///
-/// **Deviation:** rlucene returns `Cow<'_, Automaton>`, so a function that does
+/// **Deviation:** the reference implementation returns `Cow<'_, Automaton>`, so a function that does
 /// not change anything hands the input back without copying.  The C++ port
 /// returns `std::optional<Automaton>` instead: `nullopt` means "use the input
 /// as is" (`Cow::Borrowed`), a value means "use this automaton"
@@ -41,7 +41,7 @@ namespace lucene {
 /// "borrow the second automaton" case (an automaton without states) instead of
 /// returning `nullopt` for it.
 ///
-/// **Deviation:** the rlucene lists of `&Automaton` (`&[A: Borrow<Automaton>]`)
+/// **Deviation:** the reference implementation lists of `&Automaton` (`&[A: Borrow<Automaton>]`)
 /// are spelled `std::vector<const Automaton *>`.
 export class Operations {
 public:
@@ -195,7 +195,7 @@ public:
     ///
     /// Worst case complexity: exponential in the number of states.  Fails with
     /// `too_complex_to_determinize` when the work exceeds `work_limit`
-    /// (rlucene's effort limit is `work_limit * 10`).
+    /// (the reference implementation's effort limit is `work_limit * 10`).
     [[nodiscard]] static Result<std::optional<Automaton>> determinize(const Automaton &a, size_t work_limit);
 
 private:

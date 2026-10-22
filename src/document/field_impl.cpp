@@ -21,7 +21,11 @@ import :indexable_field;
 import :types;
 import :error;
 import :number;
+import :analyzer;
+import :field_token_streams;
 import :field_type;
+import :index_types;
+import :token_stream;
 
 import std;
 
@@ -29,6 +33,80 @@ namespace lucene {
 
 Field::Field(std::string name, FieldValue value, FieldType type)
     : name_(std::move(name)), value_(std::move(value)), type_(std::move(type)) {}
+
+Field::Field(const Field &other) : name_(other.name_), value_(other.value_), type_(other.type_) {}
+
+Field &Field::operator=(const Field &other) {
+    if (this != &other) {
+        name_ = other.name_;
+        value_ = other.value_;
+        type_ = other.type_;
+        string_stream_.reset();
+        binary_stream_.reset();
+    }
+    return *this;
+}
+
+Field::Field(Field &&other) noexcept
+    : name_(std::move(other.name_)),
+      value_(std::move(other.value_)),
+      type_(std::move(other.type_)),
+      string_stream_(std::move(other.string_stream_)),
+      binary_stream_(std::move(other.binary_stream_)) {}
+
+Field &Field::operator=(Field &&other) noexcept {
+    if (this != &other) {
+        name_ = std::move(other.name_);
+        value_ = std::move(other.value_);
+        type_ = std::move(other.type_);
+        string_stream_ = std::move(other.string_stream_);
+        binary_stream_ = std::move(other.binary_stream_);
+    }
+    return *this;
+}
+
+Result<TokenStream *> Field::token_stream(Analyzer &analyzer) const {
+    if (!type_.is_indexed()) {
+        return static_cast<TokenStream *>(nullptr);
+    }
+
+    if (!type_.tokenized()) {
+        // Not tokenized: the whole value is a single term, so no analyzer is
+        // needed (the reference implementation's `StringTokenStream` / `BinaryTokenStream`).
+        if (const auto text = string_value(); text.has_value()) {
+            if (string_stream_ == nullptr) {
+                string_stream_ = std::make_unique<StringTokenStream>();
+            }
+            if (auto set = string_stream_->set_value(text.value()); !set.has_value()) {
+                return std::unexpected(std::move(set.error()));
+            }
+            if (auto reset = string_stream_->reset(); !reset.has_value()) {
+                return std::unexpected(std::move(reset.error()));
+            }
+            return static_cast<TokenStream *>(string_stream_.get());
+        }
+        if (const auto bytes = binary_value(); bytes.has_value()) {
+            if (binary_stream_ == nullptr) {
+                binary_stream_ = std::make_unique<BinaryTokenStream>();
+            }
+            binary_stream_->set_value(bytes.value());
+            return static_cast<TokenStream *>(binary_stream_.get());
+        }
+        return err(LuceneError::illegal_state("Field \"" + name_ +
+                                              "\" cannot be inverted: it has neither a string nor a binary value"));
+    }
+
+    const auto text = string_value();
+    if (!text.has_value()) {
+        return err(LuceneError::illegal_state("Field \"" + name_ +
+                                              "\" cannot be inverted: a tokenized field needs a string value"));
+    }
+    auto stream = analyzer.token_stream(name_, text.value());
+    if (!stream.has_value()) {
+        return std::unexpected(std::move(stream.error()));
+    }
+    return stream.value();
+}
 
 Result<Field> Field::from_string(std::string name, std::string value, FieldType type) {
     if (auto r = type.validate(); !r) {

@@ -29,7 +29,7 @@ namespace lucene {
 /// Port of the `DataInput` trait (`core/store/data_input.rs`).  Implementations
 /// are not thread-safe: they maintain an internal position.
 ///
-/// Deviations from rlucene, both forced by C++:
+/// Deviations from the reference implementation, both forced by C++:
 ///  * `get_bytes` returns an owned buffer instead of a `Cow<[u8]>`; hot paths
 ///    should use `read_bytes(std::span<uint8_t>)` which never allocates.
 ///  * `read_string` returns an owned `std::string` for the same reason.

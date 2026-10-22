@@ -28,7 +28,7 @@ export class Scorable;
 
 /// A sub-scorer and its relationship to the parent, e.g. `"MUST"`.
 ///
-/// Port of `ChildScorable` (`core/search/scorable.rs`).  rlucene ties the child
+/// Port of `ChildScorable` (`core/search/scorable.rs`).  The reference implementation ties the child
 /// type to the parent through a generic associated type; here the child is a
 /// plain non-owning pointer, since every child in the ported code is a scorer
 /// owned by its parent.

@@ -33,7 +33,7 @@ namespace lucene {
 /// Port of the `FieldInfosFormat` trait (`core/codecs/field_infos_format.rs`).
 ///
 /// **Deviation:** the segment name and id come from the [`SegmentInfo`], like
-/// rlucene, but the port keeps them as a `const SegmentInfo &` instead of a
+/// The reference implementation, but the port keeps them as a `const SegmentInfo &` instead of a
 /// `SegmentInfo<D>`.
 export class FieldInfosFormat {
 public:

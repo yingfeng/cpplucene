@@ -62,7 +62,7 @@ std::optional<size_t> BkdTreePlanner::choose_split_dim(size_t from, size_t to) c
 
     for (size_t dim = 0; dim < config.num_index_dims; ++dim) {
         const size_t offset = dim * bytes_per_dim;
-        // Track the min/max of this dimension over the block; rlucene does the
+        // Track the min/max of this dimension over the block; the reference implementation does the
         // same scan while computing the leaf bounds.
         const auto first = writer_->packed_value(from).packed_value();
         std::vector<uint8_t> min_value(first.begin() + static_cast<std::ptrdiff_t>(offset),

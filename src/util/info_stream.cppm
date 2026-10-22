@@ -58,7 +58,7 @@ public:
 /// user supplied stream, mirroring `InfoStreamEnum`.
 export class InfoStreamEnum : public InfoStream {
 public:
-    /// `NoOutput` (rlucene's `Default`).
+    /// `NoOutput` (the reference implementation's `Default`).
     InfoStreamEnum() = default;
 
     /// Wraps a custom stream.  A null pointer is treated like `NoOutput`.
@@ -73,14 +73,14 @@ public:
     /// `true` when this instance wraps [`NoOutput`].
     [[nodiscard]] bool is_no_output() const noexcept { return std::holds_alternative<NoOutput>(inner_); }
 
-    /// rlucene's `Debug` output (`NoOutput` / `CustomInfoStream`).
+    /// The reference implementation's `Debug` output (`NoOutput` / `CustomInfoStream`).
     [[nodiscard]] std::string to_string() const { return is_no_output() ? "InfoStreamEnum(NoOutput)" : "InfoStreamEnum(CustomInfoStream)"; }
 
 private:
     std::variant<NoOutput, std::shared_ptr<InfoStream>> inner_{NoOutput{}};
 };
 
-/// Shared handle to an [`InfoStreamEnum`] (rlucene's `InfoStreamMT`).
+/// Shared handle to an [`InfoStreamEnum`] (the reference implementation's `InfoStreamMT`).
 export using InfoStreamMT = std::shared_ptr<InfoStreamEnum>;
 
 /// The default [`InfoStream`] used by newly created types.

@@ -76,7 +76,7 @@ private:
 ///
 /// **Deviations** (C++ mechanics only):
 ///  * the per-leaf `OnceLock<Arc<TermStateEnum>>` becomes
-///    `std::optional<TermStateEnum>` plus a "lookup finished" flag: rlucene marks
+///    `std::optional<TermStateEnum>` plus a "lookup finished" flag: the reference implementation marks
 ///    a leaf whose term is absent with an `EmptyTermState` to avoid redoing the
 ///    I/O, and this port keeps that memoization without inventing a state variant;
 ///  * slot publication is guarded by one mutex instead of per-slot atomics

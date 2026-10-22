@@ -71,7 +71,7 @@ export struct DisiWriteResult {
 ///    instead of being kept as a `RandomAccessInput`.  It is at most a few
 ///    hundred KiB and the read is sequential, and it keeps the iterator free of
 ///    a second lazily-created slice;
-///  * rlucene's `Owned`/`Shared` policies and the `DocIndexIterator` wrapper are
+///  * the reference implementation's `Owned`/`Shared` policies and the `DocIndexIterator` wrapper are
 ///    collapsed: this class is the owned iterator and exposes [`index`] itself.
 export class IndexedDISI final : public DocIdSetIterator {
 public:

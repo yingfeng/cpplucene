@@ -39,11 +39,11 @@ namespace lucene {
 /// the producers themselves may be shared.
 ///
 /// **Deviations** (C++ mechanics only):
-///  * rlucene's associated types collapse into `std::unique_ptr<...>` over the
+///  * the reference implementation's associated types collapse into `std::unique_ptr<...>` over the
 ///    format-neutral interfaces;
 ///  * `get_skipper` returns a null pointer instead of `None`;
 ///  * the default implementations of the getters report `unsupported_operation`,
-///    like rlucene.
+///    like the reference implementation.
 export class DocValuesProducer : public CloseableRef {
 public:
     ~DocValuesProducer() override = default;

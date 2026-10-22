@@ -25,7 +25,7 @@ import std;
 
 namespace lucene {
 
-/// Codec name written into the BKD meta header (rlucene's `CODEC_NAME`).
+/// Codec name written into the BKD meta header (the reference implementation's `CODEC_NAME`).
 export inline constexpr std::string_view BKD_CODEC_NAME = "BKD";
 /// Meta-file version this port reads and writes (Lucene 9's `VERSION_META_FILE`).
 export inline constexpr int32_t BKD_VERSION_CURRENT = 9;

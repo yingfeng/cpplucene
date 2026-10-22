@@ -35,7 +35,7 @@ namespace lucene {
 /// (`core/search/disjunction_sum_scorer.rs`, `core/search/disjunction_scorer.rs`).
 ///
 /// **Deviations** (C++ mechanics only):
-///  * rlucene's `DisjunctionScorer<D, T>` is generic over the iterator and the
+///  * the reference implementation's `DisjunctionScorer<D, T>` is generic over the iterator and the
 ///    score collector; the port has the one implementation the boolean query
 ///    needs (`DisjunctionSumScorer`) and keeps the iterator separate;
 ///  * `DisjunctionMatchesIterator` is not ported: [`matches`] walks the

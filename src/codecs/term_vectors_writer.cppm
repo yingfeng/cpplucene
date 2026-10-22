@@ -24,6 +24,8 @@ import :close;
 import :data_input;
 import :error;
 import :field_infos;
+import :fields;
+import :merge_state;
 
 namespace lucene {
 
@@ -35,9 +37,6 @@ namespace lucene {
 /// (`add_position` | `add_prox`)*`/ `finish_field`, then `finish_document`.
 /// A document without term vectors still calls `start_document(0)` and
 /// `finish_document`.
-///
-/// **Deviation:** `merge` is not part of the interface — it needs the merge
-/// state and the document-id merger, neither of which is ported yet.
 export class TermVectorsWriter : public Closeable {
 public:
     ~TermVectorsWriter() override = default;
@@ -78,6 +77,20 @@ public:
 
     /// Called once, with the number of documents that were written.
     [[nodiscard]] virtual VoidResult finish(int32_t num_docs) = 0;
+
+    /// Writes every field of one document's vectors.
+    ///
+    /// Port of `TermVectorsWriter::add_all_doc_vectors`: a null `vectors` still
+    /// writes an empty document, and every term of every field is re-emitted
+    /// through [`start_term`] / [`add_position`].  `merge_state_meta` is only
+    /// needed to resolve the field infos of the merged segment.
+    [[nodiscard]] virtual VoidResult add_all_doc_vectors(Fields *vectors, const MergeStateMeta &merge_state_meta);
+
+    /// Merges the term vectors of the readers in `merge_state`, skipping deleted
+    /// documents, and returns the number of documents written.
+    ///
+    /// Port of `TermVectorsWriter::merge`.
+    [[nodiscard]] virtual Result<int32_t> merge(MergeState &merge_state);
 };
 
 } // namespace lucene

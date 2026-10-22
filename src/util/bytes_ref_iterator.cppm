@@ -31,7 +31,7 @@ namespace lucene {
 ///
 /// **Deviation:** the generic associated type `Value<'a>: BytesRefValue<'a>`
 /// (owned, borrowed or `Cow`) is spelled as a borrowed `const BytesRef *`,
-/// which is the `Cow::Borrowed` case rlucene actually uses for term
+/// which is the `Cow::Borrowed` case the reference implementation actually uses for term
 /// dictionaries.  A null pointer means "end of iteration"; the term stays valid
 /// until the iterator is advanced or destroyed.
 export class BytesRefIterator {
@@ -46,7 +46,7 @@ public:
         return err(LuceneError::need_implemented("BytesRefIterator::next"));
     }
 
-    /// The `set_next` of rlucene: positions on the next element and reports
+    /// The `set_next` of the reference implementation: positions on the next element and reports
     /// whether there is one.
     [[nodiscard]] virtual Result<bool> set_next() {
         return err(LuceneError::need_implemented("BytesRefIterator::set_next"));

@@ -31,7 +31,7 @@ namespace lucene {
 ///
 /// Port of the `DocIdSet` trait (`core/search/doc_id_set.rs`).
 ///
-/// **Deviation:** rlucene's `bits()` returns the concrete bit set through a
+/// **Deviation:** the reference implementation's `bits()` returns the concrete bit set through a
 /// generic associated type; here it is an opaque `Bits`, which is all the
 /// consumers in the ported code need.  `finish()` stays, because some sets
 /// (e.g. `DocsWithFieldSet`) only become iterable after it.

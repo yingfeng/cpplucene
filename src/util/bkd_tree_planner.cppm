@@ -68,7 +68,7 @@ export struct BkdPlan {
 /// Recursively splits the points of a [`HeapPointWriter`] until every block fits
 /// into a leaf.
 ///
-/// This is the recursive half of rlucene's `BKDWriter.build`
+/// This is the recursive half of the reference implementation's `BKDWriter.build`
 /// (`util/bkd/bkd_writer.rs`): pick a split dimension, partition the block in
 /// place with [`BkdRadixSelector`], then recurse.  Producing the leaf ranges is
 /// kept separate from encoding them, so the partitioning can be tested on its
@@ -76,11 +76,11 @@ export struct BkdPlan {
 ///
 /// The shape is fixed: a subtree with `n` leaves gives
 /// [`num_left_leaf_nodes`] leaves to its left child and splits the points at
-/// `left_leaves * max_points_in_leaf`, exactly like rlucene.  The packed index
+/// `left_leaves * max_points_in_leaf`, exactly like the reference implementation.  The packed index
 /// does not store the shape, so any other split would produce an index no
 /// reader could walk.
 ///
-/// **Deviation:** rlucene orders each leaf by the dimension whose next byte has
+/// **Deviation:** the reference implementation orders each leaf by the dimension whose next byte has
 /// the fewest distinct values (to maximise run-length compression) and picks
 /// split dimensions with an exact-bounds refresh every
 /// `SPLITS_BEFORE_EXACT_BOUNDS` levels.  This port orders each leaf by the
@@ -108,7 +108,7 @@ public:
     [[nodiscard]] std::optional<size_t> choose_split_dim(size_t from, size_t to) const;
 
     /// Leaves handed to the left child of a subtree with `num_leaves` leaves
-    /// (rlucene's `get_num_left_leaf_nodes`).
+    /// (the reference implementation's `get_num_left_leaf_nodes`).
     ///
     /// Unbalanced levels always go left, which is what keeps the subtree
     /// heights within one level of each other.

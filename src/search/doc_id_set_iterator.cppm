@@ -56,7 +56,7 @@ public:
 /// Specialisation hooks for [`DocIdSetIterator`].  Port of the
 /// `DocIdSetIteratorExtensions` trait.
 ///
-/// Deviation from rlucene: the `SparseFixedBitSet` hook is not ported yet
+/// Deviation from the reference implementation: the `SparseFixedBitSet` hook is not ported yet
 /// (there is no `:sparse_fixed_bit_set` partition), so only the fixed bit set
 /// and the doc-base fixed bit set accessors exist.
 export class DocIdSetIteratorExtensions {
@@ -89,7 +89,7 @@ public:
     [[nodiscard]] virtual Result<int32_t> next_doc() = 0;
 
     /// Advances to the first document `>= target` and returns it, or
-    /// [`NO_MORE_DOCS`].  The default implementation mirrors rlucene and
+    /// [`NO_MORE_DOCS`].  The default implementation mirrors the reference implementation and
     /// reports `not_implemented`.
     [[nodiscard]] virtual Result<int32_t> advance(int32_t target);
 
@@ -98,7 +98,7 @@ public:
     [[nodiscard]] virtual Result<int32_t> slow_advance(int32_t target);
 
     /// Estimated cost of this iterator; the default implementation mirrors
-    /// rlucene and reports `not_implemented`.
+    /// The reference implementation and reports `not_implemented`.
     [[nodiscard]] virtual Result<int64_t> cost() const;
 };
 
@@ -152,7 +152,7 @@ private:
     int32_t max_doc_;
 };
 
-/// The `either_docidsetiterator_named!` enum variants of rlucene
+/// The `either_docidsetiterator_named!` enum variants of the reference implementation
 /// (`DocIdSetIteratorEnum2` .. `DocIdSetIteratorEnum5`), expressed as one
 /// variadic type.  Ownership is by value, like the Rust enum.
 export template <class... Ts>

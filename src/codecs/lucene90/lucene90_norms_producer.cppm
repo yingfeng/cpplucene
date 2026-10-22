@@ -40,7 +40,7 @@ namespace lucene {
 /// [`NumericDocValues`] cursor on demand — a dense cursor when every document has
 /// a norm, a sparse one pairing [`IndexedDISI`] with the values otherwise.
 ///
-/// **Deviation:** rlucene's `get_merge_instance` (the merging producer) is not
+/// **Deviation:** the reference implementation's `get_merge_instance` (the merging producer) is not
 /// ported, because merging needs `MergeState`; [`get_merge_instance`] therefore
 /// returns `nullptr`, which tells a merger to merge through [`get_norms`].
 export class Lucene90NormsProducer final : public NormsProducer {

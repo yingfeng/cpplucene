@@ -43,7 +43,7 @@ namespace lucene {
 ///  * `.kdi`: the packed index, i.e. the inner nodes of the KD-tree;
 ///  * `.kdd`: the leaf blocks, where most of the indexed data lives.
 ///
-/// **Deviation:** rlucene's `PointsFormat` trait ties the writer and reader types
+/// **Deviation:** the reference implementation's `PointsFormat` trait ties the writer and reader types
 /// to the format through associated types.  A C++ interface cannot do that, so
 /// this struct exposes the two factories directly and returns the format-neutral
 /// [`PointsWriter`]/[`PointsReader`] interfaces.
@@ -79,7 +79,7 @@ export struct Lucene90PointsFormat {
 
 /// The Lucene90 points format as a [`PointsFormat`], so a codec can hand it out.
 ///
-/// Port of rlucene's `impl PointsFormat for Lucene90PointsFormat`, which is a
+/// Port of the reference implementation's `impl PointsFormat for Lucene90PointsFormat`, which is a
 /// unit struct; here the static helpers stay on the class and this adapter gives
 /// them the virtual dispatch surface.
 export class Lucene90PointsFormatAdapter final : public PointsFormat {

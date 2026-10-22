@@ -84,7 +84,7 @@ Result<TopDocs> TopDocsCollectorBase::top_docs_with_start_limit(int32_t start, i
 }
 
 TopDocs TopDocsCollectorBase::new_top_docs(std::optional<std::vector<ScoreDoc>> results, int32_t /*start*/) const {
-    // Unlike rlucene's trait default, the hit count survives an empty result
+    // Unlike the reference implementation's trait default, the hit count survives an empty result
     // page: that is what `TopScoreDocCollector` does, and it is the only
     // `TopDocs` collector in the port.
     if (!results.has_value()) {

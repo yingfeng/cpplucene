@@ -68,7 +68,7 @@ export struct StandardTokenizerTypes {
 
 /// The Lucene standard tokenizer.
 ///
-/// rlucene ports Lucene's JFlex-generated DFA (`ZZ_CMAP`/`ZZ_TRANS` tables);
+/// The reference implementation ports Lucene's JFlex-generated DFA (`ZZ_CMAP`/`ZZ_TRANS` tables);
 /// here the UAX #29 word-boundary rules are implemented directly (WB3-WB16 plus
 /// the script handling Lucene layers on top) because it is the maintainable
 /// option: every rule below is traceable to the UAX #29 text, and the script

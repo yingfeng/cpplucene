@@ -29,14 +29,14 @@ namespace lucene {
 ///
 /// Port of `PriorityQueue` (`core/util/priority_queue.rs`).
 ///
-/// The heap is 1-based exactly like rlucene's (`heap[0]` is unused), and it can
+/// The heap is 1-based exactly like the reference implementation's (`heap[0]` is unused), and it can
 /// be pre-filled with sentinel elements so that users such as the hit queue can
 /// assume it is always full and only ever replace the top.
 ///
 /// **Deviations** (C++ mechanics only):
 ///  * the `Compare<T>` trait becomes a template parameter: `C` must provide
 ///    `Result<bool> less_than(const T &a, const T &b) const`, which is where
-///    rlucene's `Compare::less_than` lands;
+///    The reference implementation's `Compare::less_than` lands;
 ///  * `top` / `top_mut` return pointers instead of `Option<&T>`/`Option<&mut T>`
 ///    (a null pointer means the queue is empty);
 ///  * `iter_ref` / `iter` become [`elements`] and [`take_all`], which is all the

@@ -140,7 +140,7 @@ export enum class RegExpKind {
 ///
 /// Port of `RegExp` (`core/util/automation/reg_exp.rs`).
 ///
-/// **Deviation:** rlucene returns `Cow<Automaton>` from the conversion so that a
+/// **Deviation:** the reference implementation returns `Cow<Automaton>` from the conversion so that a
 /// named automaton taken from the map is not copied; the C++ port always returns
 /// an owned [`Automaton`] (the extra copy only happens for named automata).
 export class RegExp {

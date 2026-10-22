@@ -33,7 +33,7 @@ namespace lucene {
 ///
 /// Port of the `IndexInput` trait (`core/store/index_input.rs`).
 ///
-/// Deviations from rlucene (C++ mechanics only):
+/// Deviations from the reference implementation (C++ mechanics only):
 ///  * `clone()` and `slice()` return `std::unique_ptr<IndexInput>` instead of an
 ///    associated type, so no type erasure enum is needed.
 ///  * `close()` is explicit but harmless to call twice; there is no `Drop`

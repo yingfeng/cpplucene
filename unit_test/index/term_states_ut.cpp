@@ -438,7 +438,7 @@ TEST(IndexSearcherStatisticsTest, TermStatisticsAreValidated) {
     EXPECT_EQ(stats.value().doc_freq(), 5);
     EXPECT_EQ(stats.value().total_term_freq(), 8);
 
-    // doc_freq exceeds total_term_freq: rejected, like rlucene.
+    // doc_freq exceeds total_term_freq: rejected, like the reference implementation.
     auto invalid = searcher.term_statistics(Term::from_text("body", "foo"), 9, 8);
     EXPECT_FALSE(invalid.has_value());
 }
@@ -494,7 +494,7 @@ TEST(TermStatesTest, BuildWithoutStatsResolvesLazilyPerLeaf) {
     auto states = build_term_states(searcher, Term::from_text("body", "bar"), /*needs_stats=*/false);
     ASSERT_TRUE(states.has_value());
     // Without statistics the frequencies are not accumulated, and asking for
-    // them is an error (rlucene's contract).
+    // them is an error (the reference implementation's contract).
     EXPECT_FALSE(states->doc_freq().has_value());
     EXPECT_FALSE(states->total_term_freq().has_value());
 

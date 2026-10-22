@@ -31,7 +31,7 @@ namespace lucene {
 /// Port of `StateSet` (`core/util/automation/state_set.rs`), which is the
 /// `IntSet` implementation used by determinization.
 ///
-/// **Deviations:** rlucene has two flavours (a shared `Arc<Vec<i32>>` cache and
+/// **Deviations:** the reference implementation has two flavours (a shared `Arc<Vec<i32>>` cache and
 /// an exclusively owned one); C++ needs only the owned one, so there is a single
 /// type.  `long_hash_code` is public here because determinization (not a test)
 /// needs it.

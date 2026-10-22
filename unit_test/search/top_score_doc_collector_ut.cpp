@@ -360,7 +360,7 @@ TEST(PriorityQueueTest, SentinelsStartTheQueueFull) {
     ASSERT_TRUE(queue.has_value());
     auto pq = std::move(queue.value());
 
-    // rlucene starts with `max_size` sentinel elements, so the queue is full.
+    // The reference implementation starts with `max_size` sentinel elements, so the queue is full.
     EXPECT_EQ(pq.size(), 1U);
     ASSERT_NE(pq.top(), nullptr);
     EXPECT_EQ(*pq.top(), kSentinel);
@@ -529,7 +529,7 @@ TEST(IndexSearcherSearchTest, SearchAfterSkipsThePreviousPage) {
     EXPECT_EQ(second_page.value().score_docs[0].doc, 2);
     EXPECT_EQ(second_page.value().score_docs[0].score, 3.0F);
     EXPECT_EQ(second_page.value().score_docs[1].doc, 3);
-    // Skipped hits are still counted, like rlucene does.
+    // Skipped hits are still counted, like the reference implementation does.
     EXPECT_EQ(second_page.value().total_hits.value, 4U);
 }
 

@@ -34,7 +34,7 @@ namespace lucene {
 /// that the direction is forward: this project's [`FstBuilder`] appends nodes
 /// as it serializes them (children first, so a parent's address is always
 /// greater than its children's), which means the FST data is read front to
-/// back.  rlucene writes nodes backwards and therefore needs a reverse reader.
+/// back.  The reference implementation writes nodes backwards and therefore needs a reverse reader.
 export class OwnedBytesReader final : public FstBytesReader {
 public:
     OwnedBytesReader(std::shared_ptr<const std::vector<uint8_t>> bytes, size_t offset, size_t length);
@@ -100,7 +100,7 @@ public:
 
 /// An FST store that owns its bytes.
 ///
-/// Port of `OnHeapFSTStore`.  rlucene additionally switches between a paged and
+/// Port of `OnHeapFSTStore`.  The reference implementation additionally switches between a paged and
 /// a contiguous reader based on `maxBlockBits`; since this port builds FSTs in
 /// one contiguous buffer, that choice disappears and the bytes are simply kept
 /// in a `shared_ptr<vector>`, so readers keep them alive on their own.

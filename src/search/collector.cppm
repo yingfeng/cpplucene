@@ -41,7 +41,7 @@ export class Weight;
 /// slice, reduced at the end).
 ///
 /// **Deviations** (C++ mechanics only):
-///  * rlucene's `get_leaf_collector` is generic over the weight and the
+///  * the reference implementation's `get_leaf_collector` is generic over the weight and the
 ///    searcher; here they are `const Weight *` / `const IndexSearcher &`,
 ///    because every ported collector ignores the weight (the pointer may be
 ///    null for the collectors that do not need it);

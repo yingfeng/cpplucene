@@ -26,7 +26,7 @@ namespace lucene {
 
 /// Sorting and collection helpers.  Port of `util/collection_util.rs`.
 ///
-/// **Deviation:** rlucene hand-ports Lucene's `IntroSorter`/`TimSorter` because
+/// **Deviation:** the reference implementation hand-ports Lucene's `IntroSorter`/`TimSorter` because
 /// Rust's `sort` is not customizable per comparison; C++ already has an
 /// introsort (`std::sort`) and a stable merge/timsort hybrid
 /// (`std::stable_sort`), so [`intro_sort`] and [`tim_sort`] forward to those.

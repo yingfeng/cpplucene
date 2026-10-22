@@ -51,7 +51,7 @@ Result<size_t> CoreHelper::check_index(size_t index, size_t length) {
 int32_t CoreHelper::mismatch_u8(std::span<const uint8_t> a, std::span<const uint8_t> b) {
     const size_t common = std::min(a.size(), b.size());
     size_t i = 0;
-    // TODO(lucene_core): rlucene uses 32-byte SIMD compares here; revisit once the
+    // TODO(lucene_core): the reference implementation uses 32-byte SIMD compares here; revisit once the
     // hot codec paths are ported and profiled.
     while (i < common && a[i] == b[i]) {
         ++i;

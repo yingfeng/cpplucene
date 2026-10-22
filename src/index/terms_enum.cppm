@@ -40,7 +40,7 @@ export enum class SeekStatus : uint8_t {
     NotFound = 2,
 };
 
-/// Result of a prepared seek (`PrepareSeekStatus` of rlucene).
+/// Result of a prepared seek (`PrepareSeekStatus` of the reference implementation).
 export enum class PrepareSeekStatus : uint8_t {
     Pending = 0,
     Found = 1,
@@ -68,7 +68,7 @@ export enum class PrepareSeekStatus : uint8_t {
 ///  * The two `AttributeSource<'a>` GATs collapse into one mutable pointer:
 ///    C++ constness is a property of the reference, not of the type parameter.
 ///  * `term()` returns a borrowed pointer instead of an owned `Value`.
-///  * `prepare_seek_exact` returns `true` for rlucene's `Some(())`.
+///  * `prepare_seek_exact` returns `true` for the reference implementation's `Some(())`.
 export class TermsEnum : public BytesRefIterator {
 public:
     /// The attribute source of this enum, or an error when it has none.
@@ -139,7 +139,7 @@ public:
 /// A [`TermsEnum`] over nothing.  Port of `EmptyTermsEnum`
 /// (`core/index/terms_enum.rs`).
 ///
-/// **Deviation:** rlucene also has `EmptyTermsEnumTermsWrapper<T>`, which only
+/// **Deviation:** the reference implementation also has `EmptyTermsEnumTermsWrapper<T>`, which only
 /// exists to name the wrapped `Terms`' postings type; type erasure makes it
 /// redundant, so [`EmptyTermsEnum`] covers both.
 export class EmptyTermsEnum : public TermsEnum {

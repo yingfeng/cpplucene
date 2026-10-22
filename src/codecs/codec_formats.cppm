@@ -30,7 +30,7 @@ namespace lucene {
 /// Port of `CodecFormats` (`core/codecs/codec_formats.rs`).
 ///
 /// **Deviations**:
-///  * rlucene's file also declares every historical codec (Lucene90, Lucene94,
+///  * the reference implementation's file also declares every historical codec (Lucene90, Lucene94,
 ///    Lucene95, Lucene99 and their format parameter classes).  By the project's
 ///    "current format only" rule this port keeps two entries: the codec it writes
 ///    ([`Lucene101Codec`]) and the metadata-only [`Lucene99Codec`] that the

@@ -43,7 +43,7 @@ namespace {
 
 /// The next representable `float` above `value`; `infinity` stays `infinity`.
 ///
-/// rlucene gets this from `f32::next_up`, which is `nextafter` towards positive
+/// The reference implementation gets this from `f32::next_up`, which is `nextafter` towards positive
 /// infinity.
 float next_up(float value) { return std::nextafter(value, std::numeric_limits<float>::infinity()); }
 

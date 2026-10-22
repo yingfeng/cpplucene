@@ -107,7 +107,7 @@ public:
     [[nodiscard]] int32_t max_docs_per_chunk() const noexcept { return max_docs_per_chunk_; }
     [[nodiscard]] int32_t block_size() const noexcept { return block_size_; }
 
-    /// Same text as rlucene's `Display` implementation.
+    /// Same text as the reference implementation's `Display` implementation.
     [[nodiscard]] std::string to_string() const;
 
 private:

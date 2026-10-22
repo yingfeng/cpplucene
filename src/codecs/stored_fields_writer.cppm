@@ -23,6 +23,7 @@ import std;
 import :close;
 import :error;
 import :field_infos;
+import :merge_state;
 
 namespace lucene {
 
@@ -32,9 +33,6 @@ namespace lucene {
 /// The sequence is always `start_document`, one call per stored field, then
 /// `finish_document`; a document without stored fields still calls the first and
 /// the last.
-///
-/// **Deviation:** `merge` is not part of the interface — it needs the merge
-/// state and the document-id merger, neither of which is ported yet.
 export class StoredFieldsWriter : public Closeable {
 public:
     ~StoredFieldsWriter() override = default;
@@ -63,6 +61,14 @@ public:
     /// point: a codec can detect a document that was started but never finished
     /// (LUCENE-1282).
     [[nodiscard]] virtual VoidResult finish(int32_t num_docs) = 0;
+
+    /// Merges the stored fields of the readers in `merge_state`, skipping deleted
+    /// documents, and returns the number of documents written.
+    ///
+    /// Port of `StoredFieldsWriter::merge` / `StoredFieldsWriterDefaults::merge`.
+    /// The default implementation re-serialises every field -- a codec that can
+    /// copy raw bytes may override it.
+    [[nodiscard]] virtual Result<int32_t> merge(MergeState &merge_state);
 };
 
 } // namespace lucene

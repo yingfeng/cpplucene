@@ -34,7 +34,7 @@ namespace lucene {
 /// Compares two FST outputs: negative when the first is smaller, zero when
 /// they are equal, positive otherwise.
 ///
-/// **Deviation:** rlucene makes the comparator a type parameter of
+/// **Deviation:** the reference implementation makes the comparator a type parameter of
 /// `TopNSearcher`.  Here the output value is already type erased as `std::any`,
 /// so the comparator is likewise erased into a `std::function`.
 export using OutputComparator = std::function<int32_t(const std::any &, const std::any &)>;

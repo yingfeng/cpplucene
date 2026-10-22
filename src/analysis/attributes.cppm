@@ -27,7 +27,7 @@ namespace lucene {
 
 /// Base class of every token attribute.  Port of `Attribute` / `AttributeImpl`.
 ///
-/// rlucene drives attributes through a typed enum plus `RefCell` guards; here the
+/// The reference implementation drives attributes through a typed enum plus `RefCell` guards; here the
 /// Java design is used instead (one polymorphic implementation per attribute,
 /// looked up by type in an [`AttributeSource`]), which maps 1:1 onto the same
 /// observable behaviour without the borrow gymnastics.

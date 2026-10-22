@@ -34,10 +34,10 @@ namespace lucene {
 ///
 /// The document set comes from a [`ConjunctionDISI`] over the sub-scorers, and
 /// only the `scoring` sub-scorers contribute to the score — a `FILTER` clause
-/// intersects without scoring, which is the `scoring_idx` list of rlucene.
+/// intersects without scoring, which is the `scoring_idx` list of the reference implementation.
 ///
 /// **Deviations** (C++ mechanics only):
-///  * rlucene selects between plain, two-phase and block-max implementations at
+///  * the reference implementation selects between plain, two-phase and block-max implementations at
 ///    construction (`ConjunctionScorerDisi`); the port always builds the plain
 ///    conjunction and lets the two-phase confirmation run afterwards, which is
 ///    slower but exact (block-max needs impacts, which are not ported);

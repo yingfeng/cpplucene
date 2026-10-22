@@ -153,7 +153,7 @@ TEST(BkdTreePlannerTest, UsesBothDimensions) {
 }
 
 TEST(BkdTreePlannerTest, LeftLeafCountsAreSemiBalanced) {
-    // rlucene's get_num_left_leaf_nodes: complete levels are filled, leftovers go
+    // The reference implementation's get_num_left_leaf_nodes: complete levels are filled, leftovers go
     // left, and the left child never holds more than twice the right child.
     EXPECT_EQ(BkdTreePlanner::num_left_leaf_nodes(2), 1u);
     EXPECT_EQ(BkdTreePlanner::num_left_leaf_nodes(3), 2u);

@@ -34,7 +34,7 @@ export struct ByteBlockPoolConstants {
 
 /// Largest allowed term position, so that `position + 128` cannot overflow.
 ///
-/// Port of `index_writer::MAX_POSITION`; rlucene declares it in `index_writer`,
+/// Port of `index_writer::MAX_POSITION`; the reference implementation declares it in `index_writer`,
 /// which does not exist in this port yet.
 export inline constexpr int32_t MAX_POSITION = std::numeric_limits<int32_t>::max() - 128;
 

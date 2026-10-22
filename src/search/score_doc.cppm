@@ -27,7 +27,7 @@ namespace lucene {
 ///
 /// Port of `ScoreDoc` (`core/search/score_doc.rs`).
 ///
-/// **Deviation:** the `ScoreDocLike` trait that rlucene uses to put `ScoreDoc`
+/// **Deviation:** the `ScoreDocLike` trait that the reference implementation uses to put `ScoreDoc`
 /// and `TopFieldScoreDoc` in one `TopDocs` is not ported; the port has a single
 /// `TopDocs` over `ScoreDoc` until sorting lands.
 export struct ScoreDoc {

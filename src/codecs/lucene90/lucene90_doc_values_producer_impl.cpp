@@ -85,7 +85,7 @@ constexpr auto SKIP_INDEX_JUMP_LENGTHS = skip_index_jump_lengths();
 
 /// Maps a doc id to the index of its first value.
 ///
-/// rlucene pairs every compression strategy with a dense and a sparse variant
+/// The reference implementation pairs every compression strategy with a dense and a sparse variant
 /// (`DenseNumericDocValues*` / `SparseNumericDocValues*`, eight classes for the
 /// numerics alone, and the same again for binary, sorted and sorted set).  All of
 /// them differ only in how they compute the value index, so one index abstraction
@@ -664,7 +664,7 @@ private:
 
 /// A single-valued sorted set seen as a sorted set.
 ///
-/// rlucene returns the sorted cursor itself through
+/// The reference implementation returns the sorted cursor itself through
 /// `Lucene90SortedSetDocValuesEnum::Singleton`; C++ needs a distinct class because
 /// the two interfaces are unrelated.
 class SingletonSortedSet final : public SortedSetDocValues {
@@ -884,7 +884,7 @@ public:
 
     [[nodiscard]] bool is_single_valued() const override { return single_valued_; }
 
-    /// **Deviation:** rlucene wraps the underlying `NumericDocValues` here; this
+    /// **Deviation:** the reference implementation wraps the underlying `NumericDocValues` here; this
     /// port reports `unsupported_operation`, because the cursor owns no producer
     /// to build a second one.  Use `doc_value_count`/`next_value` instead.
     [[nodiscard]] Result<std::unique_ptr<NumericDocValues>> get_numeric_doc_values() override {
@@ -1488,7 +1488,7 @@ Result<std::unique_ptr<Lucene90DocValuesProducer>> Lucene90DocValuesProducer::cr
                                               std::to_string(data_header.value())));
     }
     // The data file is far too big to checksum on open; only the footer
-    // structure is validated here, like rlucene.
+    // structure is validated here, like the reference implementation.
     auto checksum = CodecUtil::retrieve_checksum(*data.value());
     if (!checksum.has_value()) {
         static_cast<void>(data.value()->close());

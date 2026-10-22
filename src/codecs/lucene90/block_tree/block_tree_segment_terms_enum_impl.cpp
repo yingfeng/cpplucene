@@ -48,7 +48,7 @@ namespace lucene {
 
 namespace {
 
-/// rlucene's `Arc<BytesRef>` output slots are type erased (`std::any`) in this
+/// The reference implementation's `Arc<BytesRef>` output slots are type erased (`std::any`) in this
 /// port; `ByteSequenceOutputs` always stores a [`BytesRef`], and a missing slot
 /// means `NO_OUTPUT`.
 const BytesRef &arc_output(const std::any &slot) {
@@ -850,7 +850,7 @@ Result<SegmentTermsEnumFrame> SegmentTermsEnumFrame::create(int32_t ord, FieldRe
     frame.has_terms_orig = false;
     frame.is_floor = false;
 
-    // rlucene pre-sizes the buffers the same way; they grow on demand.
+    // The reference implementation pre-sizes the buffers the same way; they grow on demand.
     frame.suffix_bytes.assign(32, 0);
     frame.suffix_length_bytes.assign(32, 0);
     frame.stats_bytes.assign(64, 0);

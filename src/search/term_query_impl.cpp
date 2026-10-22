@@ -54,13 +54,13 @@ namespace {
 
 /// Scores nothing; used when a query's scores are not needed, so that no
 /// collector-level scorer (and for BM25 no 256-entry table) is allocated.
-/// rlucene's `SimScorerImpl` in `term_query.rs`.
+/// The reference implementation's `SimScorerImpl` in `term_query.rs`.
 class DummySimScorer final : public SimScorer {
 public:
     [[nodiscard]] float score(float /*freq*/, int64_t /*norm*/) const override { return 0.0F; }
 };
 
-/// The score-less similarity scorer of rlucene's `create_weight` fast path.
+/// The score-less similarity scorer of the reference implementation's `create_weight` fast path.
 std::shared_ptr<SimScorer> dummy_sim_scorer() {
     static const auto instance = std::make_shared<DummySimScorer>();
     return instance;
@@ -203,7 +203,7 @@ Result<std::unique_ptr<TermWeight>> TermWeight::create(const Query &parent_query
 }
 
 Result<std::unique_ptr<TermsEnum>> TermWeight::get_terms_enum(const LeafReaderContext &context) const {
-    // rlucene asserts that the states were built for this reader tree.
+    // The reference implementation asserts that the states were built for this reader tree.
     if (!term_states_->was_built_for(ReaderUtil::get_top_level_context(context))) {
         return err(LuceneError::illegal_state(
                 "The top-reader used to create Weight is not the same as the current reader's top-reader"));

@@ -109,7 +109,7 @@ Result<WriteTermResult> PushPostingsWriterBase::write_term(const BytesRef & /*te
                     return err(std::move(position.error()));
                 }
 
-                // rlucene maps the payload to a borrowed `BytesRef`; the port's
+                // The reference implementation maps the payload to a borrowed `BytesRef`; the port's
                 // `get_payload` returns a span into the reader's buffer, so the
                 // bytes are copied into a `BytesRef` that outlives the call.
                 std::optional<BytesRef> payload_storage;

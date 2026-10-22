@@ -75,7 +75,7 @@ VoidResult write_impacts(std::span<const Impact> impacts, DataOutput &out) {
         debug_check(impact.freq > previous_freq);
         debug_check(static_cast<uint64_t>(impact.norm) > static_cast<uint64_t>(previous_norm));
         const int32_t freq_delta = impact.freq - previous_freq - 1;
-        // `wrapping_sub(1)` of rlucene: norms are compared as unsigned.
+        // `wrapping_sub(1)` of the reference implementation: norms are compared as unsigned.
         const auto norm_delta = static_cast<int64_t>(static_cast<uint64_t>(impact.norm) -
                                                     static_cast<uint64_t>(previous_norm) - 1);
         if (norm_delta == 0) {

@@ -23,15 +23,19 @@ import :number;
 
 import std;
 
+import :analyzer;
+import :field_token_streams;
 import :field_type;
+import :invertable_field;
+import :token_stream;
 
 namespace lucene {
 
 /// A single field instance of a document.  Port of `IndexableField`.
 ///
-/// rlucene models the payload as an enum that also covers token streams and
-/// readers.  The token-stream variants belong to the analysis layer and are
-/// added with it; what is here covers everything the codecs read back.
+/// The reference implementation models the payload as an enum that also covers token streams and
+/// readers.  This port keeps the value in the field and hands out a token
+/// stream on demand ([`token_stream`]), which is what the indexing chain needs.
 export class IndexableField {
 public:
     virtual ~IndexableField() = default;
@@ -43,6 +47,26 @@ public:
     [[nodiscard]] virtual std::optional<std::vector<uint8_t>> binary_value() const = 0;
     [[nodiscard]] virtual std::optional<Number> numeric_value() const = 0;
 
+    /// How the field must be inverted (port of `IndexableField::invertable_type`).
+    [[nodiscard]] virtual InvertableType invertable_type() const { return InvertableType::TokenStream; }
+
+    /// Whether the indexer owns this field and refuses it in user documents
+    /// (the soft deletes field, the parent field of a block index).
+    [[nodiscard]] virtual bool is_reserved() const { return false; }
+
+    /// The token stream used to index this field.
+    ///
+    /// `nullptr` means "this field is not indexed".  The stream stays valid
+    /// until the next call with the same field name, so the indexer must finish
+    /// one field before starting the next (which is why the indexing chain has
+    /// two passes over the document).
+    ///
+    /// **Deviation:** the reference implementation passes the reusable stream in and out; here the
+    /// field (or its analyzer) owns it and `const` is enough.
+    [[nodiscard]] virtual Result<TokenStream *> token_stream(Analyzer &analyzer) const {
+        return err(LuceneError::unsupported_operation("this field cannot produce a token stream"));
+    }
+
     [[nodiscard]] virtual std::string to_string() const = 0;
 };
 
@@ -53,6 +77,13 @@ export using FieldValue = std::variant<std::string, std::vector<uint8_t>, Number
 export class Field : public IndexableField {
 public:
     Field(std::string name, FieldValue value, FieldType type);
+
+    // The cached token streams are derived state, so copies start without them.
+    Field(const Field &other);
+    Field &operator=(const Field &other);
+    Field(Field &&other) noexcept;
+    Field &operator=(Field &&other) noexcept;
+    ~Field() override = default;
 
     // ---- factories ----
     [[nodiscard]] static Result<Field> from_string(std::string name, std::string value, FieldType type);
@@ -68,6 +99,8 @@ public:
     [[nodiscard]] std::optional<std::string_view> string_value() const override;
     [[nodiscard]] std::optional<std::vector<uint8_t>> binary_value() const override;
     [[nodiscard]] std::optional<Number> numeric_value() const override;
+
+    [[nodiscard]] Result<TokenStream *> token_stream(Analyzer &analyzer) const override;
 
     [[nodiscard]] std::string to_string() const override;
 
@@ -85,6 +118,10 @@ private:
     std::string name_;
     FieldValue value_;
     FieldType type_;
+    /// Token streams for the non-tokenized cases, reused across documents.
+    /// They are derived state: copies start with none.
+    mutable std::unique_ptr<StringTokenStream> string_stream_;
+    mutable std::unique_ptr<BinaryTokenStream> binary_stream_;
 };
 
 /// A field whose value is only stored, never indexed.  Port of `StoredField`.

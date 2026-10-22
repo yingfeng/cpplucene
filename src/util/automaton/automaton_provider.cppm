@@ -47,7 +47,7 @@ public:
     [[nodiscard]] Result<std::optional<Automaton>> get_automaton(std::string_view name) const override;
 };
 
-/// An [`AutomatonProvider`] backed by a map; the `AutomatonMap` that rlucene
+/// An [`AutomatonProvider`] backed by a map; the `AutomatonMap` that the reference implementation
 /// passes to `RegExp::to_automaton_from_map` takes the same role.
 export class AutomatonMapProvider final : public AutomatonProvider {
 public:

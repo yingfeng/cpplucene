@@ -33,7 +33,7 @@ namespace lucene {
 ///
 /// **Deviations** (C++ mechanics only):
 ///  * `get_merge_instance` returns a null pointer instead of `Option<Self>`; the
-///    default answers "no merge instance", which is what rlucene's `None` means;
+///    default answers "no merge instance", which is what the reference implementation's `None` means;
 ///  * `Fields` already collapses the associated types, so nothing else changes.
 export class FieldsProducer : public Fields, public CloseableRef {
 public:

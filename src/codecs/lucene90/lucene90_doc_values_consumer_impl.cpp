@@ -72,7 +72,7 @@ private:
 
 /// The dictionary of a sorted or sorted set field, as a dense list of terms.
 ///
-/// rlucene walks the dictionary with a `TermsEnum`; here the ordinals are dense
+/// The reference implementation walks the dictionary with a `TermsEnum`; here the ordinals are dense
 /// and already sorted by term, so reading them in order gives the same sequence
 /// without needing the `TermsEnum` adapter of the search layer.
 class TermSource {
@@ -180,7 +180,7 @@ private:
 };
 
 /// A single-valued [`SortedSetDocValues`] seen as a [`SortedDocValues`], taking
-/// the document's minimum ordinal (rlucene's `SortedSetSelector::Min`).
+/// the document's minimum ordinal (the reference implementation's `SortedSetSelector::Min`).
 class SortedSetAsSorted final : public SortedDocValues {
 public:
     explicit SortedSetAsSorted(std::unique_ptr<SortedSetDocValues> values) : values_(std::move(values)) {}
@@ -214,7 +214,7 @@ private:
 
 /// Projects a [`DocValuesProducer`] onto the accessor the values writer needs.
 ///
-/// rlucene does this with one borrowed producer per case
+/// The reference implementation does this with one borrowed producer per case
 /// (`EmptyDocValuesProducerSub1..4`); one class with a mode keeps the four
 /// behaviours together.
 class DocValuesView final : public DocValuesProducer {

@@ -54,7 +54,7 @@ public:
 
     /// The ordinal of `key`, or `-insertion_point - 1` when it is not present.
     ///
-    /// The default implementation mirrors rlucene: a binary search over the
+    /// The default implementation mirrors the reference implementation: a binary search over the
     /// dictionary through [`lookup_ord`].
     [[nodiscard]] virtual Result<int64_t> lookup_term(std::span<const uint8_t> key);
 

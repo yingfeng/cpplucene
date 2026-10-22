@@ -61,7 +61,7 @@ VoidResult BufferedChecksumIndexInput::read_bytes(std::span<uint8_t> b) {
 }
 
 VoidResult BufferedChecksumIndexInput::skip_bytes(int64_t num_bytes) {
-    // Skips are not checksummed, matching rlucene (which delegates to
+    // Skips are not checksummed, matching the reference implementation (which delegates to
     // `IndexInput::skip_bytes`); use `skip_by_reading` when the checksum of the
     // skipped bytes matters.
     return IndexInput::skip_bytes(num_bytes);

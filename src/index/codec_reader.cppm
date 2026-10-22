@@ -50,7 +50,7 @@ namespace lucene {
 /// The codec layer gives one reader per file family (stored fields, term
 /// vectors, norms, doc values, postings, points); this class is what turns them
 /// into the uniform [`LeafReader`] surface the search side expects, including the
-/// `DocValuesType` / `omit_norms` validation that rlucene performs on the way
+/// `DocValuesType` / `omit_norms` validation that the reference implementation performs on the way
 /// through.
 ///
 /// **Deviations** (C++ mechanics only):
@@ -103,7 +103,7 @@ public:
 
     /// Checks the integrity of every reader this segment holds.
     ///
-    /// Port of rlucene's `default_check_integrity`: it visits postings, norms,
+    /// Port of the reference implementation's `default_check_integrity`: it visits postings, norms,
     /// doc values, stored fields, term vectors and points.  This may read whole
     /// files, so it is for `CheckIndex` and tests only.
     [[nodiscard]] virtual VoidResult check_integrity();
@@ -112,7 +112,7 @@ protected:
     /// The [`FieldInfo`] of `field` when the field exists **and** its doc values
     /// type is `expected`; null otherwise.
     ///
-    /// Null also covers the two cases rlucene folds into `Ok(None)`: the field
+    /// Null also covers the two cases the reference implementation folds into `Ok(None)`: the field
     /// does not exist, or it was indexed without doc values of that type.
     [[nodiscard]] Result<const FieldInfo *> doc_values_field(std::string_view field, DocValuesType expected) const;
 };

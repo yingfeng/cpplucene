@@ -44,7 +44,7 @@ namespace lucene {
 
 namespace {
 
-/// The bounds-checking wrapper of rlucene's `StoredFieldsImpl`.
+/// The bounds-checking wrapper of the reference implementation's `StoredFieldsImpl`.
 ///
 /// The codec readers are not required to validate document ids, so the check is
 /// done here, before the id reaches the file format.
@@ -87,7 +87,7 @@ private:
     int32_t max_doc_;
 };
 
-/// The `OptionalTermVectors::Empty` of rlucene: a cursor that owns no files and
+/// The `OptionalTermVectors::Empty` of the reference implementation: a cursor that owns no files and
 /// answers "this document has no term vectors" for every document.
 class EmptyTermVectors final : public TermVectors {
 public:

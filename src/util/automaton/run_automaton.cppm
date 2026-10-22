@@ -36,7 +36,7 @@ namespace lucene {
 /// `state * points.size() + get_char_class(c)`, where `points` are the
 /// codepoint class interval start points.
 ///
-/// **Deviations:** rlucene returns `Result<Self>` from `new`, which a C++
+/// **Deviations:** the reference implementation returns `Result<Self>` from `new`, which a C++
 /// constructor cannot, so [`create`] is the factory; the `Accountable`
 /// implementation is not ported.
 export class RunAutomaton {

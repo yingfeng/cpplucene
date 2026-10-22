@@ -43,7 +43,7 @@ public:
     /// Writes `<info.name>.si`, adding the file name to `info.files`.
     ///
     /// `info` is mutable because writing the file makes it part of the segment,
-    /// which is what rlucene does too (`si.add_file(file_name)`).
+    /// which is what the reference implementation does too (`si.add_file(file_name)`).
     [[nodiscard]] virtual VoidResult write(Directory &dir, SegmentInfo &info, const IOContext &context) const = 0;
 
     /// Reads `<segment>.si`, validating the header against `id`.

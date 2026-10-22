@@ -517,7 +517,7 @@ VoidResult ForUtil::decode_slow(int32_t bits_per_value,
                                 PostingDecodingUtil &pdu,
                                 std::span<int32_t> tmp,
                                 std::span<int32_t> ints) {
-    // rlucene only reaches this method for `bits_per_value >= 17` (the
+    // The reference implementation only reaches this method for `bits_per_value >= 17` (the
     // specialised decoders below cover 1..16); the bit cursor starts negative
     // for smaller widths.
     if (bits_per_value < 17 || bits_per_value > 32) {

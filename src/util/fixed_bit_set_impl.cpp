@@ -76,6 +76,28 @@ bool FixedBitSet::clear(size_t index) noexcept {
     return was_set;
 }
 
+VoidResult FixedBitSet::ensure_capacity(size_t index) {
+    if (index < num_bits_) {
+        return {};
+    }
+    num_bits_ = index + 1;
+    words_.resize(bits_to_words(num_bits_), uint64_t{0});
+    return {};
+}
+
+VoidResult FixedBitSet::set_with_range(size_t from, size_t to) {
+    if (from > to) {
+        return err(LuceneError::illegal_argument("from must not be greater than to"));
+    }
+    if (to > num_bits_) {
+        return err(LuceneError::illegal_argument("the range must not go past the set length"));
+    }
+    for (size_t i = from; i < to; ++i) {
+        (void)set(i);
+    }
+    return {};
+}
+
 void FixedBitSet::clear_all() noexcept { std::ranges::fill(words_, uint64_t{0}); }
 
 bool FixedBitSet::flip(size_t index) noexcept {

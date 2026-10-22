@@ -31,7 +31,7 @@ namespace lucene {
 ///
 /// Port of the `Outputs` trait (`util/fst_impl/outputs.rs`).
 ///
-/// **Deviation:** rlucene parametrizes every FST type with the output type and
+/// **Deviation:** the reference implementation parametrizes every FST type with the output type and
 /// relies on `Arc` pointer identity to recognize `NO_OUTPUT` ("must return the
 /// same SINGLETON object").  C++ has no such parametric module boundary, so the
 /// output value is a `std::any` and emptiness is answered by
@@ -42,7 +42,7 @@ export class FstOutputs {
 public:
     virtual ~FstOutputs() = default;
 
-    /// Name used in debug output (`Display` in rlucene).
+    /// Name used in debug output (`Display` in the reference implementation).
     [[nodiscard]] virtual std::string_view type_name() const noexcept = 0;
 
     /// Longest common prefix of both outputs, e.g. `common("foobar", "food")` is

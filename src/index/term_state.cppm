@@ -31,13 +31,13 @@ export class TermState {
 public:
     virtual ~TermState() = default;
 
-    /// rlucene's `Clone` bound.
+    /// The reference implementation's `Clone` bound.
     [[nodiscard]] virtual std::unique_ptr<TermState> clone() const = 0;
 
     /// Copies the content of `other` into this instance.
     [[nodiscard]] virtual VoidResult copy_from(const TermState &other) = 0;
 
-    /// rlucene's `Display` bound.
+    /// The reference implementation's `Display` bound.
     [[nodiscard]] virtual std::string to_string() const = 0;
 };
 

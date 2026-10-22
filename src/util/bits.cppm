@@ -27,7 +27,7 @@ namespace lucene {
 /// Random access to a fixed-length bit set.  Port of the `Bits` trait
 /// (`util/bits.rs`).
 ///
-/// **Deviation:** rlucene's `copy_of()` returns a `FixedBitSet`; here the
+/// **Deviation:** the reference implementation's `copy_of()` returns a `FixedBitSet`; here the
 /// materialising type lives in `:fixed_bit_set` and implements `Bits`, so a
 /// `copy_of()` helper would only add a dependency cycle.
 export class Bits {

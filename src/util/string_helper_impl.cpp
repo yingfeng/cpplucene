@@ -34,7 +34,7 @@ namespace {
 constexpr int32_t MAX_UNICODE_CODE_POINT = 0x10FFFF;
 
 int32_t compute_good_fast_hash_seed() {
-    // rlucene reads the `tests.seed` system property and falls back to the
+    // The reference implementation reads the `tests.seed` system property and falls back to the
     // current wall clock (milliseconds).
     if (const char *prop = std::getenv("tests.seed"); prop != nullptr && *prop != '\0') {
         int32_t hash = 0;
@@ -47,7 +47,7 @@ int32_t compute_good_fast_hash_seed() {
     return static_cast<int32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(now).count());
 }
 
-/// Debug rendering of a byte range: `[61 62 63]`, matching rlucene's `Display`.
+/// Debug rendering of a byte range: `[61 62 63]`, matching the reference implementation's `Display`.
 std::string hex_view(std::span<const uint8_t> bytes) {
     std::string result;
     result.reserve(bytes.size() * 3 + 2);

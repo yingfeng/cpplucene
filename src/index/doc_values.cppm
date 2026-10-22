@@ -36,7 +36,7 @@ namespace lucene {
 ///
 /// The empty iterators report `NO_MORE_DOCS` from the first call and return a
 /// neutral value (`0`, an empty `BytesRef`, ordinal `-1`) instead of failing, which
-/// is what rlucene's `EmptyNumeric`/`EmptyBinary`/`EmptySorted`/`EmptySortedSet`
+/// is what the reference implementation's `EmptyNumeric`/`EmptyBinary`/`EmptySorted`/`EmptySortedSet`
 /// do; callers are expected to notice that nothing is positioned.
 export class EmptyNumericDocValues final : public NumericDocValues {
 public:

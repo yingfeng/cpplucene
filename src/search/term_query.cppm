@@ -73,7 +73,7 @@ private:
 ///
 /// Port of `TermWeight` (`core/search/term_query.rs`).
 ///
-/// **Deviation:** rlucene stores the parent query as an `Arc<Query>` it owns;
+/// **Deviation:** the reference implementation stores the parent query as an `Arc<Query>` it owns;
 /// here the weight borrows it (see [`Weight`]).
 export class TermWeight final : public Weight {
 public:
@@ -162,7 +162,7 @@ private:
 
 /// Builds the scorer of the term in `context`.
 ///
-/// rlucene's `TermWeight::build_term_scorer`: with a `terms_enum` it scores the
+/// The reference implementation's `TermWeight::build_term_scorer`: with a `terms_enum` it scores the
 /// postings, without one the leaf cannot match and the result is an empty
 /// constant-score scorer.
 ///

@@ -68,7 +68,7 @@ TEST(BytesRefTest, DeepCopyAndTakeBytes) {
     EXPECT_EQ(original.length(), 0u);
 }
 
-TEST(BytesRefTest, HexDisplayMatchesRlucene) {
+TEST(BytesRefTest, HexDisplayMatchesReference) {
     BytesRef ref = BytesRef::from_slice({'a', 'b'}, 0, 2);
     EXPECT_EQ(ref.to_display_string(), "[61 62]");
 }

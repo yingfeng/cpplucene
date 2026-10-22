@@ -28,7 +28,7 @@ namespace lucene {
 
 /// Holder for the parameters shared by every reader of one segment.
 ///
-/// Port of `SegmentReadState` (`core/index/segment_read_state.rs`).  rlucene
+/// Port of `SegmentReadState` (`core/index/segment_read_state.rs`).  The reference implementation
 /// borrows the directory and the IO context and shares the field infos through
 /// an `Arc`; the port keeps the same shape with references and a
 /// `std::shared_ptr<const FieldInfos>`.
@@ -50,7 +50,7 @@ public:
           context(context),
           segment_suffix(std::move(segment_suffix)) {}
 
-    /// Copy of `other` with a different segment suffix (rlucene's
+    /// Copy of `other` with a different segment suffix (the reference implementation's
     /// `copy_with_suffix`).
     [[nodiscard]] static SegmentReadState copy_with_suffix(const SegmentReadState &other,
                                                           std::string segment_suffix) {
@@ -60,7 +60,7 @@ public:
     /// Directory the segment is read from.
     ///
     /// Non-const because `Directory::open_input` is non-const in this port
-    /// (rlucene gets the same effect through interior mutability).
+    /// (the reference implementation gets the same effect through interior mutability).
     Directory &directory;
     /// Field infos describing all fields in this segment.
     std::shared_ptr<const FieldInfos> field_infos;

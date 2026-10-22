@@ -289,7 +289,7 @@ TEST(FilteredTermsEnumTest, AutomatonWithCommonSuffix) {
 }
 
 TEST(FilteredTermsEnumTest, IntersectStartTermIsExclusive) {
-    // Mirrors rlucene's `test_intersect`: the start term itself is skipped, even
+    // Mirrors the reference implementation's `test_intersect`: the start term itself is skipped, even
     // when it is accepted by the automaton.
     VectorTerms terms(terms_of({"aaa", "bbb", "ccc"}));
     auto compiled = CompiledAutomaton::create(Automata::make_any_string().value(), false, false);

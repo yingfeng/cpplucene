@@ -57,12 +57,12 @@ export struct FieldWriteOptions {
 /// Port of the `PushPostingsWriterBaseAbstract` trait
 /// (`core/codecs/push_postings_writer_base.rs`).
 ///
-/// **Deviation:** rlucene bounds the wrapper with
+/// **Deviation:** the reference implementation bounds the wrapper with
 /// `S: PushPostingsWriterBaseAbstract + PostingsWriterBase` and delegates
 /// `init` to the sub writer through the second bound.  Inheriting
 /// [`PostingsWriterBase`] here would force every codec specific writer to also
 /// implement the wrapper's `write_term`, so this interface declares `init`
-/// itself and rlucene's `PostingsWriterBase::init` is what the wrapper's `init`
+/// itself and the reference implementation's `PostingsWriterBase::init` is what the wrapper's `init`
 /// forwards to.
 export class PushPostingsWriterBaseAbstract : public Closeable {
 public:
@@ -102,13 +102,13 @@ public:
 
     /// Encodes the term metadata, honouring the field's write options.
     ///
-    /// rlucene names this `encode_term_with_option` to tell it apart from
+    /// The reference implementation names this `encode_term_with_option` to tell it apart from
     /// `PostingsWriterBase::encode_term`, which the wrapper delegates here.
     [[nodiscard]] virtual VoidResult encode_term_with_option(DataOutput &out, const FieldInfo &field_info,
                                                              const TermStateEnum &state, bool absolute,
                                                              const FieldWriteOptions &options) = 0;
 
-    /// Sets the current field for writing (rlucene's
+    /// Sets the current field for writing (the reference implementation's
     /// `PushPostingsWriterBaseAbstract::set_field`).
     virtual void set_field(const FieldInfo &field_info) = 0;
 };
@@ -140,11 +140,11 @@ public:
 
     [[nodiscard]] VoidResult close() override;
 
-    /// The write options of the current field (rlucene's crate-visible field).
+    /// The write options of the current field (the reference implementation's crate-visible field).
     [[nodiscard]] const FieldWriteOptions &options() const noexcept { return options_; }
 
     /// The flags passed to `TermsEnum::postings_with_flags` for the current
-    /// field (rlucene's `enum_flags`).
+    /// field (the reference implementation's `enum_flags`).
     [[nodiscard]] int32_t enum_flags() const noexcept { return enum_flags_; }
 
     /// The field currently being written, or `nullptr` before `set_field`.

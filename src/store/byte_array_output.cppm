@@ -28,7 +28,7 @@ namespace lucene {
 
 /// An [`IndexOutput`] that keeps everything in memory.
 ///
-/// The stand-in for rlucene's `ByteBuffersIndexOutput` / `ByteArrayDataOutput`
+/// The stand-in for the reference implementation's `ByteBuffersIndexOutput` / `ByteArrayDataOutput`
 /// and for Lucene's `ByteBuffersDataOutput`: the doc values format buffers a
 /// block of terms or of packed values, then measures it and copies it to the real
 /// file, and the monotonic writers need a temporary data output they can drain

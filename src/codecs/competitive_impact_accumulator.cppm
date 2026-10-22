@@ -54,7 +54,7 @@ public:
     /// decreasing unsigned `norm`.
     [[nodiscard]] std::vector<Impact> get_competitive_freq_norm_pairs() const;
 
-    /// `[{freq=..,norm=..}, ...]`, the `Display` implementation of rlucene.
+    /// `[{freq=..,norm=..}, ...]`, the `Display` implementation of the reference implementation.
     [[nodiscard]] std::string to_string() const;
 
     /// True when the invariants of the accumulator hold (debug builds).

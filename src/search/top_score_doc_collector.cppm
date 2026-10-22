@@ -48,7 +48,7 @@ export class Weight;
 /// soon as the queue is full.
 ///
 /// **Deviations** (C++ mechanics only):
-///  * rlucene has a `const CHECK_AFTER: bool` template parameter to pick the
+///  * the reference implementation has a `const CHECK_AFTER: bool` template parameter to pick the
 ///    first-page (no cursor) code path at compile time; the port keeps it as a
 ///    construction-time flag, because the port has no compile-time
 ///    specialisation to gain from;

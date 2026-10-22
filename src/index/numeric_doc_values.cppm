@@ -34,7 +34,7 @@ public:
     [[nodiscard]] virtual Result<int64_t> long_value() = 0;
 };
 
-/// The `either_numeric_docvalues!` variants of rlucene
+/// The `either_numeric_docvalues!` variants of the reference implementation
 /// (`NumericDocValuesEnum2`, ...), expressed as one variadic type.
 export template <class... Ts>
 class NumericDocValuesEnum : public NumericDocValues {

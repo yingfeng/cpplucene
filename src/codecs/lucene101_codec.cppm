@@ -50,7 +50,7 @@ namespace lucene {
 /// instance of every format and hands them out by name.
 ///
 /// **Deviations**:
-///  * rlucene routes postings and doc values through
+///  * the reference implementation routes postings and doc values through
 ///    `PerFieldPostingsFormat` / `PerFieldDocValuesFormat`, whose
 ///    `get_*_format_for_field` always returns the default format.  Those wrappers
 ///    also change the per-file segment suffix (`Lucene101_0` style).  This port

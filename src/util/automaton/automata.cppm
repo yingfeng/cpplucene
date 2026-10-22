@@ -32,7 +32,7 @@ namespace lucene {
 ///
 /// Port of `Automata` (`core/util/automation/automata.rs`).
 ///
-/// **Deviation:** rlucene spells the optional interval bounds
+/// **Deviation:** the reference implementation spells the optional interval bounds
 /// `Option<&BytesRef>`; here a null pointer means "no bound" and the
 /// corresponding inclusive flag must then be `true`, exactly like the Rust
 /// version.

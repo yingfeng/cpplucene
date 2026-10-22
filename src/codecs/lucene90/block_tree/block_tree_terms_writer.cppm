@@ -48,7 +48,7 @@ namespace lucene {
 ///    `std::unique_ptr<IndexOutput>` and `std::unique_ptr<PostingsWriterBase>`:
 ///    type erasure replaces the generics, exactly like the reader side;
 ///  * `ByteBuffersDataOutput` becomes [`GrowableByteArrayDataOutput`];
-///  * rlucene's `catch_unwind` based cleanup is not needed – C++ reports
+///  * the reference implementation's `catch_unwind` based cleanup is not needed – C++ reports
 ///    failures through [`VoidResult`], so the constructor unwinds its outputs
 ///    explicitly on the error path;
 ///  * only the current format version is written (see the project's
@@ -71,7 +71,7 @@ public:
     /// `[min_items_in_block, max_items_in_block]` entries (blocks may be
     /// smaller than the minimum).
     ///
-    /// **Deviation:** rlucene's constructor returns `Result<Self>`; a C++
+    /// **Deviation:** the reference implementation's constructor returns `Result<Self>`; a C++
     /// constructor cannot, so this is a factory.  It opens `.tim`, `.tip` and
     /// `.tmd`, writes their headers and initialises `postings_writer`.
     [[nodiscard]] static Result<std::unique_ptr<BlockTreeTermsWriter>>
@@ -104,7 +104,7 @@ private:
     BlockTreeTermsWriter() = default;
 
     /// Releases the outputs on the error path, ignoring secondary failures
-    /// (rlucene's `IOUtils::close_while_handling_exception`).
+    /// (the reference implementation's `IOUtils::close_while_handling_exception`).
     void close_quietly() noexcept;
 
     std::unique_ptr<IndexOutput> meta_out_{};

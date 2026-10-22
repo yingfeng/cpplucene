@@ -41,7 +41,7 @@ export enum class TwoPhaseState : int32_t {
 ///
 /// Port of `Scorer` (`core/search/scorer.rs`).
 ///
-/// **Deviation:** rlucene builds `Scorer` out of the `Scorable`,
+/// **Deviation:** the reference implementation builds `Scorer` out of the `Scorable`,
 /// `DocIdSetIterator` and `TwoPhaseIterator` traits (three separate objects with
 /// an `Either` enum for the combinations); here the three are one class
 /// hierarchy — `Scorer` derives from [`DocIdSetIterator`] and [`Scorable`] and

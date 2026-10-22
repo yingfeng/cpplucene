@@ -41,7 +41,7 @@ namespace lucene {
 /// Port of the `PostingsReaderBase` trait (`core/codecs/postings_reader_base.rs`).
 ///
 /// **Deviations** (C++ mechanics only):
-///  * rlucene's associated types `PostingsEnum` / `ImpactsEnum` become
+///  * the reference implementation's associated types `PostingsEnum` / `ImpactsEnum` become
 ///    `std::unique_ptr<PostingsEnum>` / `std::unique_ptr<ImpactsEnum>`; the
 ///    `Option<Self::PostingsEnum>` reuse parameter becomes a possibly-null
 ///    `std::unique_ptr`.
@@ -86,7 +86,7 @@ public:
     /// Releases the resources held by this reader; idempotent.
     [[nodiscard]] virtual VoidResult close() { return {}; }
 
-    /// Human readable description (`Display` in rlucene).
+    /// Human readable description (`Display` in the reference implementation).
     [[nodiscard]] virtual std::string to_string() const { return "PostingsReaderBase"; }
 };
 

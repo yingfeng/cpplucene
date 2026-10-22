@@ -42,7 +42,7 @@ namespace lucene {
 /// The reader keeps the chunk it last served decompressed, so reading the
 /// documents of a chunk in order costs one decompression for the whole chunk.
 ///
-/// **Deviation:** rlucene decompresses lazily, keeping only as much of the chunk
+/// **Deviation:** the reference implementation decompresses lazily, keeping only as much of the chunk
 /// as the requested document needs, and streams the blocks of a sliced chunk on
 /// demand.  This port decompresses the whole chunk when it is loaded instead:
 /// LZ4 cannot seek, so a document in the middle of a chunk has to have

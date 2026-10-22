@@ -23,6 +23,7 @@ import std;
 import :close;
 import :error;
 import :field_infos;
+import :merge_state;
 import :norms_producer;
 
 namespace lucene {
@@ -41,9 +42,6 @@ namespace lucene {
 ///
 /// Port of the `NormsConsumer` trait (`core/codecs/norms_consumer.rs`).
 ///
-/// **Deviation:** `merge` / `merge_norms_field` are not ported yet: they need
-/// the merge subsystem (`MergeState`, `CodecReader`, `DocIDMerger`), which does
-/// not exist in this port.  The push API above is all the writers need.
 export class NormsConsumer : public Closeable {
 public:
     ~NormsConsumer() override = default;
@@ -51,9 +49,25 @@ public:
     /// Writes normalization values for `field`.
     [[nodiscard]] virtual VoidResult add_norms_field(const FieldInfo &field,
                                                      NormsProducer &norms_producer) = 0;
+
+    /// Merges the norms of every segment in `merge_state`.
+    ///
+    /// Port of `NormsConsumer::merge`: it checks the producers, then calls
+    /// [`merge_norms_field`] for each field of the merged segment that stores
+    /// norms.  Segments that have no value for a field contribute zeros, which
+    /// is what the field's consumers expect for a missing norm.
+    [[nodiscard]] virtual VoidResult merge(const MergeState &merge_state);
+
+    /// Merges the norms of one field.
+    ///
+    /// Port of `NormsConsumer::merge_norms_field`: the default implementation
+    /// hands [`add_norms_field`] a producer that merges and filters deleted
+    /// documents on the fly.
+    [[nodiscard]] virtual VoidResult merge_norms_field(const FieldInfo &merge_field_info,
+                                                       const MergeState &merge_state);
 };
 
-/// The `NormsConsumerEnum2` variants of rlucene, expressed as one variadic type.
+/// The `NormsConsumerEnum2` variants of the reference implementation, expressed as one variadic type.
 export template <class... Ts>
 class NormsConsumerEnum : public NormsConsumer {
 public:
@@ -64,6 +78,15 @@ public:
         return std::visit(
                 [&field, &norms_producer](auto &consumer) {
                     return consumer.add_norms_field(field, norms_producer);
+                },
+                inner_);
+    }
+
+    [[nodiscard]] VoidResult merge_norms_field(const FieldInfo &merge_field_info,
+                                               const MergeState &merge_state) override {
+        return std::visit(
+                [&merge_field_info, &merge_state](auto &consumer) {
+                    return consumer.merge_norms_field(merge_field_info, merge_state);
                 },
                 inner_);
     }

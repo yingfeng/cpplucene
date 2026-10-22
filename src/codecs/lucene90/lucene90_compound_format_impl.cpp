@@ -46,7 +46,7 @@ struct SizedFile {
     size_t length{0};
 };
 
-/// rlucene's one-argument `IndexFileNames::strip_segment_name`.
+/// The reference implementation's one-argument `IndexFileNames::strip_segment_name`.
 std::string strip_segment_name(std::string_view name) {
     const auto pos = name.find('_');
     if (pos == std::string_view::npos) {
@@ -128,7 +128,7 @@ VoidResult Lucene90CompoundFormat::write_compound_file(IndexOutput &entries, Ind
         files.push_back(SizedFile{filename, file_length.value()});
     }
 
-    // The size ordering is what rlucene's priority queue produced; ties are
+    // The size ordering is what the reference implementation's priority queue produced; ties are
     // broken by name so the output stays deterministic.
     std::ranges::sort(files, [](const SizedFile &left, const SizedFile &right) {
         if (left.length != right.length) {

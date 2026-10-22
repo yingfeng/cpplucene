@@ -70,7 +70,7 @@ private:
 };
 
 /// A distinct type with the same behaviour, so that `std::variant` can hold two
-/// different alternatives (rlucene's `PostingsEnumEnum2::A` / `::B`).
+/// different alternatives (the reference implementation's `PostingsEnumEnum2::A` / `::B`).
 class OtherPostingsEnum : public FakePostingsEnum {};
 
 /// Impacts over a single level.
@@ -129,7 +129,7 @@ TEST(PostingsEnumTest, FeatureFlags) {
     EXPECT_FALSE(feature_requested(PAYLOADS, OFFSETS));
     EXPECT_TRUE(feature_requested(ALL, OFFSETS));
     EXPECT_TRUE(feature_requested(ALL, PAYLOADS));
-    // `fetch_freqs`/`fetch_positions`/... of rlucene are derived from the same
+    // `fetch_freqs`/`fetch_positions`/... of the reference implementation are derived from the same
     // word, so FREQS must not be reported when only positions were asked for.
     EXPECT_FALSE(feature_requested(POSITIONS, OFFSETS));
 }

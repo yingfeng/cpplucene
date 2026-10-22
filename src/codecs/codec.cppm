@@ -36,7 +36,7 @@ namespace lucene {
 
 /// A set of formats that together read and write one index format generation.
 ///
-/// Port of the `Codec` trait (`codecs/codec.rs`).  rlucene keeps a registry of
+/// Port of the `Codec` trait (`codecs/codec.rs`).  The reference implementation keeps a registry of
 /// codecs keyed by name so `segments_N` can pick the right one per segment (see
 /// `lucene_core:codec_formats`); what matters here is the dispatch surface: every
 /// format hangs off a codec name.
@@ -45,7 +45,7 @@ namespace lucene {
 ///  * the metadata formats ([`segment_info_format`], [`live_docs_format`],
 ///    [`field_infos_format`]) are returned by reference: every codec has them;
 ///  * the data formats are returned by pointer, where a null pointer means "this
-///    codec does not provide it".  rlucene returns them by value and therefore
+///    codec does not provide it".  The reference implementation returns them by value and therefore
 ///    cannot express "absent"; the pointer keeps the port honest for a codec that
 ///    only carries metadata (e.g. [`Lucene99Codec`], which exists to read the
 ///    tests' `segments_N`) without forcing it to fake data formats it does not

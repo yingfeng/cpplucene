@@ -97,6 +97,6 @@ export struct BitUtil {
 };
 
 static_assert(std::endian::native == std::endian::little,
-              "lucene_core requires a little-endian host (rlucene has the same constraint)");
+              "lucene_core requires a little-endian host");
 
 } // namespace lucene

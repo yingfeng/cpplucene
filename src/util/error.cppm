@@ -22,9 +22,9 @@ import std;
 
 namespace lucene {
 
-/// Error taxonomy of rlucene (`core/util/error`).
+/// Error taxonomy of the reference implementation (`core/util/error`).
 ///
-/// rlucene models every failure as a distinct struct (`IllegalArgumentError`,
+/// The reference implementation models every failure as a distinct struct (`IllegalArgumentError`,
 /// `Eof`, ...).  For C++ a single tagged error type is cheaper to propagate and
 /// keeps `std::expected` ergonomic while preserving the original taxonomy.
 export enum class ErrorKind : int32_t {
@@ -137,7 +137,7 @@ private:
     std::shared_ptr<const LuceneError> suppressed_{};
 };
 
-/// `Result<T>`: rlucene's `Result<T>` = `std::expected<T, LuceneError>`.
+/// `Result<T>`: the reference implementation's `Result<T>` = `std::expected<T, LuceneError>`.
 export template <class T>
 using Result = std::expected<T, LuceneError>;
 

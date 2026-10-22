@@ -49,7 +49,7 @@ export struct BKDUtil {
 
     /// Unsigned lexicographic comparison of the next `num_bytes` bytes.
     ///
-    /// Replaces rlucene's `ArrayUtil::get_unsigned_comparator`, whose four
+    /// Replaces the reference implementation's `ArrayUtil::get_unsigned_comparator`, whose four
     /// implementations (`int32`, `int64`, generic) collapse into one loop here.
     [[nodiscard]] static int32_t compare_unsigned(std::span<const uint8_t> a, size_t a_offset,
                                                   std::span<const uint8_t> b, size_t b_offset, size_t num_bytes);
@@ -57,7 +57,7 @@ export struct BKDUtil {
 
 /// "Do the next `num_bytes` bytes match?" for a fixed width.
 ///
-/// Replaces rlucene's `ByteArrayPredicate` trait plus its three
+/// Replaces the reference implementation's `ByteArrayPredicate` trait plus its three
 /// implementations: with a stored width the dispatch collapses into one
 /// comparison, and the 4/8 byte cases keep their integer fast paths.
 export struct ByteArrayPredicate {

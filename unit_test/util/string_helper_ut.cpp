@@ -54,7 +54,7 @@ TEST(StringHelperTest, BytesDifference) {
     ASSERT_TRUE(key_length.has_value());
     EXPECT_EQ(key_length.value(), 3u);
 
-    // rlucene only reports an error when the two terms are fully identical
+    // The reference implementation only reports an error when the two terms are fully identical
     // (`mismatch < 0`); an out-of-order pair is not validated here.
     auto reversed = StringHelper::bytes_difference(as_bytes("abd"), as_bytes("abc"));
     ASSERT_TRUE(reversed.has_value());
@@ -65,7 +65,7 @@ TEST(StringHelperTest, BytesDifference) {
 }
 
 TEST(StringHelperTest, MurmurHash3KnownValues) {
-    // Reference values from yonik/java_util (the implementation rlucene uses).
+    // Reference values from yonik/java_util (the implementation the reference implementation uses).
     EXPECT_EQ(StringHelper::murmurhash3_x86_32(as_bytes(""), 0), 0);
     EXPECT_EQ(static_cast<uint32_t>(StringHelper::murmurhash3_x86_32(as_bytes("hello"), 0)), 0x248bfa47u);
     // Known value with the classic Lucene seed.

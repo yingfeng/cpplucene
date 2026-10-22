@@ -32,7 +32,7 @@ using namespace lucene;
 
 namespace {
 
-/// Collects every message; the `Vec<u8>` sink of rlucene's tests.
+/// Collects every message; the `Vec<u8>` sink of the reference implementation's tests.
 class RecordingInfoStream : public InfoStream {
 public:
     [[nodiscard]] VoidResult message(std::string_view component, std::string_view text) const override {

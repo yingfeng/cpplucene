@@ -17,7 +17,7 @@
 
 // The packed tables below were generated with the moman/finenight package
 // (MIT licensed, see NOTICE.txt) and are copied over from the auto-generated
-// rlucene sources; do not edit them by hand.
+// upstream sources; do not edit them by hand.
 
 module lucene_core:lev_parametric_description.impl;
 
@@ -51,9 +51,9 @@ struct ParametricCase {
 
 /// A parametric description backed by the packed tables of one degree.
 ///
-/// rlucene has one generated type per degree; the C++ port keeps the tables and
-/// describes them with [`ParametricCase`], so the transition algorithm lives in
-/// one place instead of four.
+/// The upstream implementation has one generated type per degree; the C++ port
+/// keeps the tables and describes them with [`ParametricCase`], so the
+/// transition algorithm lives in one place instead of four.
 class LevTableDescription final : public ParametricDescriptionBase {
 public:
     explicit LevTableDescription(std::vector<ParametricCase> cases) : cases_(std::move(cases)) {}

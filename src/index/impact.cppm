@@ -24,7 +24,7 @@ namespace lucene {
 
 /// Per-document scoring factors.  Port of `Impact` (`core/index/impact.rs`).
 ///
-/// The ordering is the one rlucene derives manually: increasing `freq` first,
+/// The ordering is the one the reference implementation derives manually: increasing `freq` first,
 /// then **decreasing unsigned** `norm` — i.e. the most competitive pairs come
 /// first when iterating ascending.
 export struct Impact {
@@ -43,7 +43,7 @@ export struct Impact {
     }
 };
 
-/// `{freq=...,norm=...}`, the `Display` implementation of rlucene.
+/// `{freq=...,norm=...}`, the `Display` implementation of the reference implementation.
 [[nodiscard]] inline std::string to_string(const Impact &impact) {
     return std::format("{{freq={},norm={}}}", impact.freq, impact.norm);
 }

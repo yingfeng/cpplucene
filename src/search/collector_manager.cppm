@@ -31,7 +31,7 @@ namespace lucene {
 ///
 /// Port of the `CollectorManager` trait (`core/search/collector_manager.rs`).
 ///
-/// **Deviation:** rlucene's associated types (`C`, `T`) collapse into
+/// **Deviation:** the reference implementation's associated types (`C`, `T`) collapse into
 /// `std::unique_ptr<Collector>` / [`TopDocs`]: the port only has collectors that
 /// produce a `TopDocs`, and reduction therefore has to downcast the collectors it
 /// was handed.

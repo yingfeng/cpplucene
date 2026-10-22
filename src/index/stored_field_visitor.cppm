@@ -42,7 +42,7 @@ export enum class Status : uint8_t {
 /// traversal early with [`Status::Stop`], which is what makes it cheap to load a
 /// handful of fields out of a large document.
 ///
-/// **Deviation:** the callbacks take no `StoredFieldsWriter`.  rlucene threads
+/// **Deviation:** the callbacks take no `StoredFieldsWriter`.  The reference implementation threads
 /// the writer through so a merge can re-serialize fields without an intermediate
 /// `Document`; this port has no merge path yet, so the parameter is gone.
 export class StoredFieldVisitor {

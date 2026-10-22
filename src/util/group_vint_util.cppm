@@ -77,7 +77,7 @@ export struct GroupVIntUtil {
     /// Returns the number of bytes consumed excluding the flag byte, i.e. a
     /// value in `[0, MAX_LENGTH_PER_GROUP - 1]`.
     ///
-    /// rlucene expresses the "same object is both a `DataInput` and an
+    /// The reference implementation expresses the "same object is both a `DataInput` and an
     /// `IntReader`" requirement with a trait bound (`DI: DataInput + IntReader`).
     /// C++ has no such bound here — `IntReader` cannot live in `:data_input`
     /// because it is where the group-varint decoder lives — so `reader` and

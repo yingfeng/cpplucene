@@ -33,7 +33,7 @@ namespace lucene {
 ///
 /// Port of `SegmentWriteState` (`core/index/segment_write_state.rs`).  The
 /// directory and the IO context are borrowed, the field infos and the live docs
-/// are shared, exactly like the `Arc`s in rlucene.
+/// are shared, exactly like the `Arc`s in the reference implementation.
 export class SegmentWriteState {
 public:
     /// Creates a state without a segment suffix.
@@ -53,7 +53,7 @@ public:
         debug_check(is_valid_segment_suffix(this->segment_suffix), "invalid segment suffix");
     }
 
-    /// Copy of `state` with a different segment suffix (rlucene's
+    /// Copy of `state` with a different segment suffix (the reference implementation's
     /// `copy_with_suffix`).
     [[nodiscard]] static SegmentWriteState copy_with_suffix(const SegmentWriteState &state,
                                                            std::string segment_suffix) {
@@ -67,7 +67,7 @@ public:
 
     /// A suffix is either empty, `_X` (one underscore) or a base36 generation.
     ///
-    /// rlucene keeps this check private and only runs it from a `debug_assert`;
+    /// The reference implementation keeps this check private and only runs it from a `debug_assert`;
     /// it is exported here so the writers using it can be tested directly.
     [[nodiscard]] static bool is_valid_segment_suffix(std::string_view suffix) {
         if (suffix.empty()) {
@@ -86,7 +86,7 @@ public:
     /// Directory the segment is written to.
     ///
     /// Non-const because `Directory::create_output` is non-const in this port
-    /// (rlucene gets the same effect through interior mutability).
+    /// (the reference implementation gets the same effect through interior mutability).
     Directory &directory;
     /// Field infos describing all fields in this segment.
     std::shared_ptr<const FieldInfos> field_infos;
@@ -108,7 +108,7 @@ public:
     const IOContext &context;
 
 private:
-    /// `i64::from_str_radix(suffix, 36)` of rlucene: a non-empty run of
+    /// `i64::from_str_radix(suffix, 36)` of the reference implementation: a non-empty run of
     /// `[0-9a-zA-Z]`.
     [[nodiscard]] static bool is_base36(std::string_view text) {
         if (text.empty()) {

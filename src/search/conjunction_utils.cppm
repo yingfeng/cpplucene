@@ -33,7 +33,7 @@ namespace lucene {
 ///
 /// Port of `ConjunctionUtils` (`core/search/conjunction_utils.rs`).
 ///
-/// rlucene keeps the "how many iterators do I have" bookkeeping in its boolean
+/// The reference implementation keeps the "how many iterators do I have" bookkeeping in its boolean
 /// scorer supplier; the port collects it here because the C++ type system cannot
 /// collapse a one-element conjunction into its element.
 export class ConjunctionUtils {

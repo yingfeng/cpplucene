@@ -84,7 +84,7 @@ void TermStates::register_with_stats(TermStateEnum state, int32_t ord, int32_t d
 void TermStates::register_state(TermStateEnum state, int32_t ord) {
     const std::lock_guard<std::mutex> guard(*mutex_);
     if (ord < 0 || static_cast<size_t>(ord) >= states_.size()) {
-        // rlucene asserts here; a release build would corrupt memory, so report
+        // The reference implementation asserts here; a release build would corrupt memory, so report
         // instead of writing out of bounds.
         return;
     }

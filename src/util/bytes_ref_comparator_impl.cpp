@@ -75,7 +75,7 @@ int32_t NaturalBytesRefComparator::compare_with_offset(const BytesRef &o1, const
 }
 
 size_t NaturalBytesRefComparator::compared_bytes_count() const {
-    // `i32::MAX` in rlucene: effectively unbounded.
+    // `i32::MAX` in the reference implementation: effectively unbounded.
     return static_cast<size_t>(std::numeric_limits<int32_t>::max());
 }
 

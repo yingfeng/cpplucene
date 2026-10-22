@@ -76,7 +76,7 @@ public:
     /// Files are copied in increasing size order, which keeps the smaller files
     /// (the ones a reader opens first) at the front of the compound file.
     ///
-    /// **Deviation:** rlucene drains a min-heap for this; the C++ port sorts a
+    /// **Deviation:** the reference implementation drains a min-heap for this; the C++ port sorts a
     /// vector, which yields the same order without a `PriorityQueue` clone.
     [[nodiscard]] VoidResult write_compound_file(IndexOutput &entries, IndexOutput &data, Directory &directory,
                                                  const SegmentInfo &si) const;

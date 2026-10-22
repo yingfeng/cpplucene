@@ -41,7 +41,7 @@ public:
     /// term.
     int64_t block_file_pointer{0};
 
-    /// The term's ordinal in the full list of sorted terms (rlucene's private
+    /// The term's ordinal in the full list of sorted terms (the reference implementation's private
     /// `ord: OrdTermState`).
     [[nodiscard]] int64_t ord() const noexcept { return ord_.ord; }
     void set_ord(int64_t ord) noexcept { ord_.ord = ord; }
@@ -76,12 +76,12 @@ private:
 /// needs.  Port of `IntBlockTermState`
 /// (`core/codecs/lucene101/lucene101_postings_format.rs`).
 ///
-/// **Deviation:** rlucene declares this type inside the Lucene101 postings
+/// **Deviation:** the reference implementation declares this type inside the Lucene101 postings
 /// format, which makes `block_term_state` and the format mutually dependent.  A
 /// C++20 module cycle cannot be expressed, so the type lives here with the rest
 /// of the term states.
 ///
-/// Like rlucene this keeps the shared statistics in a [`BlockTermState`]
+/// Like the reference implementation this keeps the shared statistics in a [`BlockTermState`]
 /// member rather than inheriting from it, so the two variants stay distinct.
 export class IntBlockTermState : public TermState {
 public:
@@ -128,7 +128,7 @@ public:
 /// (`core/codecs/block_term_state.rs`).
 ///
 /// **Deviation:** the `Empty` (`EmptyTermState`) and `BaseTermsEnum`
-/// (`BaseTermsEnumTermStateImpl`) variants of rlucene are not ported yet,
+/// (`BaseTermsEnumTermStateImpl`) variants of the reference implementation are not ported yet,
 /// because the term dictionaries that own them do not exist in this port.
 export class TermStateEnum {
 public:
@@ -194,7 +194,7 @@ public:
     }
 
     /// Copies `other` into this state; the variants must match, like the `match`
-    /// in rlucene.
+    /// in the reference implementation.
     [[nodiscard]] VoidResult copy_from(const TermStateEnum &other) {
         if (value_.index() != other.value_.index()) {
             return err(LuceneError::illegal_state("TermState variants must match when copying"));

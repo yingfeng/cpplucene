@@ -46,7 +46,7 @@ export struct FileEntry {
 /// Port of `Lucene90CompoundReader`
 /// (`core/codecs/lucene90/lucene90_compound_reader.rs`).
 ///
-/// **Deviations** (C++ mechanics only): rlucene wraps the shared handle in a
+/// **Deviations** (C++ mechanics only): the reference implementation wraps the shared handle in a
 /// `parking_lot::Mutex`; this port uses `std::mutex` with a `mutable` handle so
 /// that the `const` [`Directory::open_input`] can still slice it.
 export class Lucene90CompoundReader final : public CompoundDirectory {

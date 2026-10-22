@@ -38,7 +38,7 @@ public:
 };
 
 /// [`Closeable`] for shared resources, whose `close` takes `&self` because the
-/// caller only holds a `std::shared_ptr` (rlucene's `Arc`).
+/// caller only holds a `std::shared_ptr` (the reference implementation's `Arc`).
 export class CloseableRef {
 public:
     virtual ~CloseableRef() = default;

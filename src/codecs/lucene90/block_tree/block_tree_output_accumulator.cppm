@@ -32,12 +32,12 @@ namespace lucene {
 /// Port of `OutputAccumulator` (`core/codecs/lucene90/block_tree/segment_terms_enum.rs`).
 ///
 /// **Deviations** (C++ mechanics only):
-///  * rlucene shares the output buffers through `Arc<Vec<u8>>`, so
+///  * the reference implementation shares the output buffers through `Arc<Vec<u8>>`, so
 ///    `set_floor_data` can hand a `ByteArrayDataInput` a view into them.  A
 ///    [`ByteArrayDataInput`] in this port *borrows* its bytes, so
 ///    [`set_floor_data`] copies the unread tail into a caller owned buffer
 ///    instead (the floor data is short: a vint plus one label);
-///  * `SegmentTermsEnum` reads the outputs directly in rlucene (same module,
+///  * `SegmentTermsEnum` reads the outputs directly in the reference implementation (same module,
 ///    `pub(crate)` fields); C++ needs accessors for the same thing.
 export class OutputAccumulator : public DataInput {
 public:

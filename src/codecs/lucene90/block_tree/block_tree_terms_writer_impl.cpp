@@ -61,7 +61,7 @@ namespace lucene {
 namespace {
 
 /// Packs a block's file pointer and its two flags into the FST output of the
-/// term index.  `encode_output` of rlucene.
+/// term index.  `encode_output` of the reference implementation.
 int64_t encode_output(int64_t fp, bool has_terms, bool is_floor) {
     debug_check(fp < (int64_t{1} << 62), "a block file pointer must fit in 62 bits");
     return (fp << 2) | (has_terms ? static_cast<int64_t>(OUTPUT_FLAG_HAS_TERMS) : 0) |
@@ -130,7 +130,7 @@ private:
 /// of one block (or of one set of floor blocks), plus the bytes it was built
 /// from.
 ///
-/// **Deviation:** rlucene keeps an `FST<ByteSequenceOutputs,
+/// **Deviation:** the reference implementation keeps an `FST<ByteSequenceOutputs,
 /// DataOutputEnum<DummyIndexOutput>>` that can write itself back out; this
 /// port's [`FST`] reads from an owned byte store, so the bytes are held next to
 /// the FST for [`save`] and [`num_bytes`].
@@ -161,7 +161,7 @@ public:
     [[nodiscard]] const FST &fst() const noexcept { return *fst_; }
 
     /// Writes the FST metadata to `meta_out` and the FST bytes to `out`
-    /// (`FST::save` of rlucene).
+    /// (`FST::save` of the reference implementation).
     [[nodiscard]] VoidResult save(DataOutput &meta_out, DataOutput &out) const {
         if (auto written = metadata_.save(meta_out); !written) {
             return written;
@@ -204,7 +204,7 @@ struct PendingBlock {
     /// output, merging in the sub-indexes of the pending blocks.
     ///
     /// The returned block is `blocks[0]`; the other blocks are compiled into it
-    /// and dropped, exactly like rlucene's `drain(..)`.
+    /// and dropped, exactly like the reference implementation's `drain(..)`.
     [[nodiscard]] static Result<PendingBlock> compile_index(std::vector<PendingBlock> &blocks,
                                                             GrowableByteArrayDataOutput &scratch_bytes,
                                                             IntsRefBuilder &scratch_ints_ref);
@@ -212,7 +212,7 @@ struct PendingBlock {
 
 /// Emits every accepted key of `fst`, in lexicographic order.
 ///
-/// **Deviation:** rlucene uses `BytesRefFSTEnum`, which needs the whole
+/// **Deviation:** the reference implementation uses `BytesRefFSTEnum`, which needs the whole
 /// `fst_enum` stack; the writer only needs "walk everything once", so a depth
 /// first walk over the arcs covers it.
 [[nodiscard]] VoidResult walk_fst(const FST &fst, const FstOutputs &outputs, std::vector<int32_t> &key,
@@ -322,7 +322,7 @@ Result<PendingBlock> PendingBlock::compile_index(std::vector<PendingBlock> &bloc
         }
     }
 
-    // rlucene derives the page size of its paged FST writer from the estimated
+    // The reference implementation derives the page size of its paged FST writer from the estimated
     // index size; this port builds the FST in one contiguous buffer, so only the
     // prefix length matters here.
 
@@ -397,7 +397,7 @@ public:
     /// Writes the postings of `text` and pushes the term onto the pending stack.
     ///
     /// Returns the [`PostingsEnum`] the postings writer may reuse for the next
-    /// term (rlucene's `Option<PE>` return value).
+    /// term (the reference implementation's `Option<PE>` return value).
     [[nodiscard]] Result<std::unique_ptr<PostingsEnum>> write(const BytesRef &text, TermsEnum &terms_enum,
                                                               const NormsProducer *norms,
                                                               std::unique_ptr<PostingsEnum> postings_enum) {
@@ -632,7 +632,7 @@ public:
         if (!compiled) {
             return err(std::move(compiled.error()));
         }
-        // rlucene drains the whole vector: the remaining blocks are folded into
+        // The reference implementation drains the whole vector: the remaining blocks are folded into
         // the first one and discarded.
         new_blocks_.clear();
 
@@ -1261,7 +1261,7 @@ VoidResult BlockTreeTermsWriter::close() {
         return written;
     }
 
-    // rlucene's order: metadata, terms, index, then the postings writer.
+    // The reference implementation's order: metadata, terms, index, then the postings writer.
     std::optional<LuceneError> first_error;
     auto close_one = [&first_error](VoidResult result) {
         if (!result && !first_error.has_value()) {

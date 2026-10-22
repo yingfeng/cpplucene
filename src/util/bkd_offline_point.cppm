@@ -33,7 +33,7 @@ namespace lucene {
 /// The cursor type used by [`OfflinePointReader`].
 ///
 /// The offline cursor is byte-for-byte the same as the on-heap one (an offset
-/// plus a block of fixed-width records), so rlucene's `OfflinePointValue` is
+/// plus a block of fixed-width records), so the reference implementation's `OfflinePointValue` is
 /// an alias here rather than a second copy of the same code.
 export using OfflinePointValue = HeapPointValue;
 
@@ -43,7 +43,7 @@ export using OfflinePointValue = HeapPointValue;
 /// Port of `OfflinePointReader` (`util/bkd/offline_point_reader.rs`), reading
 /// through a reusable buffer of `n * bytes_per_doc` bytes.
 ///
-/// **Deviation:** rlucene opens a checksum input when the slice covers the whole
+/// **Deviation:** the reference implementation opens a checksum input when the slice covers the whole
 /// file and validates the footer on close.  The footer is still written (so the
 /// file looks like a codec file), but reading skips the checksum: the temporary
 /// file is deleted right after the BKD build, and a partial slice could not be

@@ -42,7 +42,7 @@ namespace lucene {
 /// What [`FieldReader`] and [`SegmentTermsEnum`] need from the owning
 /// `TermsReader`.
 ///
-/// **Deviation:** rlucene gives `FieldReader` an `Option<Arc<TermsReader>>` and
+/// **Deviation:** the reference implementation gives `FieldReader` an `Option<Arc<TermsReader>>` and
 /// calls back into it (`parent.postings_reader`, `parent.terms_in`,
 /// `parent.segment`, `parent.version`).  `TermsReader` owns the field readers,
 /// so the two types are mutually recursive and cannot be split into two C++
@@ -73,10 +73,10 @@ public:
 /// **Deviations** (C++ mechanics only):
 ///  * `Arc<TermsReader>` becomes [`BlockTreeTermsParent`] (see above);
 ///  * `Arc<FieldInfo>` becomes a `std::shared_ptr<const FieldInfo>`;
-///  * rlucene's `TryClone` (used to hand a copy to each `SegmentTermsEnum`)
+///  * the reference implementation's `TryClone` (used to hand a copy to each `SegmentTermsEnum`)
 ///    becomes [`clone_for_enum`], which shares the FST instead of deep copying
 ///    it – the same thing `Arc::clone` did;
-///  * the fields are public: rlucene declares them `pub(crate)` and the frame /
+///  * the fields are public: the reference implementation declares them `pub(crate)` and the frame /
 ///    enum read them directly, which a C++ module partition cannot express.
 export class FieldReader : public Terms {
 public:
@@ -84,7 +84,7 @@ public:
 
     /// Reads the FST metadata and remembers what [`init_field_reader`] needs.
     ///
-    /// **Deviation:** rlucene's constructor returns `Result<Self>`; a C++
+    /// **Deviation:** the reference implementation's constructor returns `Result<Self>`; a C++
     /// constructor cannot, so this is a factory.
     [[nodiscard]] static Result<std::unique_ptr<FieldReader>> create(
             std::shared_ptr<const FieldInfo> field_info, int64_t num_terms, BytesRef root_code,
@@ -93,7 +93,7 @@ public:
 
     /// Opens the FST index over `index_in` and computes the root block pointer.
     ///
-    /// **Deviation:** rlucene keeps the FST off heap over the (memory mapped)
+    /// **Deviation:** the reference implementation keeps the FST off heap over the (memory mapped)
     /// `.tip` input; the [`FST`] of this port reads from an owned byte store, so
     /// the `num_bytes` bytes of the index are copied into memory once per field.
     [[nodiscard]] static VoidResult init_field_reader(IndexInput &index_in, FieldReader &reader);
@@ -106,7 +106,7 @@ public:
     [[nodiscard]] Result<std::unique_ptr<TermsEnum>> iterator() const override;
 
     /// Walks the blocks instead of filtering [`iterator`], which is what
-    /// rlucene's `FieldReader::intersect` does through
+    /// The reference implementation's `FieldReader::intersect` does through
     /// `IntersectTermsEnum`.  Defined in `:block_tree_intersect_terms_enum`,
     /// which imports this partition.
     [[nodiscard]] Result<std::unique_ptr<TermsEnum>> intersect(const CompiledAutomaton &compiled,
@@ -168,14 +168,14 @@ export class SegmentTermsEnum;
 /// Port of `SegmentTermsEnumFrame`
 /// (`core/codecs/lucene90/block_tree/segment_terms_enum_frame.rs`).
 ///
-/// **Deviation:** rlucene's `ByteArrayDataInput<Vec<u8>>` owns the bytes it
+/// **Deviation:** the reference implementation's `ByteArrayDataInput<Vec<u8>>` owns the bytes it
 /// reads; this port's [`ByteArrayDataInput`] only borrows, so the frame owns the
 /// buffers and re-seats the readers after every growth ([`reseat_readers`]).
 export class SegmentTermsEnumFrame {
 public:
     SegmentTermsEnumFrame() = default;
 
-    /// **Deviation:** rlucene's `SegmentTermsEnumFrame::new` returns
+    /// **Deviation:** the reference implementation's `SegmentTermsEnumFrame::new` returns
     /// `Result<Self>`; a C++ constructor cannot, so this is a factory.
     [[nodiscard]] static Result<SegmentTermsEnumFrame> create(int32_t ord, FieldReader &fr);
 
@@ -266,7 +266,7 @@ public:
 
     /// `TermStateEnum` has no default constructor, so the frame starts from an
     /// empty `IntBlockTermState` and the constructor replaces it with the one
-    /// the postings reader hands out.  rlucene does the same through
+    /// the postings reader hands out.  The reference implementation does the same through
     /// `FieldReader::new_term_state()`.
     TermStateEnum state{IntBlockTermState{}};
     CompressionAlgorithm compression_alg{CompressionAlgorithm::NoCompression};
@@ -283,7 +283,7 @@ public:
 /// (`core/codecs/lucene90/block_tree/segment_terms_enum.rs`).
 ///
 /// **Deviations** (C++ mechanics only):
-///  * the `FieldReader` is owned through a `std::unique_ptr` (rlucene stores it
+///  * the `FieldReader` is owned through a `std::unique_ptr` (the reference implementation stores it
 ///    by value and clones it in `FieldReader::iterator`), so that
 ///    [`FieldReader::clone_for_enum`] can hand one over without a deep copy of
 ///    the FST;
@@ -291,13 +291,13 @@ public:
 ///    exposes it through `FST::reader()`, which is what the arc walkers take;
 ///  * actions that cannot be expressed as `fn(&mut self) -> Result<_>` chains
 ///    (the recursive sub-frame descent) use the same frame index arguments as
-///    rlucene's `SegmentTermsEnumFrame::*` statics.
+///    The reference implementation's `SegmentTermsEnumFrame::*` statics.
 class SegmentTermsEnum : public TermsEnum {
 public:
     /// Static frame index: `stack[0]` holds the seek-by-term-state frame.
     static constexpr size_t STATIC_FRAME_IDX = 0;
 
-    /// **Deviation:** rlucene's `SegmentTermsEnum::new` returns
+    /// **Deviation:** the reference implementation's `SegmentTermsEnum::new` returns
     /// `Result<Self>`; a C++ constructor cannot fail, so this is a factory that
     /// also builds the static frame.
     [[nodiscard]] static Result<std::unique_ptr<SegmentTermsEnum>> create(std::unique_ptr<FieldReader> fr);
@@ -360,7 +360,7 @@ public:
     [[nodiscard]] size_t &valid_index_prefix() noexcept { return valid_index_prefix_; }
 
 public:
-    /// Outcome of the last [`prepare_seek_exact`]; rlucene's
+    /// Outcome of the last [`prepare_seek_exact`]; the reference implementation's
     /// `PrepareSeekStatus`.
     enum class PrepareStatus : uint8_t {
         /// The target is definitely absent.
@@ -374,19 +374,19 @@ public:
 private:
     friend class SegmentTermsEnumFrame;
 
-    /// rlucene's `prepare_seek_exact(target, prefetch)`; the trait method always
+    /// The reference implementation's `prepare_seek_exact(target, prefetch)`; the trait method always
     /// asks for a prefetch.
     [[nodiscard]] Result<bool> prepare_seek_exact_with_prefetch(std::span<const uint8_t> target, bool prefetch);
 
     std::unique_ptr<FieldReader> fr_;
-    /// Lazily cloned `.tim` input (rlucene: `input: Option<I>`).
+    /// Lazily cloned `.tim` input (the reference implementation: `input: Option<I>`).
     std::unique_ptr<IndexInput> input_{};
     /// `stack[0]` is the static frame used for seek by term state.
     std::vector<SegmentTermsEnumFrame> stack_{};
     size_t current_frame_idx_{STATIC_FRAME_IDX};
     bool term_exists_{false};
     /// Length of the prefix the FST walk already matched; `-1` means "equal to
-    /// the static frame", like rlucene's `i32` sentinel.
+    /// the static frame", like the reference implementation's `i32` sentinel.
     int32_t target_before_current_length_{-1};
     OutputAccumulator output_accumulator_{};
     size_t valid_index_prefix_{0};

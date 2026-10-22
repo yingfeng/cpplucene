@@ -57,7 +57,7 @@ Result<std::optional<BytesRef>> FilteredTermsEnum::hook_next_seek_term(const Byt
         return next;
     }
     if (next.error().kind() == ErrorKind::kNeedImplemented || next.error().kind() == ErrorKind::kNotImplemented) {
-        // rlucene: a hook that does not implement `next_seek_term` starts from
+        // The reference implementation: a hook that does not implement `next_seek_term` starts from
         // the initial seek term, once.
         auto initial = std::move(initial_seek_term_);
         initial_seek_term_.reset();

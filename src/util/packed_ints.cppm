@@ -93,7 +93,7 @@ export struct FormatAndBits {
 /// Picks the format and bit width whose overhead stays within
 /// `acceptable_overhead_ratio` (`PackedInts.fastestFormatAndBits`).
 ///
-/// `value_count` is unused: it is part of the Java signature only, and rlucene
+/// `value_count` is unused: it is part of the Java signature only, and the reference implementation
 /// keeps it as a `TODO` placeholder as well.
 [[nodiscard]] FormatAndBits fastest_format_and_bits(int32_t value_count, int32_t bits_per_value,
                                                     float acceptable_overhead_ratio);

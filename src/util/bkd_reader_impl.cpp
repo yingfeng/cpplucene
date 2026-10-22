@@ -222,7 +222,7 @@ Result<std::shared_ptr<BkdReader>> BkdReader::open(std::shared_ptr<const BkdMeta
         return err(corrupt("the index and the meta block disagree on the leaf count"));
     }
 
-    // rlucene validates the stored bounds here; a crossed box means the tree
+    // The reference implementation validates the stored bounds here; a crossed box means the tree
     // cannot be traversed sensibly, so reject it while the reader is built.
     const size_t bytes_per_dim = meta->config.bytes_per_dim;
     for (size_t dim = 0; dim < meta->config.num_index_dims; ++dim) {

@@ -33,7 +33,7 @@ namespace lucene {
 ///
 /// Port of the `NormsFormat` trait (`core/codecs/norms_format.rs`).
 ///
-/// **Deviation:** rlucene parameterises the two methods with the directory's
+/// **Deviation:** the reference implementation parameterises the two methods with the directory's
 /// associated `IndexOutput` / `IndexInput` types and returns associated
 /// `NormsConsumer<T>` / `NormsProducer<T>` types.  The port returns
 /// type-erased `std::unique_ptr`s; the directory reaches the implementation

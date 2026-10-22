@@ -51,7 +51,7 @@ namespace {
 
 /// Reads one node of the packed index, then its children.
 ///
-/// Mirrors rlucene's `read_node_data` + `push_left`/`push_right`, with the level
+/// Mirrors the reference implementation's `read_node_data` + `push_left`/`push_right`, with the level
 /// stacks replaced by copies handed down the recursion: `split_values` is the
 /// per-dimension split value last seen on the path here, `negative_deltas`
 /// records that a dimension descended on the way down (which flips the sign of

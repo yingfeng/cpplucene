@@ -31,15 +31,15 @@ namespace lucene {
 /// A scorer that gives every document it iterates the same score.
 ///
 /// Port of `ConstantScoreDisiScorer` (`core/search/constant_score_scorer.rs`),
-/// reduced to the plain `DocIdSetIterator` form (rlucene also has a two-phase
+/// reduced to the plain `DocIdSetIterator` form (the reference implementation also has a two-phase
 /// approximation form and a bit-set form).
 ///
-/// **Deviation:** the wrapped iterator is owned; rlucene's enum keeps the
+/// **Deviation:** the wrapped iterator is owned; the reference implementation's enum keeps the
 /// variant inline.  Score modes that do not need scores still report the score,
 /// since nothing prunes with it in this port yet.
 export class ConstantScoreScorer final : public Scorer {
 public:
-    /// [`EmptyDISI`] for the "this leaf cannot match" case of rlucene's
+    /// [`EmptyDISI`] for the "this leaf cannot match" case of the reference implementation's
     /// `empty_scorer`.
     [[nodiscard]] static std::unique_ptr<ConstantScoreScorer> from_disi(float score, ScoreMode score_mode,
                                                                         std::unique_ptr<DocIdSetIterator> iterator);

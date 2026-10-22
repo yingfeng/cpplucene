@@ -114,7 +114,7 @@ export struct Stats {
 /// Walks the whole field and computes its block statistics.
 ///
 /// Port of `SegmentTermsEnum::compute_block_stats`; the enumerator is left
-/// rewound to the root block, like rlucene leaves it.
+/// rewound to the root block, like the reference implementation leaves it.
 [[nodiscard]] Result<Stats> compute_block_stats(SegmentTermsEnum &ste);
 
 } // namespace lucene

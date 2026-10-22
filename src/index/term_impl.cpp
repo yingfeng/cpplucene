@@ -36,7 +36,7 @@ Term Term::from_empty(std::string field) { return Term(std::move(field), BytesRe
 
 std::string Term::text() const {
     const std::span<const uint8_t> bytes = bytes_.as_slice();
-    // Only report text when the bytes are valid UTF-8, like rlucene.
+    // Only report text when the bytes are valid UTF-8, like the reference implementation.
     const auto *begin = reinterpret_cast<const char *>(bytes.data());
     const std::string_view view(begin, bytes.size());
     size_t index = 0;

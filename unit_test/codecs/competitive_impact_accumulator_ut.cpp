@@ -102,7 +102,7 @@ TEST(CompetitiveImpactAccumulatorTest, AddAllMergesAndCopyFromReplaces) {
     EXPECT_TRUE(copied.get_competitive_freq_norm_pairs().empty());
 }
 
-TEST(CompetitiveImpactAccumulatorTest, ToStringMatchesRluceneFormat) {
+TEST(CompetitiveImpactAccumulatorTest, ToStringMatchesReferenceFormat) {
     CompetitiveImpactAccumulator acc;
     acc.add(1, 2);
     acc.add(3, 4);

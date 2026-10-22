@@ -29,7 +29,7 @@ namespace lucene {
 
 /// Builds an FST from a stream of `(key, output)` pairs.
 ///
-/// This is the C++ replacement for rlucene's `FSTCompiler`
+/// This is the C++ replacement for the reference implementation's `FSTCompiler`
 /// (`util/fst_impl/fst_compiler.rs`, 1544 lines).  It produces a **valid Lucene
 /// FST** — the file is readable by [`FST`] and by Java Lucene — but deliberately
 /// implements only the variable-length arc layout:
