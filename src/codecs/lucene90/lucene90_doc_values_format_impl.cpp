@@ -33,12 +33,12 @@ import std;
 namespace lucene {
 
 Result<std::unique_ptr<DocValuesConsumer>> Lucene90DocValuesFormat::fields_consumer(
-        const SegmentWriteState &state, const SegmentInfo &segment_info) {
+        const SegmentWriteState &state, const SegmentInfo &segment_info) const {
     return Lucene90DocValuesConsumer::create(state, segment_info);
 }
 
 Result<std::unique_ptr<DocValuesProducer>> Lucene90DocValuesFormat::fields_producer(
-        const SegmentReadState &state, const SegmentInfo &segment_info) {
+        const SegmentReadState &state, const SegmentInfo &segment_info) const {
     return Lucene90DocValuesProducer::create(state, segment_info, DATA_CODEC, DATA_EXTENSION, META_CODEC,
                                              META_EXTENSION);
 }

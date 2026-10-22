@@ -34,7 +34,7 @@ import std;
 namespace lucene {
 
 Result<std::unique_ptr<NormsConsumer>> Lucene90NormsFormat::norms_consumer(const SegmentWriteState &state,
-                                                                          const SegmentInfo &segment_info) {
+                                                                          const SegmentInfo &segment_info) const {
     auto consumer = Lucene90NormsConsumer::create(state, segment_info);
     if (!consumer.has_value()) {
         return std::unexpected(std::move(consumer.error()));
@@ -43,7 +43,7 @@ Result<std::unique_ptr<NormsConsumer>> Lucene90NormsFormat::norms_consumer(const
 }
 
 Result<std::unique_ptr<NormsProducer>> Lucene90NormsFormat::norms_producer(const SegmentReadState &state,
-                                                                          const SegmentInfo &segment_info) {
+                                                                          const SegmentInfo &segment_info) const {
     auto producer = Lucene90NormsProducer::create(state, segment_info);
     if (!producer.has_value()) {
         return std::unexpected(std::move(producer.error()));

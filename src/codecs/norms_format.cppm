@@ -44,7 +44,7 @@ public:
 
     /// A consumer that writes norms to the index.
     [[nodiscard]] virtual Result<std::unique_ptr<NormsConsumer>> norms_consumer(const SegmentWriteState &state,
-                                                                               const SegmentInfo &segment_info) = 0;
+                                                                               const SegmentInfo &segment_info) const = 0;
 
     /// A producer that reads norms from the index.
     ///
@@ -54,7 +54,7 @@ public:
     /// be returned so that segment opening is retried with fresh `segments_N`
     /// data.
     [[nodiscard]] virtual Result<std::unique_ptr<NormsProducer>> norms_producer(const SegmentReadState &state,
-                                                                                const SegmentInfo &segment_info) = 0;
+                                                                                const SegmentInfo &segment_info) const = 0;
 };
 
 } // namespace lucene

@@ -68,10 +68,10 @@ public:
     static constexpr int32_t VERSION_CURRENT = VERSION_START;
 
     [[nodiscard]] Result<std::unique_ptr<NormsConsumer>> norms_consumer(const SegmentWriteState &state,
-                                                                       const SegmentInfo &segment_info) override;
+                                                                       const SegmentInfo &segment_info) const override;
 
     [[nodiscard]] Result<std::unique_ptr<NormsProducer>> norms_producer(const SegmentReadState &state,
-                                                                       const SegmentInfo &segment_info) override;
+                                                                       const SegmentInfo &segment_info) const override;
 };
 
 } // namespace lucene

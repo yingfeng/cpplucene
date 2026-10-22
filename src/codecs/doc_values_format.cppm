@@ -44,11 +44,11 @@ public:
 
     /// A consumer that writes the doc values of `state`.
     [[nodiscard]] virtual Result<std::unique_ptr<DocValuesConsumer>> fields_consumer(const SegmentWriteState &state,
-                                                                                     const SegmentInfo &segment_info) = 0;
+                                                                                     const SegmentInfo &segment_info) const = 0;
 
     /// A producer that reads the doc values of `state`.
     [[nodiscard]] virtual Result<std::unique_ptr<DocValuesProducer>> fields_producer(const SegmentReadState &state,
-                                                                                    const SegmentInfo &segment_info) = 0;
+                                                                                    const SegmentInfo &segment_info) const = 0;
 };
 
 } // namespace lucene

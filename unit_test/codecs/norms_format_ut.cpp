@@ -90,19 +90,19 @@ public:
 class RecordingNormsFormat : public NormsFormat {
 public:
     [[nodiscard]] Result<std::unique_ptr<NormsConsumer>> norms_consumer(const SegmentWriteState &state,
-                                                                       const SegmentInfo & /*segment_info*/) override {
+                                                                       const SegmentInfo & /*segment_info*/) const override {
         write_suffix = state.segment_suffix;
         return std::unique_ptr<NormsConsumer>(std::make_unique<RecordingNormsConsumer>());
     }
 
     [[nodiscard]] Result<std::unique_ptr<NormsProducer>> norms_producer(const SegmentReadState &state,
-                                                                      const SegmentInfo & /*segment_info*/) override {
+                                                                      const SegmentInfo & /*segment_info*/) const override {
         read_suffix = state.segment_suffix;
         return std::unique_ptr<NormsProducer>(std::make_unique<FixedNormsProducer>(42));
     }
 
-    std::string write_suffix;
-    std::string read_suffix;
+    mutable std::string write_suffix;
+    mutable std::string read_suffix;
 };
 
 FieldInfo norms_field() {

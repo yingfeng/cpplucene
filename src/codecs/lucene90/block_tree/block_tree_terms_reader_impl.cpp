@@ -29,6 +29,8 @@ import :debug;
 import :directory;
 import :error;
 import :field_infos;
+import :fields;
+import :fields_producer;
 import :index_file_names;
 import :index_input;
 import :io_context;
@@ -300,16 +302,46 @@ Result<std::unique_ptr<Lucene90BlockTreeTermsReader>> Lucene90BlockTreeTermsRead
     return reader;
 }
 
-Result<std::unique_ptr<FieldReader>> Lucene90BlockTreeTermsReader::terms(std::string_view field) const {
+Result<std::unique_ptr<Terms>> Lucene90BlockTreeTermsReader::terms(std::string_view field) const {
     const FieldInfo *field_info = field_infos_->by_name(field);
     if (field_info == nullptr) {
-        return static_cast<std::unique_ptr<FieldReader>>(nullptr);
+        return static_cast<std::unique_ptr<Terms>>(nullptr);
     }
     const auto found = field_map_.find(field_info->number);
     if (found == field_map_.end()) {
-        return static_cast<std::unique_ptr<FieldReader>>(nullptr);
+        return static_cast<std::unique_ptr<Terms>>(nullptr);
     }
-    return found->second->clone_for_enum();
+    auto cloned = found->second->clone_for_enum();
+    if (!cloned.has_value()) {
+        return std::unexpected(std::move(cloned.error()));
+    }
+    std::unique_ptr<Terms> result = std::move(cloned.value());
+    return result;
+}
+
+Result<std::unique_ptr<FieldNameIterator>> Lucene90BlockTreeTermsReader::iterator() const {
+    /// Walks the sorted field-name list of the reader.
+    class ListIterator final : public FieldNameIterator {
+    public:
+        explicit ListIterator(const std::vector<std::string> &names) : names_(names) {}
+
+        [[nodiscard]] Result<const std::string *> next() override {
+            if (index_ >= names_.size()) {
+                return static_cast<const std::string *>(nullptr);
+            }
+            return &names_[index_++];
+        }
+
+    private:
+        const std::vector<std::string> &names_;
+        size_t index_{0};
+    };
+
+    return std::unique_ptr<FieldNameIterator>(std::make_unique<ListIterator>(field_list_));
+}
+
+Result<int32_t> Lucene90BlockTreeTermsReader::size() const {
+    return static_cast<int32_t>(field_map_.size());
 }
 
 VoidResult Lucene90BlockTreeTermsReader::check_integrity() const {
@@ -325,7 +357,7 @@ VoidResult Lucene90BlockTreeTermsReader::check_integrity() const {
     return terms_reader_->postings_reader().check_integrity();
 }
 
-VoidResult Lucene90BlockTreeTermsReader::close() {
+VoidResult Lucene90BlockTreeTermsReader::close() const {
     VoidResult result;
     if (index_in_ != nullptr) {
         if (auto closed = index_in_->close(); !closed) {

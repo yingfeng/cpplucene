@@ -46,8 +46,11 @@ public:
             std::shared_ptr<const FieldInfos> field_infos, const IOContext &context) const = 0;
 
     /// A writer for the stored fields of `segment_info`.
+    /// Non-const `segment_info` because the format records the compression mode
+    /// it used as a segment attribute, which a reader needs to reopen the
+    /// segment (rlucene takes `&mut SegmentInfo` for the same reason).
     [[nodiscard]] virtual Result<std::unique_ptr<StoredFieldsWriter>> fields_writer(
-            Directory &directory, const SegmentInfo &segment_info, const IOContext &context) const = 0;
+            Directory &directory, SegmentInfo &segment_info, const IOContext &context) const = 0;
 };
 
 } // namespace lucene

@@ -20,8 +20,14 @@ export module lucene_core:lucene101_postings_format;
 import :types;
 import std;
 
+import :error;
+import :fields_consumer;
+import :fields_producer;
 import :for_util;
+import :postings_format;
 import :segment_info;
+import :segment_read_state;
+import :segment_write_state;
 
 namespace lucene {
 
@@ -36,17 +42,16 @@ namespace lucene {
 /// groups of [`LEVEL1_FACTOR`] blocks.
 ///
 /// Files:
-///  * `.tim` term dictionary, `.tip` term index (block tree, not ported yet)
+///  * `.tim` term dictionary, `.tip` term index, `.tmd` terms metadata
 ///  * `.psm` postings metadata, `.doc` frequencies and skip data
 ///  * `.pos` positions, `.pay` payloads and offsets
 ///
-/// **Deviation:** only the format constants live here so far.  The
-/// `PostingsFormat` trait binding (which needs the block tree terms
-/// reader/writer) is deferred until those are ported; the term state that goes
-/// with this format, `IntBlockTermState`, already lives in
-/// `lucene_core:block_term_state` because rlucene's placement creates a module
-/// cycle.
-export struct Lucene101PostingsFormat {
+/// **Deviation:** the `PostingsFormat` binding is implemented in
+/// `lucene101_postings_format_impl.cpp`, not here: the postings reader and
+/// writer both import this module for its constants, so importing them back from
+/// the interface would create a module cycle.
+export class Lucene101PostingsFormat final : public PostingsFormat {
+public:
     /// Extension of the postings metadata file.
     static constexpr std::string_view META_EXTENSION = "psm";
     /// Extension of the frequencies and skip data file.
@@ -79,11 +84,45 @@ export struct Lucene101PostingsFormat {
     static constexpr int32_t VERSION_START = 0;
     static constexpr int32_t VERSION_CURRENT = VERSION_START;
 
+    /// Smallest number of terms in a block (Lucene's
+    /// `BlockTreeTermsWriter::DEFAULT_MIN_BLOCK_SIZE`).
+    static constexpr int32_t DEFAULT_MIN_TERM_BLOCK_SIZE = 25;
+    /// Largest number of terms in a block (Lucene's
+    /// `BlockTreeTermsWriter::DEFAULT_MAX_BLOCK_SIZE`).
+    static constexpr int32_t DEFAULT_MAX_TERM_BLOCK_SIZE = 48;
+
+    /// The format name recorded in the codec metadata.
+    static constexpr std::string_view FORMAT_NAME = "Lucene101";
+
+    /// Creates the format with Lucene's default block sizes.
+    Lucene101PostingsFormat() = default;
+
+    /// Creates the format with explicit block sizes.
+    explicit Lucene101PostingsFormat(int32_t min_term_block_size, int32_t max_term_block_size)
+            : min_term_block_size_(min_term_block_size), max_term_block_size_(max_term_block_size) {}
+
+    [[nodiscard]] std::string_view name() const override { return FORMAT_NAME; }
+
+    /// Writes the terms dictionary and the postings of a new segment.
+    [[nodiscard]] Result<std::unique_ptr<FieldsConsumer>> fields_consumer(
+            const SegmentWriteState &state, const SegmentInfo &segment_info) const override;
+
+    /// Reads the terms dictionary and the postings of an existing segment.
+    [[nodiscard]] Result<std::unique_ptr<FieldsProducer>> fields_producer(
+            const SegmentReadState &state, const SegmentInfo &segment_info) const override;
+
+    [[nodiscard]] int32_t min_term_block_size() const noexcept { return min_term_block_size_; }
+    [[nodiscard]] int32_t max_term_block_size() const noexcept { return max_term_block_size_; }
+
     /// `<segment>_<suffix>.psm` and friends, for `extension` without the dot.
     [[nodiscard]] static std::string file_name(std::string_view segment, std::string_view suffix,
                                                std::string_view extension) {
         return segment_file_name(segment, suffix, extension);
     }
+
+private:
+    int32_t min_term_block_size_{DEFAULT_MIN_TERM_BLOCK_SIZE};
+    int32_t max_term_block_size_{DEFAULT_MAX_TERM_BLOCK_SIZE};
 };
 
 } // namespace lucene

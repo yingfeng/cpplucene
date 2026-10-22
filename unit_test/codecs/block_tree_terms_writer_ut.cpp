@@ -615,7 +615,16 @@ OpenedTerms write_and_open(ByteBuffersDirectory &directory, const std::vector<Te
     opened.reader = std::move(reader.value());
     auto field = opened.reader->terms("f");
     EXPECT_TRUE(field.has_value());
-    opened.field = std::move(field.value());
+    EXPECT_TRUE(field.value() != nullptr);
+    // `Fields::terms` hands out the type-erased `Terms`; these tests need the
+    // block tree field reader's `intersect` API, and the concrete type is
+    // `FieldReader`.
+    auto *concrete = dynamic_cast<FieldReader *>(field.value().get());
+    EXPECT_TRUE(concrete != nullptr);
+    if (concrete != nullptr) {
+        field.value().release();
+        opened.field.reset(concrete);
+    }
     return opened;
 }
 

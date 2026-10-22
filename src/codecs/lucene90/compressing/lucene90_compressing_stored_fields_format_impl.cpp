@@ -271,7 +271,7 @@ Result<std::unique_ptr<StoredFieldsReader>> Lucene90CompressingStoredFieldsForma
 }
 
 Result<std::unique_ptr<StoredFieldsWriter>> Lucene90CompressingStoredFieldsFormat::fields_writer(
-        Directory &directory, const SegmentInfo &segment_info, const IOContext &context) const {
+        Directory &directory, SegmentInfo &segment_info, const IOContext &context) const {
     return Lucene90CompressingStoredFieldsWriter::create(directory, segment_info, context, format_name_,
                                                          compression_mode_, chunk_size_, max_docs_per_chunk_,
                                                          block_shift_);

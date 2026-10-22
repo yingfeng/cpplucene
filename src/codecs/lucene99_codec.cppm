@@ -25,6 +25,7 @@ import std;
 import :codec;
 import :error;
 import :field_infos;
+import :field_infos_format;
 import :lucene90_live_docs_format;
 import :live_docs_format;
 import :lucene99_segment_info_format;
@@ -48,6 +49,8 @@ public:
 
     [[nodiscard]] const LiveDocsFormat &live_docs_format() const override { return live_docs_format_; }
 
+    [[nodiscard]] const FieldInfosFormat &field_infos_format() const override { return field_infos_format_; }
+
     /// Codec name in the header of `.fnm` files of this generation.
     [[nodiscard]] static std::string_view field_infos_codec_name() noexcept {
         return Lucene94FieldInfosFormat::CODEC_NAME;
@@ -56,6 +59,7 @@ public:
 private:
     Lucene99SegmentInfoFormat segment_info_format_;
     Lucene90LiveDocsFormat live_docs_format_;
+    Lucene94FieldInfosFormatAdapter field_infos_format_;
 };
 
 /// The shared instance, so callers do not have to own a codec object.

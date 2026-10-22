@@ -22,6 +22,7 @@ import :lucene90_points_format;
 import :error;
 import :lucene90_points_reader;
 import :lucene90_points_writer;
+import :points_format;
 import :points_reader;
 import :points_writer;
 import :segment_info;
@@ -49,6 +50,20 @@ Result<std::unique_ptr<PointsReader>> Lucene90PointsFormat::fields_reader(Segmen
         return std::unexpected(std::move(reader.error()));
     }
     return std::unique_ptr<PointsReader>(std::move(reader.value()));
+}
+
+} // namespace lucene
+
+namespace lucene {
+
+Result<std::unique_ptr<PointsWriter>> Lucene90PointsFormatAdapter::fields_writer(
+        SegmentWriteState &state, const SegmentInfo &segment_info) const {
+    return Lucene90PointsFormat::fields_writer(state, segment_info);
+}
+
+Result<std::unique_ptr<PointsReader>> Lucene90PointsFormatAdapter::fields_reader(
+        SegmentReadState &state, const SegmentInfo &segment_info) const {
+    return Lucene90PointsFormat::fields_reader(state, segment_info);
 }
 
 } // namespace lucene

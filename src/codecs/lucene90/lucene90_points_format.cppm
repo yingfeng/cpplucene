@@ -22,6 +22,7 @@ import :error;
 
 import std;
 
+import :points_format;
 import :points_reader;
 import :points_writer;
 import :segment_info;
@@ -74,6 +75,20 @@ export struct Lucene90PointsFormat {
     /// Creates the reader for `state`.
     [[nodiscard]] static Result<std::unique_ptr<PointsReader>> fields_reader(SegmentReadState &state,
                                                                             const SegmentInfo &segment_info);
+};
+
+/// The Lucene90 points format as a [`PointsFormat`], so a codec can hand it out.
+///
+/// Port of rlucene's `impl PointsFormat for Lucene90PointsFormat`, which is a
+/// unit struct; here the static helpers stay on the class and this adapter gives
+/// them the virtual dispatch surface.
+export class Lucene90PointsFormatAdapter final : public PointsFormat {
+public:
+    [[nodiscard]] Result<std::unique_ptr<PointsWriter>> fields_writer(SegmentWriteState &state,
+                                                                      const SegmentInfo &segment_info) const override;
+
+    [[nodiscard]] Result<std::unique_ptr<PointsReader>> fields_reader(SegmentReadState &state,
+                                                                      const SegmentInfo &segment_info) const override;
 };
 
 } // namespace lucene

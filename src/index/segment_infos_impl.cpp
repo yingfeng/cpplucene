@@ -20,6 +20,7 @@ module lucene_core:segment_infos.impl;
 import :segment_infos;
 
 import :codec;
+import :codec_formats;
 import :codec_util;
 import :data_input;
 import :data_output;
@@ -370,12 +371,14 @@ Result<SegmentInfos> SegmentInfos::read_file(const Directory &dir, std::string_v
             if (!codec_name.has_value()) {
                 return err(codec_name.error());
             }
-            auto codec = codec_for_name(codec_name.value());
-            if (!codec.has_value()) {
-                return err(codec.error());
+            // Every registered codec knows its segment info format, so a
+            // `segments_N` written by any of them can be read back.
+            const Codec *codec = CodecFormats::for_name(codec_name.value());
+            if (codec == nullptr) {
+                return err(LuceneError::illegal_argument("unknown codec: " + codec_name.value()));
             }
 
-            auto segment_info = codec.value()->segment_info_format().read(dir, name.value(), segment_id, context);
+            auto segment_info = codec->segment_info_format().read(dir, name.value(), segment_id, context);
             if (!segment_info.has_value()) {
                 return err(segment_info.error());
             }

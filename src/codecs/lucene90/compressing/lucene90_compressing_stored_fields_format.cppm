@@ -109,7 +109,7 @@ public:
             std::shared_ptr<const FieldInfos> field_infos, const IOContext &context) const override;
 
     [[nodiscard]] Result<std::unique_ptr<StoredFieldsWriter>> fields_writer(
-            Directory &directory, const SegmentInfo &segment_info, const IOContext &context) const override;
+            Directory &directory, SegmentInfo &segment_info, const IOContext &context) const override;
 
     [[nodiscard]] const std::string &format_name() const noexcept { return format_name_; }
     [[nodiscard]] const CompressionMode &compression_mode() const noexcept { return compression_mode_; }

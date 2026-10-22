@@ -130,7 +130,8 @@ Lucene90CompressingStoredFieldsReader::Lucene90CompressingStoredFieldsReader(
       num_chunks_(num_chunks),
       num_dirty_chunks_(num_dirty_chunks),
       num_dirty_docs_(num_dirty_docs),
-      state_(std::make_unique<BlockState>()) {}
+      state_(std::make_unique<BlockState>()),
+      prefetched_block_id_cache_(PREFETCH_CACHE_SIZE, -1) {}
 
 Lucene90CompressingStoredFieldsReader::~Lucene90CompressingStoredFieldsReader() = default;
 
@@ -433,6 +434,11 @@ VoidResult Lucene90CompressingStoredFieldsReader::prefetch(int32_t doc_id) {
     if (!block_id.has_value()) {
         return std::unexpected(std::move(block_id.error()));
     }
+    for (const int64_t cached : prefetched_block_id_cache_) {
+        if (cached == block_id.value()) {
+            return {};
+        }
+    }
     auto start = index_reader_->get_block_start_pointer(block_id.value());
     if (!start.has_value()) {
         return std::unexpected(std::move(start.error()));
@@ -441,7 +447,12 @@ VoidResult Lucene90CompressingStoredFieldsReader::prefetch(int32_t doc_id) {
     if (!length.has_value()) {
         return std::unexpected(std::move(length.error()));
     }
-    return fields_stream_->prefetch(start.value(), length.value());
+    if (auto prefetched = fields_stream_->prefetch(start.value(), length.value()); !prefetched.has_value()) {
+        return prefetched;
+    }
+    prefetched_block_id_cache_[prefetched_block_id_cache_index_ & PREFETCH_CACHE_MASK] = block_id.value();
+    ++prefetched_block_id_cache_index_;
+    return {};
 }
 
 VoidResult Lucene90CompressingStoredFieldsReader::document_with_visitor(int32_t doc_id,

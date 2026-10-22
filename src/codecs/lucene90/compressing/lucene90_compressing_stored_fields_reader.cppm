@@ -112,6 +112,9 @@ private:
     int64_t num_dirty_docs_{0};
     bool merging_{false};
     std::unique_ptr<BlockState> state_;
+    /// Ids of recently prefetched blocks; scanned linearly, so kept small.
+    std::vector<int64_t> prefetched_block_id_cache_;
+    size_t prefetched_block_id_cache_index_{0};
 };
 
 } // namespace lucene

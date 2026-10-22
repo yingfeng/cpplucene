@@ -23,6 +23,8 @@ import std;
 import :block_tree_segment_terms_enum;
 import :error;
 import :field_infos;
+import :fields;
+import :fields_producer;
 import :index_input;
 import :postings_reader_base;
 import :segment_info;
@@ -67,12 +69,16 @@ private:
 /// (`core/codecs/lucene90/block_tree/lucene90_block_tree_terms_reader.rs`).
 ///
 /// **Deviations** (C++ mechanics only):
-///  * the `Fields` / `FieldsProducer` traits are not ported yet, so the class
-///    exposes [`field_names`], [`terms`], [`size`], [`check_integrity`] and
-///    [`close`] directly instead of implementing them;
+///  * {@link field_names} is kept as a convenience next to the [`Fields`]
+///    surface, and {@link field_count} carries the old `size()` (which now has to
+///    return `Result<int32_t>` to satisfy [`Fields::size`]);
+///  * `terms()` returns the type-erased `std::unique_ptr<Terms>`; the concrete
+///    `FieldReader` is still what is handed out, so callers that need it can
+///    `dynamic_cast`;
+///  * `get_merge_instance` keeps the [`FieldsProducer`] default (none);
 ///  * the index input is opened with `state.context` rather than with the extra
 ///    `ReadAdvice::RandomPreload` read advice.
-export class Lucene90BlockTreeTermsReader {
+export class Lucene90BlockTreeTermsReader final : public FieldsProducer {
 public:
     /// Opens `<segment>[_suffix].tim/.tip/.tmd` and reads the dictionary.
     [[nodiscard]] static Result<std::unique_ptr<Lucene90BlockTreeTermsReader>> create(
@@ -81,22 +87,33 @@ public:
 
     /// Names of all fields that have terms, sorted.
     [[nodiscard]] const std::vector<std::string> &field_names() const noexcept { return field_list_; }
-    /// Number of fields that have terms.
-    [[nodiscard]] size_t size() const noexcept { return field_map_.size(); }
+
+    /// Number of fields that have terms (the old, allocation-free `size`).
+    [[nodiscard]] size_t field_count() const noexcept { return field_map_.size(); }
+
+    // ---- Fields ----
+
+    /// Steps through the field names, in sorted order.
+    [[nodiscard]] Result<std::unique_ptr<FieldNameIterator>> iterator() const override;
 
     /// The [`Terms`] of `field`, or `nullptr` when the field has no terms.
-    [[nodiscard]] Result<std::unique_ptr<FieldReader>> terms(std::string_view field) const;
+    [[nodiscard]] Result<std::unique_ptr<Terms>> terms(std::string_view field) const override;
 
-    [[nodiscard]] VoidResult check_integrity() const;
+    /// Number of fields that have terms.
+    [[nodiscard]] Result<int32_t> size() const override;
 
-    [[nodiscard]] VoidResult close();
+    // ---- FieldsProducer ----
+
+    [[nodiscard]] VoidResult check_integrity() const override;
+
+    [[nodiscard]] VoidResult close() const override;
 
     [[nodiscard]] std::string to_string() const;
 
 private:
-    std::shared_ptr<TermsReader> terms_reader_;
-    std::shared_ptr<IndexInput> index_in_;
-    std::map<int32_t, std::unique_ptr<FieldReader>> field_map_;
+    mutable std::shared_ptr<TermsReader> terms_reader_;
+    mutable std::shared_ptr<IndexInput> index_in_;
+    mutable std::map<int32_t, std::unique_ptr<FieldReader>> field_map_;
     std::vector<std::string> field_list_;
     std::shared_ptr<const FieldInfos> field_infos_;
 };

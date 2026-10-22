@@ -119,10 +119,10 @@ public:
     /// producer both import this module for its constants, so their factories
     /// cannot live in the interface unit without creating an import cycle.
     [[nodiscard]] Result<std::unique_ptr<DocValuesConsumer>> fields_consumer(
-            const SegmentWriteState &state, const SegmentInfo &segment_info) override;
+            const SegmentWriteState &state, const SegmentInfo &segment_info) const override;
 
     [[nodiscard]] Result<std::unique_ptr<DocValuesProducer>> fields_producer(
-            const SegmentReadState &state, const SegmentInfo &segment_info) override;
+            const SegmentReadState &state, const SegmentInfo &segment_info) const override;
 };
 
 } // namespace lucene
