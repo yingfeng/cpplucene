@@ -19,13 +19,13 @@
 ///
 /// `import std;` only exports the `std::` names, so the global C typedefs
 /// (`::int32_t`, `::uint8_t`, ...) are not available inside module purview.
-/// Aliasing them into `clucene` keeps the ported code reading like the Rust
+/// Aliasing them into `lucene_core` keeps the ported code reading like the Rust
 /// original (`i32`, `u8`, ...) while still having the C names at hand.
-export module clucene:types;
+export module lucene_core:types;
 
 import std;
 
-namespace clucene {
+namespace lucene {
 
 export using i8 = std::int8_t;
 export using i16 = std::int16_t;
@@ -53,4 +53,4 @@ export using std::uint32_t;
 export using std::uint64_t;
 export using std::size_t;
 
-} // namespace clucene
+} // namespace lucene

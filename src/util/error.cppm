@@ -15,12 +15,12 @@
  * limitations under the License.
  */
 
-export module clucene:error;
+export module lucene_core:error;
 
 import :types;
 import std;
 
-namespace clucene {
+namespace lucene {
 
 /// Error taxonomy of rlucene (`core/util/error`).
 ///
@@ -146,9 +146,9 @@ export using VoidResult = std::expected<void, LuceneError>;
 
 export std::string to_string(const LuceneError &error);
 
-} // namespace clucene
+} // namespace lucene
 
-export namespace clucene {
+export namespace lucene {
 
 /// `std::unexpected` shorthand used by the port: `return err(LuceneError::eof("..."))`.
 inline std::unexpected<LuceneError> err(LuceneError error) { return std::unexpected<LuceneError>(std::move(error)); }
@@ -162,4 +162,4 @@ inline LuceneError io_error(const std::error_code &ec, std::string_view context)
     return LuceneError::io(std::move(message));
 }
 
-} // namespace clucene
+} // namespace lucene

@@ -15,14 +15,14 @@
  * limitations under the License.
  */
 
-export module clucene:string_helper;
+export module lucene_core:string_helper;
 
 import :types;
 import std;
 
 import :error;
 
-namespace clucene {
+namespace lucene {
 
 /// Methods for manipulating strings.  Port of `core/util/string_helper.rs`.
 ///
@@ -78,4 +78,4 @@ export struct StringHelper {
     [[nodiscard]] static std::string id_to_string(std::span<const uint8_t> id);
 };
 
-} // namespace clucene
+} // namespace lucene

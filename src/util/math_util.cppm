@@ -15,14 +15,14 @@
  * limitations under the License.
  */
 
-export module clucene:math_util;
+export module lucene_core:math_util;
 
 import :types;
 import std;
 
 import :error;
 
-namespace clucene {
+namespace lucene {
 
 /// Math utility methods.  Port of `core/util/math_util.rs`.
 export struct MathUtil {
@@ -57,4 +57,4 @@ export struct MathUtil {
     [[nodiscard]] static double sum_upper_bound(double sum, int32_t num_values);
 };
 
-} // namespace clucene
+} // namespace lucene

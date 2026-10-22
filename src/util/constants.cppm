@@ -15,12 +15,12 @@
  * limitations under the License.
  */
 
-export module clucene:constants;
+export module lucene_core:constants;
 
 import :types;
 import std;
 
-namespace clucene {
+namespace lucene {
 
 /// Buffer pool constants (`core/util/byte_block_pool.rs`).
 export struct ByteBlockPoolConstants {
@@ -42,4 +42,4 @@ export struct Constants {
     [[nodiscard]] static std::string os_version();
 };
 
-} // namespace clucene
+} // namespace lucene

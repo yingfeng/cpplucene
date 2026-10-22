@@ -19,14 +19,14 @@ module;
 
 #include <sys/utsname.h>
 
-module clucene:constants.impl;
+module lucene_core:constants.impl;
 
 import :constants;
 
 import :types;
 import std;
 
-namespace clucene {
+namespace lucene {
 
 namespace {
 
@@ -59,4 +59,4 @@ std::string Constants::os_arch() { return uts_name().ok ? std::string(uts_name()
 
 std::string Constants::os_version() { return uts_name().ok ? std::string(uts_name().info.release) : std::string(); }
 
-} // namespace clucene
+} // namespace lucene

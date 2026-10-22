@@ -15,32 +15,32 @@
  * limitations under the License.
  */
 
-// Preprocessor helpers for the clucene port.
+// Preprocessor helpers for the lucene_core port.
 //
 // Macros cannot be exported from a C++23 module, so they live in this plain
-// header.  Consumers that want `CLUCENE_TRY` include it explicitly next to
-// `import clucene;`.
-#ifndef CLUCENE_MACROS_H
-#define CLUCENE_MACROS_H
+// header.  Consumers that want `LUCENE_CORE_TRY` include it explicitly next to
+// `import lucene_core;`.
+#ifndef LUCENE_CORE_MACROS_H
+#define LUCENE_CORE_MACROS_H
 
 // Propagates an unexpected `LuceneError` from an expression returning
 // `std::expected`.  The enclosing function must return a `std::expected` too.
 //
-//   CLUCENE_TRY(auto value, input->read_vint());
-#define CLUCENE_TRY(decl, expr)                 \
-    auto &&_clucene_r_##decl = (expr);          \
-    if (!_clucene_r_##decl) {                   \
-        return std::unexpected(_clucene_r_##decl.error()); \
+//   LUCENE_CORE_TRY(auto value, input->read_vint());
+#define LUCENE_CORE_TRY(decl, expr)                 \
+    auto &&_lucene_core_r_##decl = (expr);          \
+    if (!_lucene_core_r_##decl) {                   \
+        return std::unexpected(_lucene_core_r_##decl.error()); \
     }                                           \
-    decl = std::move(*_clucene_r_##decl)
+    decl = std::move(*_lucene_core_r_##decl)
 
 // Discards the value and only propagates the error.
-#define CLUCENE_TRY_VOID(expr)                  \
+#define LUCENE_CORE_TRY_VOID(expr)                  \
     do {                                        \
-        auto &&_clucene_r = (expr);             \
-        if (!_clucene_r) {                      \
-            return std::unexpected(_clucene_r.error()); \
+        auto &&_lucene_core_r = (expr);             \
+        if (!_lucene_core_r) {                      \
+            return std::unexpected(_lucene_core_r.error()); \
         }                                       \
     } while (false)
 
-#endif // CLUCENE_MACROS_H
+#endif // LUCENE_CORE_MACROS_H

@@ -1,7 +1,7 @@
 find_package(GTest CONFIG QUIET)
 
 if (NOT GTest_FOUND)
-    message(WARNING "GTest not found: clucene unit tests are disabled. "
+    message(WARNING "GTest not found: lucene_core unit tests are disabled. "
             "Configure with -DCMAKE_PREFIX_PATH=<prefix containing GTestConfig.cmake> to enable them.")
     return ()
 endif ()
@@ -10,9 +10,9 @@ endif ()
 #
 #   module;
 #   #include <gtest/gtest.h>     // global module fragment: keeps gtest's std
-#                                  // declarations out of the clucene module
-#   module clucene:ut.<name>;
-#   import clucene;
+#                                  // declarations out of the lucene_core module
+#   module lucene_core:ut.<name>;
+#   import lucene_core;
 #
 # This mirrors infinity's unit-test layout.
 file(GLOB_RECURSE ut_modules CONFIGURE_DEPENDS "*_ut.cpp")
@@ -25,7 +25,7 @@ target_sources(unit_test
         ${ut_modules}
 )
 
-target_link_libraries(unit_test PRIVATE clucene_core GTest::gtest GTest::gtest_main)
+target_link_libraries(unit_test PRIVATE lucene_core GTest::gtest GTest::gtest_main)
 target_include_directories(unit_test PRIVATE "${CMAKE_SOURCE_DIR}/include")
 target_compile_options(unit_test PRIVATE -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare)
 

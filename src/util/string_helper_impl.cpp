@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-module clucene:string_helper.impl;
+module lucene_core:string_helper.impl;
 
 import :string_helper;
 import :bit_util;
@@ -25,7 +25,7 @@ import :types;
 import :debug;
 import std;
 
-namespace clucene {
+namespace lucene {
 
 namespace {
 
@@ -256,4 +256,4 @@ std::string StringHelper::id_to_string(std::span<const uint8_t> id) {
     return digits;
 }
 
-} // namespace clucene
+} // namespace lucene

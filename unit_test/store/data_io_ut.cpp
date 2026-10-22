@@ -19,11 +19,11 @@ module;
 
 #include <gtest/gtest.h>
 
-module clucene:ut.data_io;
+module lucene_core:ut.data_io;
 
-import clucene;
+import lucene_core;
 
-using namespace clucene;
+using namespace lucene;
 
 namespace {
 

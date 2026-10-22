@@ -15,14 +15,14 @@
  * limitations under the License.
  */
 
-module clucene:io_context.impl;
+module lucene_core:io_context.impl;
 
 import :io_context;
 
 import :types;
 import std;
 
-namespace clucene {
+namespace lucene {
 
 Result<ReadAdvice> read_advice_from_str(std::string_view text) {
     std::string upper(text);
@@ -113,4 +113,4 @@ const IOContext &io_context_read_once() {
     return context;
 }
 
-} // namespace clucene
+} // namespace lucene

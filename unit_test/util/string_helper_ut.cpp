@@ -19,11 +19,11 @@ module;
 
 #include <gtest/gtest.h>
 
-module clucene:ut.string_helper;
+module lucene_core:ut.string_helper;
 
-import clucene;
+import lucene_core;
 
-using namespace clucene;
+using namespace lucene;
 
 namespace {
 

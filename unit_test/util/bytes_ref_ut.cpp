@@ -19,11 +19,11 @@ module;
 
 #include <gtest/gtest.h>
 
-module clucene:ut.bytes_ref;
+module lucene_core:ut.bytes_ref;
 
-import clucene;
+import lucene_core;
 
-using namespace clucene;
+using namespace lucene;
 
 TEST(BytesRefTest, FromStringAndSlice) {
     BytesRef ref = BytesRef::from_string("hello");

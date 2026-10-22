@@ -15,14 +15,14 @@
  * limitations under the License.
  */
 
-module clucene:array_util.impl;
+module lucene_core:array_util.impl;
 
 import :array_util;
 
 import :types;
 import std;
 
-namespace clucene {
+namespace lucene {
 
 Result<size_t> ArrayUtil::oversize(size_t min_target_size, size_t bytes_per_element) {
     if (min_target_size == 0) {
@@ -64,4 +64,4 @@ int32_t ArrayUtil::hash_code(std::span<const char32_t> array, size_t start, size
     return code;
 }
 
-} // namespace clucene
+} // namespace lucene

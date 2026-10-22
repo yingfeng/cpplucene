@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-export module clucene:bytes_ref;
+export module lucene_core:bytes_ref;
 
 import :types;
 import :debug;
@@ -23,7 +23,7 @@ import std;
 
 import :error;
 
-namespace clucene {
+namespace lucene {
 
 /// A slice (`offset` + `length`) into an owned byte array.
 ///
@@ -112,10 +112,10 @@ private:
     size_t length_{0};
 };
 
-} // namespace clucene
+} // namespace lucene
 
-export namespace clucene {
+export namespace lucene {
 
 inline std::ostream &operator<<(std::ostream &os, const BytesRef &ref) { return os << ref.to_display_string(); }
 
-} // namespace clucene
+} // namespace lucene

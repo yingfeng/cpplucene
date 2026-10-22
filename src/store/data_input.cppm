@@ -15,14 +15,14 @@
  * limitations under the License.
  */
 
-export module clucene:data_input;
+export module lucene_core:data_input;
 
 import :types;
 import std;
 
 import :error;
 
-namespace clucene {
+namespace lucene {
 
 /// Base class for performing read operations on Lucene's low-level data types.
 ///
@@ -129,4 +129,4 @@ private:
     size_t limit_{0};
 };
 
-} // namespace clucene
+} // namespace lucene

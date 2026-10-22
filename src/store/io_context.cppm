@@ -15,14 +15,14 @@
  * limitations under the License.
  */
 
-export module clucene:io_context;
+export module lucene_core:io_context;
 
 import :types;
 import std;
 
 import :error;
 
-namespace clucene {
+namespace lucene {
 
 /// Advice regarding the expected read access pattern.  Port of `ReadAdvice`.
 export enum class ReadAdvice : uint8_t {
@@ -123,4 +123,4 @@ export [[nodiscard]] const IOContext &io_context_default();
 /// Default context for read-once access (`IO_CONTEXT_READ_ONCE`).
 export [[nodiscard]] const IOContext &io_context_read_once();
 
-} // namespace clucene
+} // namespace lucene

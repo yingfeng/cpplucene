@@ -15,12 +15,12 @@
  * limitations under the License.
  */
 
-export module clucene:bit_util;
+export module lucene_core:bit_util;
 
 import :types;
 import std;
 
-namespace clucene {
+namespace lucene {
 
 /// Port of `core/util/bit_util.rs`.
 ///
@@ -97,6 +97,6 @@ export struct BitUtil {
 };
 
 static_assert(std::endian::native == std::endian::little,
-              "clucene requires a little-endian host (rlucene has the same constraint)");
+              "lucene_core requires a little-endian host (rlucene has the same constraint)");
 
-} // namespace clucene
+} // namespace lucene

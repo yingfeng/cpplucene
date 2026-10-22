@@ -11,7 +11,7 @@ else (CMAKE_VERSION GREATER 4.2.5 AND CMAKE_VERSION LESS_EQUAL 4.3.4)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-reserved-module-identifier")
 endif ()
 
-project(clucene VERSION 0.1.0 LANGUAGES CXX)
+project(lucene_core VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -52,7 +52,7 @@ else ()
 endif ()
 message(STATUS "Build type = ${CMAKE_BUILD_TYPE}")
 
-option(CLUCENE_BUILD_TESTS "Build the clucene unit tests" ON)
+option(LUCENE_CORE_BUILD_TESTS "Build the lucene_core unit tests" ON)
 option(ENABLE_SANITIZER_ADDRESS "Enable address sanitizer" OFF)
 option(ENABLE_SANITIZER_THREAD "Enable thread sanitizer" OFF)
 
@@ -71,6 +71,6 @@ endif ()
 
 add_subdirectory(src)
 
-if (CLUCENE_BUILD_TESTS)
+if (LUCENE_CORE_BUILD_TESTS)
     add_subdirectory(unit_test)
 endif ()

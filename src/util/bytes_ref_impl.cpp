@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-module clucene:bytes_ref.impl;
+module lucene_core:bytes_ref.impl;
 
 import :bytes_ref;
 import :core_helper;
@@ -25,7 +25,7 @@ import :types;
 import :debug;
 import std;
 
-namespace clucene {
+namespace lucene {
 
 BytesRef::BytesRef(std::vector<uint8_t> bytes) : bytes_(std::move(bytes)), offset_(0), length_(bytes_.size()) {}
 
@@ -181,4 +181,4 @@ std::string BytesRef::to_display_string() const {
     return result;
 }
 
-} // namespace clucene
+} // namespace lucene

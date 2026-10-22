@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-module clucene:bit_util.impl;
+module lucene_core:bit_util.impl;
 
 import :bit_util;
 
@@ -23,7 +23,7 @@ import :types;
 import :debug;
 import std;
 
-namespace clucene {
+namespace lucene {
 
 namespace {
 
@@ -207,4 +207,4 @@ bool BitUtil::is_zero_or_power_of_two(int32_t x) {
     return (x & static_cast<int32_t>(static_cast<uint32_t>(x) - 1u)) == 0;
 }
 
-} // namespace clucene
+} // namespace lucene

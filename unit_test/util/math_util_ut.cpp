@@ -19,11 +19,11 @@ module;
 
 #include <gtest/gtest.h>
 
-module clucene:ut.math_util;
+module lucene_core:ut.math_util;
 
-import clucene;
+import lucene_core;
 
-using namespace clucene;
+using namespace lucene;
 
 TEST(MathUtilTest, Log) {
     EXPECT_EQ(MathUtil::log(0, 2).value(), 0);

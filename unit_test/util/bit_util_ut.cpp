@@ -19,11 +19,11 @@ module;
 
 #include <gtest/gtest.h>
 
-module clucene:ut.bit_util;
+module lucene_core:ut.bit_util;
 
-import clucene;
+import lucene_core;
 
-using namespace clucene;
+using namespace lucene;
 
 TEST(BitUtilTest, BigAndLittleEndianRoundTrip) {
     std::array<uint8_t, 8> buffer{};

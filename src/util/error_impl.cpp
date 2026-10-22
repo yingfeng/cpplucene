@@ -15,14 +15,14 @@
  * limitations under the License.
  */
 
-module clucene:error.impl;
+module lucene_core:error.impl;
 
 import :error;
 
 import :types;
 import std;
 
-namespace clucene {
+namespace lucene {
 
 std::string_view error_kind_name(ErrorKind kind) {
     switch (kind) {
@@ -72,49 +72,49 @@ std::string_view error_kind_name(ErrorKind kind) {
 
 LuceneError::LuceneError(ErrorKind kind, std::string message) : kind_(kind), message_(std::move(message)) {}
 
-#define CLUCENE_DEFINE_ERROR_FACTORY(name, kind_value)                                                                                    \
+#define LUCENE_CORE_DEFINE_ERROR_FACTORY(name, kind_value)                                                                                    \
     LuceneError LuceneError::name(std::string message) { return LuceneError(ErrorKind::kind_value, std::move(message)); }
 
-CLUCENE_DEFINE_ERROR_FACTORY(io, kIo)
-CLUCENE_DEFINE_ERROR_FACTORY(illegal_argument, kIllegalArgument)
-CLUCENE_DEFINE_ERROR_FACTORY(illegal_state, kIllegalState)
-CLUCENE_DEFINE_ERROR_FACTORY(array_index_out_of_bounds, kArrayIndexOutOfBounds)
-CLUCENE_DEFINE_ERROR_FACTORY(already_closed, kAlreadyClosed)
-CLUCENE_DEFINE_ERROR_FACTORY(buffer_allocation, kBufferAllocation)
-CLUCENE_DEFINE_ERROR_FACTORY(collection_terminated, kCollectionTerminated)
-CLUCENE_DEFINE_ERROR_FACTORY(concurrent_modification, kConcurrentModification)
-CLUCENE_DEFINE_ERROR_FACTORY(corrupt_index, kCorruptIndex)
-CLUCENE_DEFINE_ERROR_FACTORY(eof, kEof)
-CLUCENE_DEFINE_ERROR_FACTORY(fuzzy_terms, kFuzzyTerms)
-CLUCENE_DEFINE_ERROR_FACTORY(index_format_too_new, kIndexFormatTooNew)
-CLUCENE_DEFINE_ERROR_FACTORY(index_format_too_old, kIndexFormatTooOld)
-CLUCENE_DEFINE_ERROR_FACTORY(index_not_found, kIndexNotFound)
-CLUCENE_DEFINE_ERROR_FACTORY(lock_already_held, kLockAlreadyHeld)
-CLUCENE_DEFINE_ERROR_FACTORY(lock_held_by_other, kLockHeldByOther)
-CLUCENE_DEFINE_ERROR_FACTORY(lock_obtain_failed, kLockObtainFailed)
-CLUCENE_DEFINE_ERROR_FACTORY(lock_release_failed, kLockReleaseFailed)
-CLUCENE_DEFINE_ERROR_FACTORY(max_bytes_length_exceeded, kMaxBytesLengthExceeded)
-CLUCENE_DEFINE_ERROR_FACTORY(merge_aborted, kMergeAborted)
-CLUCENE_DEFINE_ERROR_FACTORY(merge, kMerge)
-CLUCENE_DEFINE_ERROR_FACTORY(need_implemented, kNeedImplemented)
-CLUCENE_DEFINE_ERROR_FACTORY(no_more_terms, kNoMoreTerms)
-CLUCENE_DEFINE_ERROR_FACTORY(no_such_element, kNoSuchElement)
-CLUCENE_DEFINE_ERROR_FACTORY(not_implemented, kNotImplemented)
-CLUCENE_DEFINE_ERROR_FACTORY(not_such_file, kNotSuchFile)
-CLUCENE_DEFINE_ERROR_FACTORY(number_format, kNumberFormat)
-CLUCENE_DEFINE_ERROR_FACTORY(number_overflow, kNumberOverflow)
-CLUCENE_DEFINE_ERROR_FACTORY(time_exceeded, kTimeExceeded)
-CLUCENE_DEFINE_ERROR_FACTORY(too_complex_to_determinize, kTooComplexToDeterminize)
-CLUCENE_DEFINE_ERROR_FACTORY(too_many_clauses, kTooManyClauses)
-CLUCENE_DEFINE_ERROR_FACTORY(too_many_nested_clauses, kTooManyNestedClauses)
-CLUCENE_DEFINE_ERROR_FACTORY(tragedy, kTragedy)
-CLUCENE_DEFINE_ERROR_FACTORY(unchecked_io, kUncheckedIo)
-CLUCENE_DEFINE_ERROR_FACTORY(unreachable, kUnreachable)
-CLUCENE_DEFINE_ERROR_FACTORY(unsupported_operation, kUnsupportedOperation)
-CLUCENE_DEFINE_ERROR_FACTORY(version, kVersion)
-CLUCENE_DEFINE_ERROR_FACTORY(parse, kParse)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(io, kIo)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(illegal_argument, kIllegalArgument)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(illegal_state, kIllegalState)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(array_index_out_of_bounds, kArrayIndexOutOfBounds)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(already_closed, kAlreadyClosed)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(buffer_allocation, kBufferAllocation)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(collection_terminated, kCollectionTerminated)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(concurrent_modification, kConcurrentModification)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(corrupt_index, kCorruptIndex)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(eof, kEof)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(fuzzy_terms, kFuzzyTerms)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(index_format_too_new, kIndexFormatTooNew)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(index_format_too_old, kIndexFormatTooOld)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(index_not_found, kIndexNotFound)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(lock_already_held, kLockAlreadyHeld)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(lock_held_by_other, kLockHeldByOther)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(lock_obtain_failed, kLockObtainFailed)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(lock_release_failed, kLockReleaseFailed)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(max_bytes_length_exceeded, kMaxBytesLengthExceeded)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(merge_aborted, kMergeAborted)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(merge, kMerge)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(need_implemented, kNeedImplemented)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(no_more_terms, kNoMoreTerms)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(no_such_element, kNoSuchElement)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(not_implemented, kNotImplemented)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(not_such_file, kNotSuchFile)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(number_format, kNumberFormat)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(number_overflow, kNumberOverflow)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(time_exceeded, kTimeExceeded)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(too_complex_to_determinize, kTooComplexToDeterminize)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(too_many_clauses, kTooManyClauses)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(too_many_nested_clauses, kTooManyNestedClauses)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(tragedy, kTragedy)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(unchecked_io, kUncheckedIo)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(unreachable, kUnreachable)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(unsupported_operation, kUnsupportedOperation)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(version, kVersion)
+LUCENE_CORE_DEFINE_ERROR_FACTORY(parse, kParse)
 
-#undef CLUCENE_DEFINE_ERROR_FACTORY
+#undef LUCENE_CORE_DEFINE_ERROR_FACTORY
 
 std::string LuceneError::to_string() const {
     std::string result;
@@ -142,4 +142,4 @@ void LuceneError::add_suppressed(const LuceneError &error) {
 
 std::string to_string(const LuceneError &error) { return error.to_string(); }
 
-} // namespace clucene
+} // namespace lucene

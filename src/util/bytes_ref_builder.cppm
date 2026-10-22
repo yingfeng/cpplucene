@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-export module clucene:bytes_ref_builder;
+export module lucene_core:bytes_ref_builder;
 
 import :types;
 import std;
@@ -23,7 +23,7 @@ import std;
 import :error;
 import :bytes_ref;
 
-namespace clucene {
+namespace lucene {
 
 /// A builder for [`BytesRef`] instances.  Port of `core/index/bytes_ref_builder.rs`.
 export class BytesRefBuilder {
@@ -76,4 +76,4 @@ private:
     BytesRef bytes_ref_{};
 };
 
-} // namespace clucene
+} // namespace lucene

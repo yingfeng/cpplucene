@@ -15,14 +15,14 @@
  * limitations under the License.
  */
 
-export module clucene:array_util;
+export module lucene_core:array_util;
 
 import :types;
 import std;
 
 import :error;
 
-namespace clucene {
+namespace lucene {
 
 /// Port of the growth/allocation helpers of `core/util/array_util.rs`.
 ///
@@ -98,4 +98,4 @@ export struct ArrayUtil {
     [[nodiscard]] static int32_t hash_code(std::span<const char32_t> array, size_t start, size_t end);
 };
 
-} // namespace clucene
+} // namespace lucene

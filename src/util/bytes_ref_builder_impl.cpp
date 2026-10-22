@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-module clucene:bytes_ref_builder.impl;
+module lucene_core:bytes_ref_builder.impl;
 
 import :bytes_ref_builder;
 import :bytes_ref;
@@ -26,7 +26,7 @@ import :types;
 import :debug;
 import std;
 
-namespace clucene {
+namespace lucene {
 
 uint8_t BytesRefBuilder::byte_at(size_t index) const {
     debug_check(index < bytes_ref_.bytes().size());
@@ -116,4 +116,4 @@ BytesRef BytesRefBuilder::get_bytes_owner() { return std::move(bytes_ref_); }
 
 Result<BytesRef> BytesRefBuilder::get_bytes_ref_copy() const { return BytesRef::deep_copy_of(bytes_ref_); }
 
-} // namespace clucene
+} // namespace lucene

@@ -15,14 +15,14 @@
  * limitations under the License.
  */
 
-module clucene:core_helper.impl;
+module lucene_core:core_helper.impl;
 
 import :core_helper;
 
 import :types;
 import std;
 
-namespace clucene {
+namespace lucene {
 
 Result<size_t> CoreHelper::check_from_index_size(size_t from_index, size_t size, size_t length) {
     if (from_index > length || size > length - from_index) {
@@ -51,7 +51,7 @@ Result<size_t> CoreHelper::check_index(size_t index, size_t length) {
 int32_t CoreHelper::mismatch_u8(std::span<const uint8_t> a, std::span<const uint8_t> b) {
     const size_t common = std::min(a.size(), b.size());
     size_t i = 0;
-    // TODO(clucene): rlucene uses 32-byte SIMD compares here; revisit once the
+    // TODO(lucene_core): rlucene uses 32-byte SIMD compares here; revisit once the
     // hot codec paths are ported and profiled.
     while (i < common && a[i] == b[i]) {
         ++i;
@@ -173,4 +173,4 @@ double CoreHelper::min_f64(double a, double b) {
     return a <= b ? a : b;
 }
 
-} // namespace clucene
+} // namespace lucene

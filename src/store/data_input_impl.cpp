@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-module clucene:data_input.impl;
+module lucene_core:data_input.impl;
 
 import :data_input;
 import :bit_util;
@@ -24,7 +24,7 @@ import :core_helper;
 import :types;
 import std;
 
-namespace clucene {
+namespace lucene {
 
 namespace {
 
@@ -385,4 +385,4 @@ std::string ByteArrayDataInput::to_string() const {
     return std::format("ByteArrayDataInput@{}", static_cast<const void *>(this));
 }
 
-} // namespace clucene
+} // namespace lucene

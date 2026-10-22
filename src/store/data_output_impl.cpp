@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-module clucene:data_output.impl;
+module lucene_core:data_output.impl;
 
 import :data_output;
 import :data_input;
@@ -24,7 +24,7 @@ import :bit_util;
 import :types;
 import std;
 
-namespace clucene {
+namespace lucene {
 
 namespace {
 constexpr size_t COPY_BUFFER_SIZE = 16384;
@@ -226,4 +226,4 @@ std::string ByteArrayDataOutput::to_string() const {
     return std::format("ByteArrayDataOutput@{}", static_cast<const void *>(this));
 }
 
-} // namespace clucene
+} // namespace lucene

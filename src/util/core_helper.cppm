@@ -15,14 +15,14 @@
  * limitations under the License.
  */
 
-export module clucene:core_helper;
+export module lucene_core:core_helper;
 
 import :types;
 import std;
 
 import :error;
 
-namespace clucene {
+namespace lucene {
 
 /// Port of the range-check / comparison helpers of `core/util/core_helper.rs`.
 export struct CoreHelper {
@@ -55,4 +55,4 @@ export struct CoreHelper {
     [[nodiscard]] static double min_f64(double a, double b);
 };
 
-} // namespace clucene
+} // namespace lucene

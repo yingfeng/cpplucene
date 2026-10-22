@@ -15,17 +15,17 @@
  * limitations under the License.
  */
 
-module clucene:debug.impl;
+module lucene_core:debug.impl;
 
 import :debug;
 import :types;
 
 import std;
 
-namespace clucene {
+namespace lucene {
 
 void report_assertion_failure(std::string_view expression, const std::source_location &location) {
-    const std::string message = std::format("clucene assertion failed: {} at {}:{}:{}",
+    const std::string message = std::format("lucene_core assertion failed: {} at {}:{}:{}",
                                             expression.empty() ? "<no expression>" : expression,
                                             location.file_name(),
                                             location.line(),
@@ -35,4 +35,4 @@ void report_assertion_failure(std::string_view expression, const std::source_loc
     std::abort();
 }
 
-} // namespace clucene
+} // namespace lucene

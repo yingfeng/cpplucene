@@ -15,14 +15,14 @@
  * limitations under the License.
  */
 
-module clucene:math_util.impl;
+module lucene_core:math_util.impl;
 
 import :math_util;
 
 import :types;
 import std;
 
-namespace clucene {
+namespace lucene {
 
 Result<int32_t> MathUtil::log(int64_t x, int32_t base) {
     if (base == 2) {
@@ -110,4 +110,4 @@ double MathUtil::sum_upper_bound(double sum, int32_t num_values) {
     return (1.0 + 2.0 * b) * sum;
 }
 
-} // namespace clucene
+} // namespace lucene

@@ -15,13 +15,13 @@
  * limitations under the License.
  */
 
-export module clucene:debug;
+export module lucene_core:debug;
 
 import :types;
 
 import std;
 
-namespace clucene {
+namespace lucene {
 
 /// Reports a failed assertion and aborts.  Only called from `debug_check`.
 export void report_assertion_failure(std::string_view expression, const std::source_location &location);
@@ -45,4 +45,4 @@ export inline void debug_check(bool condition,
 #endif
 }
 
-} // namespace clucene
+} // namespace lucene
