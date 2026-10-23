@@ -15,6 +15,7 @@ set(LUCENE_CORE_SUBSYSTEMS
         codecs
         index
         search
+        geo
         queryparser
         sandbox
 )

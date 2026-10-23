@@ -362,7 +362,7 @@ TEST(IndexingChainTest, RejectsAnInconsistentSchema) {
     EXPECT_NE(rejected.error().to_string().find("index options"), std::string::npos);
 }
 
-TEST(IndexingChainTest, RejectsPointsAndVectors) {
+TEST(IndexingChainTest, AcceptsPointsAndRejectsVectors) {
     auto created = Lucene101Codec::create();
     ASSERT_TRUE(created.has_value());
     ByteBuffersDirectory dir;
@@ -381,9 +381,8 @@ TEST(IndexingChainTest, RejectsPointsAndVectors) {
     ASSERT_TRUE(point_type.set_dimensions(1, 8).has_value());
     points.add(std::make_unique<Field>(std::string("p"), FieldValue{std::vector<uint8_t>(8, 0)},
                                       std::move(point_type)));
-    auto rejected = chain.process_document(0, points, builder);
-    ASSERT_FALSE(rejected.has_value());
-    EXPECT_EQ(rejected.error().kind(), ErrorKind::kUnsupportedOperation);
+    // Points are indexed; a field carrying the right number of bytes is accepted.
+    EXPECT_TRUE(chain.process_document(0, points, builder).has_value());
 
     Document vectors;
     FieldType vector_type;

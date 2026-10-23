@@ -21,6 +21,7 @@ module;
 
 #include <cstdint>
 #include <memory>
+#include <set>
 #include <string>
 #include <utility>
 #include <variant>
@@ -450,6 +451,67 @@ TEST(Lucene90CompressingStoredFieldsTest, ExposesTheFormatFactories) {
     auto number = field->numeric_value();
     ASSERT_TRUE(number.has_value());
     EXPECT_EQ(std::get<int64_t>(number.value()), 17179869184LL);
+}
+
+TEST(Lucene90CompressingStoredFieldsTest, LoadsEveryStoredFieldIntoADocument) {
+    Fixture fixture;
+    const auto values = Fixture::sample_values(2);
+    fixture.write(values, /*chunk_size=*/4096, /*max_docs_per_chunk=*/128);
+
+    auto reader = fixture.open(2);
+    ASSERT_TRUE(reader != nullptr);
+
+    DocumentStoredFieldVisitor visitor;
+    ASSERT_TRUE(reader->document_with_visitor(1, visitor).has_value());
+    Document document = visitor.take_document();
+    ASSERT_EQ(document.field_count(), 6U);
+
+    const IndexableField *text = document.get_field("f0");
+    ASSERT_TRUE(text != nullptr);
+    EXPECT_EQ(text->string_value().value(), values[1].text);
+    // A stored string keeps the indexing options of the field it came from.
+    EXPECT_TRUE(text->field_type().stored());
+    EXPECT_TRUE(text->field_type().tokenized());
+    EXPECT_EQ(text->field_type().index_options(), IndexOptions::None);
+
+    const IndexableField *binary = document.get_field("f1");
+    ASSERT_TRUE(binary != nullptr);
+    EXPECT_EQ(binary->binary_value().value(), values[1].binary);
+
+    const IndexableField *i32 = document.get_field("f2");
+    ASSERT_TRUE(i32 != nullptr);
+    EXPECT_EQ(std::get<int32_t>(i32->numeric_value().value()), values[1].i32);
+
+    const IndexableField *i64 = document.get_field("f3");
+    ASSERT_TRUE(i64 != nullptr);
+    EXPECT_EQ(std::get<int64_t>(i64->numeric_value().value()), values[1].i64);
+
+    const IndexableField *f32 = document.get_field("f4");
+    ASSERT_TRUE(f32 != nullptr);
+    EXPECT_FLOAT_EQ(std::get<float>(f32->numeric_value().value()), values[1].f32);
+
+    const IndexableField *f64 = document.get_field("f5");
+    ASSERT_TRUE(f64 != nullptr);
+    EXPECT_DOUBLE_EQ(std::get<double>(f64->numeric_value().value()), values[1].f64);
+}
+
+TEST(Lucene90CompressingStoredFieldsTest, LoadsOnlyTheSelectedFieldsIntoADocument) {
+    Fixture fixture;
+    const auto values = Fixture::sample_values(3);
+    fixture.write(values, /*chunk_size=*/4096, /*max_docs_per_chunk=*/128);
+
+    auto reader = fixture.open(3);
+    ASSERT_TRUE(reader != nullptr);
+
+    DocumentStoredFieldVisitor visitor(std::set<std::string>{"f0", "f2"});
+    ASSERT_TRUE(reader->document_with_visitor(2, visitor).has_value());
+    Document document = visitor.take_document();
+    ASSERT_EQ(document.field_count(), 2U);
+    ASSERT_TRUE(document.get_field("f0") != nullptr);
+    ASSERT_TRUE(document.get_field("f2") != nullptr);
+    EXPECT_TRUE(document.get_field("f1") == nullptr);
+    EXPECT_EQ(document.get_field("f0")->string_value().value(), values[2].text);
+    EXPECT_EQ(std::get<int32_t>(document.get_field("f2")->numeric_value().value()), values[2].i32);
 }
 
 TEST(Lucene90CompressingStoredFieldsTest, RejectsInvalidParameters) {

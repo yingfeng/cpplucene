@@ -54,6 +54,10 @@ import :norms_format;
 import :norms_producer;
 import :number;
 import :numeric_doc_values_writer;
+import :numeric_utils;
+import :point_values_writer;
+import :points_format;
+import :points_writer;
 import :postings_format;
 import :segment_info;
 import :segment_write_state;
@@ -129,6 +133,7 @@ struct IndexingChain::Impl {
         std::optional<FieldInvertState> invert_state;
         std::optional<FreqProxTermsWriterPerField> terms_hash_per_field;
         std::unique_ptr<DocValuesWriter> doc_values_writer;
+        std::unique_ptr<PointValuesWriter> points_writer;
         std::unique_ptr<NormValuesWriter> norms;
         int64_t field_gen{-1};
         /// Index of the next [`PerField`] in the same bucket, `-1` for the last.
@@ -340,8 +345,12 @@ struct IndexingChain::Impl {
         }
 
         if (field_type.point_dimension_count() != 0) {
-            return err(LuceneError::unsupported_operation(
-                    "point values are not indexed by this port (field=\"" + schema.name() + "\")"));
+            if (auto set = schema.set_points(field_type.point_dimension_count(),
+                                             field_type.point_index_dimension_count(),
+                                             field_type.point_num_bytes());
+                !set.has_value()) {
+                return set;
+            }
         }
         if (field_type.vector_dimension() != 0) {
             return err(LuceneError::unsupported_operation(
@@ -383,6 +392,9 @@ struct IndexingChain::Impl {
         info.index_options = schema.index_options();
         info.doc_values_type = schema.doc_values_type();
         info.doc_values_skip_index = schema.doc_values_skip_index();
+        info.point_dimension_count = schema.point_dimension_count();
+        info.point_index_dimension_count = schema.point_index_dimension_count();
+        info.point_num_bytes = schema.point_num_bytes();
         for (const auto &[key, value] : schema.attributes()) {
             info.attributes.emplace(key, value);
         }
@@ -422,6 +434,9 @@ struct IndexingChain::Impl {
                 per_field.doc_values_writer =
                         std::make_unique<SortedSetDocValuesWriter>(per_field.field_info);
                 break;
+        }
+        if (per_field.field_info->point_dimension_count != 0) {
+            per_field.points_writer = std::make_unique<PointValuesWriter>(*per_field.field_info);
         }
         return {};
     }
@@ -485,9 +500,81 @@ struct IndexingChain::Impl {
         }
 
         if (type.doc_values_type() != DocValuesType::None) {
-            return index_doc_value(doc_id, per_field, field);
+            if (auto written = index_doc_value(doc_id, per_field, field); !written.has_value()) {
+                return written;
+            }
+        }
+
+        // Points, last: the packed value is the same one the point values writer
+        // stores, so a field can be both a doc values field and a point field.
+        if (type.point_dimension_count() != 0) {
+            return index_points(doc_id, per_field, field);
         }
         return {};
+    }
+
+    [[nodiscard]] VoidResult index_points(int32_t doc_id, PerField &per_field, const IndexableField &field) {
+        PointValuesWriter *writer = per_field.points_writer.get();
+        if (writer == nullptr) {
+            return err(LuceneError::illegal_state("field=\"" + per_field.field_info->name +
+                                                  "\": no point values writer"));
+        }
+        auto packed = packed_point_value(field, field.field_type());
+        if (!packed.has_value()) {
+            return std::unexpected(std::move(packed.error()));
+        }
+        return writer->add_packed_value(doc_id, packed.value());
+    }
+
+    /// The packed point value of `field`.
+    ///
+    /// **Deviation:** the reference implementation's `IntPoint`/`LongPoint`/
+    /// `FloatPoint`/`DoublePoint` encode their own `binaryValue()`; this port's
+    /// numeric fields carry a [`Number`] instead, so the encoding happens here for
+    /// a single-dimension numeric field.
+    [[nodiscard]] static Result<std::vector<uint8_t>>
+    packed_point_value(const IndexableField &field, const FieldType &type) {
+        if (auto bytes = field.binary_value(); bytes.has_value()) {
+            return bytes.value();
+        }
+        const auto number = field.numeric_value();
+        if (!number.has_value() || type.point_dimension_count() != 1) {
+            return err(LuceneError::illegal_argument("point field missing binary value (field=\"" +
+                                                     std::string(field.name()) + "\")"));
+        }
+        std::vector<uint8_t> packed(type.point_num_bytes(), 0);
+        if (type.point_num_bytes() == 4) {
+            int32_t value = 0;
+            if (const auto *single = std::get_if<float>(&number.value()); single != nullptr) {
+                value = NumericUtils::float_to_sortable_int(*single);
+            } else if (auto as_i64 = number_i64(number.value()); as_i64.has_value() &&
+                       as_i64.value() >= std::numeric_limits<int32_t>::min() &&
+                       as_i64.value() <= std::numeric_limits<int32_t>::max()) {
+                value = static_cast<int32_t>(as_i64.value());
+            } else {
+                return err(LuceneError::illegal_argument("field=\"" + std::string(field.name()) +
+                                                         "\": numeric value out of range for 4 bytes"));
+            }
+            NumericUtils::int_to_sortable_bytes(value, packed, 0);
+            return packed;
+        }
+        if (type.point_num_bytes() == 8) {
+            int64_t value = 0;
+            if (const auto *wide = std::get_if<double>(&number.value()); wide != nullptr) {
+                value = NumericUtils::double_to_sortable_long(*wide);
+            } else {
+                auto as_i64 = number_i64(number.value());
+                if (!as_i64.has_value()) {
+                    return err(LuceneError::illegal_argument("field=\"" + std::string(field.name()) +
+                                                             "\": numeric value out of range for 8 bytes"));
+                }
+                value = as_i64.value();
+            }
+            NumericUtils::long_to_sortable_bytes(value, packed, 0);
+            return packed;
+        }
+        return err(LuceneError::illegal_argument("field=\"" + std::string(field.name()) +
+                                                 "\": a numeric point must be 4 or 8 bytes wide"));
     }
 
     [[nodiscard]] VoidResult index_doc_value(int32_t doc_id, PerField &per_field,
@@ -811,6 +898,9 @@ struct IndexingChain::Impl {
         if (auto written = write_doc_values(state, *infos); !written.has_value()) {
             return written;
         }
+        if (auto written = write_points(state, *infos); !written.has_value()) {
+            return written;
+        }
         if (auto written = stored_fields_.flush(segment_info_.max_doc); !written.has_value()) {
             return written;
         }
@@ -882,6 +972,52 @@ struct IndexingChain::Impl {
             }
         }
         return consumer.value()->close();
+    }
+
+    /// Writes the buffered points of every point field.
+    ///
+    /// The points writer is created lazily, once a field actually has points, so a
+    /// segment without points writes no `.kdd`/`.kdi`/`.kdm` at all.
+    [[nodiscard]] VoidResult write_points(const SegmentWriteState &state, const FieldInfos &infos) {
+        if (!infos.has_point_values()) {
+            return {};
+        }
+        const PointsFormat *format = codec_.points_format();
+        if (format == nullptr) {
+            return err(LuceneError::illegal_state("the codec does not provide a points format"));
+        }
+        std::unique_ptr<PointsWriter> writer;
+        for (auto &per_field : per_fields_) {
+            if (per_field->points_writer == nullptr) {
+                continue;
+            }
+            std::unique_ptr<PointValuesWriter> points = std::move(per_field->points_writer);
+            if (per_field->field_info == nullptr || per_field->field_info->point_dimension_count == 0) {
+                continue;
+            }
+            if (writer == nullptr) {
+                // The points format takes the write state by non-const reference (the
+                // reference implementation does the same); the chain only ever hands it a
+                // state it owns, so the cast is safe.
+                auto created = format->fields_writer(const_cast<SegmentWriteState &>(state), segment_info_);
+                if (!created.has_value()) {
+                    return std::unexpected(std::move(created.error()));
+                }
+                writer = std::move(created.value());
+            }
+            if (auto written = points->flush(*writer); !written.has_value()) {
+                (void)writer->close();
+                return written;
+            }
+        }
+        if (writer == nullptr) {
+            return {};
+        }
+        if (auto finished = writer->finish(); !finished.has_value()) {
+            (void)writer->close();
+            return finished;
+        }
+        return writer->close();
     }
 
     [[nodiscard]] VoidResult write_postings(const SegmentWriteState &state) {
@@ -965,6 +1101,7 @@ struct IndexingChain::Impl {
             per_field->invert_state.reset();
             per_field->terms_hash_per_field.reset();
             per_field->doc_values_writer.reset();
+            per_field->points_writer.reset();
             per_field->norms.reset();
         }
         return stored_fields_.abort();

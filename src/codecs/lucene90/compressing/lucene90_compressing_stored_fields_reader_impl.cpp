@@ -24,6 +24,7 @@ import :compression;
 import :data_input;
 import :directory;
 import :document;
+import :document_stored_field_visitor;
 import :error;
 import :indexable_field;
 import :field_infos;
@@ -48,49 +49,6 @@ namespace {
 /// because index sorting and clustering put similar documents next to each other.
 constexpr size_t PREFETCH_CACHE_SIZE = 1 << 4;
 constexpr size_t PREFETCH_CACHE_MASK = PREFETCH_CACHE_SIZE - 1;
-
-/// Collects every stored field of a document into a [`Document`].
-class DocumentVisitor final : public StoredFieldVisitor {
-public:
-    [[nodiscard]] Status needs_field(const FieldInfo &field_info) override {
-        static_cast<void>(field_info);
-        return Status::Yes;
-    }
-
-    [[nodiscard]] VoidResult binary_field(const FieldInfo &field_info, std::span<const uint8_t> value) override {
-        return add(StoredField::from_bytes(field_info.name, std::vector<uint8_t>(value.begin(), value.end())));
-    }
-
-    [[nodiscard]] VoidResult string_field(const FieldInfo &field_info, std::string_view value) override {
-        return add(StoredField::from_string(field_info.name, std::string(value)));
-    }
-
-    [[nodiscard]] VoidResult int_field(const FieldInfo &field_info, int32_t value) override {
-        return add(StoredField::from_i32(field_info.name, value));
-    }
-
-    [[nodiscard]] VoidResult long_field(const FieldInfo &field_info, int64_t value) override {
-        return add(StoredField::from_i64(field_info.name, value));
-    }
-
-    [[nodiscard]] VoidResult float_field(const FieldInfo &field_info, float value) override {
-        return add(StoredField::from_f32(field_info.name, value));
-    }
-
-    [[nodiscard]] VoidResult double_field(const FieldInfo &field_info, double value) override {
-        return add(StoredField::from_f64(field_info.name, value));
-    }
-
-    [[nodiscard]] Document take() { return std::move(document_); }
-
-private:
-    VoidResult add(Field field) {
-        document_.add(std::make_unique<Field>(std::move(field)));
-        return {};
-    }
-
-    Document document_;
-};
 
 } // namespace
 
@@ -517,11 +475,11 @@ VoidResult Lucene90CompressingStoredFieldsReader::document_with_visitor(int32_t 
 }
 
 Result<Document> Lucene90CompressingStoredFieldsReader::document(int32_t doc_id) {
-    DocumentVisitor visitor;
+    DocumentStoredFieldVisitor visitor;
     if (auto loaded = document_with_visitor(doc_id, visitor); !loaded.has_value()) {
         return std::unexpected(std::move(loaded.error()));
     }
-    return visitor.take();
+    return visitor.take_document();
 }
 
 VoidResult Lucene90CompressingStoredFieldsReader::check_integrity() const {
