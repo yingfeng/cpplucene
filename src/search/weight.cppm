@@ -33,6 +33,7 @@ import :segment_cacheable;
 namespace lucene {
 
 export class IndexSearcher;
+export class Matches;
 export class Query;
 
 /// Expert: computes query weights and builds query scorers.
@@ -45,9 +46,10 @@ export class Query;
 /// leaf.
 ///
 /// **Deviations** (C++ mechanics only):
-///  * `matches` / `QueryWeightMatches` are not ported yet: they need the
-///    `Matches` / `MatchesIterator` machinery, which no ported query needs so
-///    far;
+///  * `matches` returns the type-erased [`Matches`] directly instead of the
+///    reference implementation's `QueryWeightMatches` / `QueryWeightMatchesIterator`
+///    pair, whose enum-of-iterators only exists because Rust has no trait
+///    objects for matches;
 ///  * `get_query` returns a borrowed reference: the reference implementation's `create_weight`
 ///    consumes the query into an `Arc`, so the weight owns it, while here the
 ///    caller keeps the query alive for as long as the weight is used (the same
@@ -61,6 +63,13 @@ public:
     /// Explains the score of `doc`.
     [[nodiscard]] virtual Result<Explanation> explain(const LeafReaderContext &context, int32_t doc,
                                                       const IndexSearcher &searcher) const = 0;
+
+    /// The matches of `doc`, or a null pointer when the document does not match.
+    ///
+    /// The default asks the scorer whether the document matches and answers
+    /// `MatchWithNoTerms`, since a scorer carries no position information.
+    [[nodiscard]] virtual Result<std::unique_ptr<Matches>> matches(const LeafReaderContext &context, int32_t doc,
+                                                                  const IndexSearcher &searcher);
 
     /// The query this weight belongs to.
     [[nodiscard]] virtual const Query &get_query() const = 0;

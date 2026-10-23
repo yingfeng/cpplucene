@@ -23,6 +23,7 @@ import :doc_id_set_iterator;
 import :error;
 import :score_mode;
 import :scorer;
+import :two_phase_iterator;
 import :types;
 
 import std;
@@ -32,6 +33,12 @@ namespace lucene {
 std::unique_ptr<ConstantScoreScorer> ConstantScoreScorer::from_disi(float score, ScoreMode score_mode,
                                                                     std::unique_ptr<DocIdSetIterator> iterator) {
     return std::unique_ptr<ConstantScoreScorer>(new ConstantScoreScorer(score, score_mode, std::move(iterator)));
+}
+
+std::unique_ptr<ConstantScoreScorer> ConstantScoreScorer::from_tpi(float score, ScoreMode score_mode,
+                                                                  std::unique_ptr<TwoPhaseIterator> iterator) {
+    std::unique_ptr<DocIdSetIterator> disi(new TwoPhaseIteratorAsDocIdSetIterator(std::move(iterator)));
+    return std::unique_ptr<ConstantScoreScorer>(new ConstantScoreScorer(score, score_mode, std::move(disi), true));
 }
 
 int32_t ConstantScoreScorer::doc_id() const {

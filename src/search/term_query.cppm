@@ -37,6 +37,9 @@ import :weight;
 
 namespace lucene {
 
+export class Matches;
+export class MatchesIterator;
+
 /// A query that matches the documents containing a term.
 ///
 /// Port of `TermQuery` (`core/search/term_query.rs`).  The term states may be
@@ -95,6 +98,15 @@ public:
     /// Counts the matches of a leaf that has no deletions by its document
     /// frequency, without building a scorer.
     [[nodiscard]] Result<int32_t> count(const LeafReaderContext &context, const IndexSearcher &searcher) override;
+
+    /// The matches of `doc` in the field of the term.
+    [[nodiscard]] Result<std::unique_ptr<Matches>> matches(const LeafReaderContext &context, int32_t doc,
+                                                           const IndexSearcher &searcher) override;
+
+    /// The matches iterator of `doc`, or a null pointer when the term does not
+    /// occur in that document.
+    [[nodiscard]] Result<std::unique_ptr<MatchesIterator>> matches_iterator(const LeafReaderContext &context,
+                                                                            int32_t doc) const;
 
     /// A term weight only depends on segment-immutable structures.
     [[nodiscard]] Result<bool> is_cacheable(const LeafReaderContext &context) const override {
@@ -166,11 +178,16 @@ private:
 /// postings, without one the leaf cannot match and the result is an empty
 /// constant-score scorer.
 ///
-/// **Deviation:** the `ScoreMode::TopScores` impacts path (`ImpactsEnum` +
-/// max-score cache) is not ported, so every score mode iterates the postings.
+/// `ScoreMode::TopScores` goes through the indexed impacts, so the scorer can
+/// prune non-competitive blocks; `top_level_scoring_clause` decides whether the
+/// collector's minimum competitive score can drive that pruning.
+///
+/// **Deviation:** terms enums that cannot serve impacts (fake dictionaries,
+/// term vectors) fall back to the postings path instead of failing.
 [[nodiscard]] Result<std::unique_ptr<Scorer>> build_term_scorer(const LeafReaderContext &context,
                                                                TermsEnum *terms_enum, const Term &term,
                                                                std::shared_ptr<SimScorer> sim_scorer,
-                                                               ScoreMode score_mode);
+                                                               ScoreMode score_mode,
+                                                               bool top_level_scoring_clause = false);
 
 } // namespace lucene

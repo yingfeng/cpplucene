@@ -35,11 +35,17 @@ import :score_mode;
 import :scorer_supplier;
 import :similarity;
 import :term;
+import :sort_field;
+import :top_field_docs;
+import :total_hit_count_collector;
 import :term_statistics;
 import :top_docs;
 import :weight;
 
 namespace lucene {
+
+export class QueryCache;
+export class QueryCachingPolicy;
 
 /// Runs queries against a [`IndexReader`].
 ///
@@ -53,8 +59,9 @@ namespace lucene {
 ///  * searching is serial: slices, partitions and the task executor are not
 ///    ported, so one collector is created per leaf and the leaves are visited in
 ///    order;
-///  * `count` and `explain` are not ported yet, and neither are the query cache,
-///    caching policy, timeouts or the `IndexSearcherHook`;
+///  * `count` and `explain` are not ported yet, and neither are timeouts or the
+///    `IndexSearcherHook`; the query cache is only consulted when a cache and a
+///    policy are set, and only for searches that do not need scores;
 ///  * the reader is a `std::shared_ptr` instead of a ref-counted
 ///    `IndexReaderContext` tree.
 export class IndexSearcher {
@@ -84,12 +91,27 @@ public:
 
     /// Builds the searcher-dependent state of `query`.
     ///
-    /// Port of `IndexSearcher::create_weight`.  **Deviation:** the query cache
-    /// hook is not ported, so this is a plain forward to
-    /// [`Query::create_weight`].
+    /// Port of `IndexSearcher::create_weight`: when a query cache is set and the
+    /// search does not need scores, the weight is wrapped so that the matching
+    /// documents are cached per leaf.
     [[nodiscard]] Result<std::unique_ptr<Weight>> create_weight(const Query &query, ScoreMode score_mode,
-                                                                float boost) const {
-        return query.create_weight(*this, score_mode, boost);
+                                                                float boost) const;
+
+    /// A query cache, or a null pointer (no caching).
+    [[nodiscard]] const std::shared_ptr<QueryCache> &query_cache() const noexcept { return query_cache_; }
+
+    /// Sets the query cache; a null pointer disables caching.
+    void set_query_cache(std::shared_ptr<QueryCache> cache) noexcept { query_cache_ = std::move(cache); }
+
+    /// The policy that decides which queries the cache keeps, `nullptr` when no
+    /// cache is set.
+    [[nodiscard]] const std::shared_ptr<const QueryCachingPolicy> &caching_policy() const noexcept {
+        return caching_policy_;
+    }
+
+    /// Sets the caching policy; without one, a cache is never consulted.
+    void set_caching_policy(std::shared_ptr<const QueryCachingPolicy> policy) noexcept {
+        caching_policy_ = std::move(policy);
     }
 
     /// Statistics of `field` aggregated over all leaves, or `std::nullopt` when
@@ -115,6 +137,21 @@ public:
 
     /// The top `n` hits for `query`, sorted by score.
     [[nodiscard]] Result<TopDocs> search(const Query &query, int32_t n) const;
+
+    /// How many documents match `query`.
+    ///
+    /// Port of `IndexSearcher::count`: it runs a [`TotalHitCountCollector`](:total_hit_count_collector),
+    /// which skips the leaves the weight can count without visiting them.
+    [[nodiscard]] Result<int32_t> count(const Query &query) const;
+
+    /// The `num_hits` best hits ordered by `sort`.
+    ///
+    /// Port of `IndexSearcher::search(sort)`.  **Deviation:** the reference
+    /// implementation goes through a `TopFieldCollectorManager`; the port runs
+    /// one [`TopFieldCollector`] over all leaves, which the collapsed
+    /// [`CollectorManager`](:collector_manager) cannot express because its
+    /// reduction is typed as [`TopDocs`].
+    [[nodiscard]] Result<TopFieldDocs> search(const Query &query, const Sort &sort, int32_t n) const;
 
     /// The top hits at or after the `after` cursor; `after` may be null, which
     /// makes this the first page.
@@ -144,6 +181,8 @@ private:
 
     std::shared_ptr<IndexReader> reader_;
     std::shared_ptr<Similarity> similarity_;
+    std::shared_ptr<QueryCache> query_cache_;
+    std::shared_ptr<const QueryCachingPolicy> caching_policy_;
 };
 
 } // namespace lucene

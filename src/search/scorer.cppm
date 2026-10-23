@@ -82,6 +82,9 @@ public:
     [[nodiscard]] virtual int32_t approx_doc_id() const { return doc_id(); }
     [[nodiscard]] virtual Result<int32_t> approx_next_doc() { return next_doc(); }
     [[nodiscard]] virtual Result<int32_t> approx_advance(int32_t target) { return advance(target); }
+    /// The slow path of [`approx_advance`]; defaults to it, like the reference
+    /// implementation's `ApproximationDISI::approx_slow_advance` default.
+    [[nodiscard]] virtual Result<int32_t> approx_slow_advance(int32_t target) { return approx_advance(target); }
     [[nodiscard]] virtual Result<int64_t> approx_cost() const { return cost(); }
 };
 

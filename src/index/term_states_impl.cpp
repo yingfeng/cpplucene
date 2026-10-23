@@ -44,6 +44,31 @@ TermStates::TermStates(Identity identity, Identity top_reader_context_identity, 
           resolved_(num_leaves, 0),
           mutex_(std::make_unique<std::mutex>()) {}
 
+TermStates::TermStates(const TermStates &other)
+        : identity_(other.identity_),
+          top_reader_context_identity_(other.top_reader_context_identity_),
+          term_(other.term_),
+          states_(other.states_),
+          resolved_(other.resolved_),
+          mutex_(std::make_unique<std::mutex>()),
+          doc_freq_(other.doc_freq_),
+          total_term_freq_(other.total_term_freq_) {}
+
+TermStates &TermStates::operator=(const TermStates &other) {
+    if (this == &other) {
+        return *this;
+    }
+    const std::lock_guard<std::mutex> guard(*mutex_);
+    identity_ = other.identity_;
+    top_reader_context_identity_ = other.top_reader_context_identity_;
+    term_ = other.term_;
+    states_ = other.states_;
+    resolved_ = other.resolved_;
+    doc_freq_ = other.doc_freq_;
+    total_term_freq_ = other.total_term_freq_;
+    return *this;
+}
+
 Result<TermStates> TermStates::with_term(std::optional<Term> term, const IndexReader &reader) {
     auto leaves = reader.leaves();
     if (!leaves.has_value()) {

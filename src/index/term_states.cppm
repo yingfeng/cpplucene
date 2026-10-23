@@ -86,6 +86,13 @@ private:
 ///    `Arc<TermStateEnum>`.
 export class TermStates {
 public:
+    /// Copies the registered states and the accumulated statistics; the copied
+    /// view gets a mutex of its own.
+    TermStates(const TermStates &other);
+    TermStates &operator=(const TermStates &other);
+    TermStates(TermStates &&) noexcept = default;
+    TermStates &operator=(TermStates &&) noexcept = default;
+
     /// An empty view over `reader`'s leaves, remembering `term` for lazy
     /// lookups.  `reader` must be a top-level reader.
     [[nodiscard]] static Result<TermStates> with_term(std::optional<Term> term, const IndexReader &reader);

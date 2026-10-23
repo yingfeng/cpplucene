@@ -27,6 +27,9 @@ import :explanation;
 import :index_searcher;
 import :leaf_reader;
 import :leaf_reader_context;
+import :matches;
+import :matches_iterator;
+import :matches_utils;
 import :number;
 import :numeric_doc_values;
 import :postings_enum;
@@ -38,6 +41,7 @@ import :scorer;
 import :scorer_supplier;
 import :similarity;
 import :term;
+import :term_matches_iterator;
 import :term_scorer;
 import :term_states;
 import :term_statistics;
@@ -368,6 +372,50 @@ Result<int32_t> TermWeight::count(const LeafReaderContext &context, const IndexS
     return terms_enum.value()->doc_freq();
 }
 
+Result<std::unique_ptr<Matches>> TermWeight::matches(const LeafReaderContext &context, int32_t doc,
+                                                     const IndexSearcher & /*searcher*/) {
+    const auto *parent = dynamic_cast<const TermQuery *>(parent_query_);
+    if (parent == nullptr) {
+        return err(LuceneError::illegal_state("a term weight needs a term query"));
+    }
+    const std::string field(parent->term().field());
+    return for_field(field, [this, context, doc]() { return matches_iterator(context, doc); });
+}
+
+Result<std::unique_ptr<MatchesIterator>> TermWeight::matches_iterator(const LeafReaderContext &context,
+                                                                      int32_t doc) const {
+    auto terms_enum = get_terms_enum(context);
+    if (!terms_enum.has_value()) {
+        return std::unexpected(std::move(terms_enum.error()));
+    }
+    if (terms_enum.value() == nullptr) {
+        return std::unique_ptr<MatchesIterator>{};
+    }
+    auto postings = terms_enum.value()->postings_with_flags(nullptr, OFFSETS);
+    if (!postings.has_value()) {
+        return std::unexpected(std::move(postings.error()));
+    }
+    if (postings.value() == nullptr) {
+        return std::unique_ptr<MatchesIterator>{};
+    }
+    auto advanced = postings.value()->advance(doc);
+    if (!advanced.has_value()) {
+        return std::unexpected(std::move(advanced.error()));
+    }
+    if (advanced.value() != doc) {
+        return std::unique_ptr<MatchesIterator>{};
+    }
+    // The weight borrows its parent query, so the iterator gets a non-owning
+    // `shared_ptr` to it: the caller keeps the query alive, exactly like the
+    // weight itself does.
+    std::shared_ptr<Query> parent_query(std::shared_ptr<void>{}, const_cast<Query *>(parent_query_));
+    auto iterator = TermMatchesIterator::create(std::move(postings.value()), std::move(parent_query));
+    if (!iterator.has_value()) {
+        return std::unexpected(std::move(iterator.error()));
+    }
+    return std::unique_ptr<MatchesIterator>(std::move(iterator.value()));
+}
+
 // ------------------------------------------------------- TermScorerSupplier
 
 TermScorerSupplier::TermScorerSupplier(bool top_level_scoring_clause, std::shared_ptr<TermStates> term_states,
@@ -423,7 +471,8 @@ Result<std::unique_ptr<Scorer>> TermScorerSupplier::get(int64_t lead_cost, const
     if (!present.has_value()) {
         return std::unexpected(std::move(present.error()));
     }
-    return build_term_scorer(context, present.value() ? terms_enum_.get() : nullptr, term_, sim_scorer_, score_mode_);
+    return build_term_scorer(context, present.value() ? terms_enum_.get() : nullptr, term_, sim_scorer_, score_mode_,
+                             top_level_scoring_clause_);
 }
 
 Result<int64_t> TermScorerSupplier::cost(const LeafReaderContext &context, const IndexSearcher &searcher) {
@@ -451,7 +500,7 @@ VoidResult TermScorerSupplier::set_top_level_scoring_clause() {
 
 Result<std::unique_ptr<Scorer>> build_term_scorer(const LeafReaderContext &context, TermsEnum *terms_enum,
                                                   const Term &term, std::shared_ptr<SimScorer> sim_scorer,
-                                                  ScoreMode score_mode) {
+                                                  ScoreMode score_mode, bool top_level_scoring_clause) {
     if (terms_enum == nullptr) {
         // No postings for this leaf: an empty scorer with score 0 keeps the
         // "term exists elsewhere" case uniform.
@@ -470,6 +519,24 @@ Result<std::unique_ptr<Scorer>> build_term_scorer(const LeafReaderContext &conte
             return std::unexpected(std::move(values.error()));
         }
         norms = std::move(values.value());
+    }
+
+    if (score_mode == ScoreMode::TopScores) {
+        auto impacts = terms_enum->impacts(FREQS);
+        if (impacts.has_value() && impacts.value() != nullptr) {
+            auto scoring = TermScorer::from_impacts(std::move(impacts.value()), std::move(sim_scorer),
+                                                    std::move(norms), top_level_scoring_clause);
+            if (!scoring.has_value()) {
+                return std::unexpected(std::move(scoring.error()));
+            }
+            return std::unique_ptr<Scorer>(std::move(scoring.value()));
+        }
+        if (!impacts.has_value() && impacts.error().kind() != ErrorKind::kUnsupportedOperation &&
+            impacts.error().kind() != ErrorKind::kNotImplemented) {
+            return std::unexpected(std::move(impacts.error()));
+        }
+        // Deviation: no impacts for this dictionary, so iterate the postings
+        // without pruning instead of failing.
     }
 
     const int32_t flags = score_mode_needs_scores(score_mode) ? FREQS : NONE;

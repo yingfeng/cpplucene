@@ -25,6 +25,7 @@ import :error;
 import :score_mode;
 import :scorable;
 import :scorer;
+import :two_phase_iterator;
 
 namespace lucene {
 
@@ -44,6 +45,11 @@ public:
     [[nodiscard]] static std::unique_ptr<ConstantScoreScorer> from_disi(float score, ScoreMode score_mode,
                                                                         std::unique_ptr<DocIdSetIterator> iterator);
 
+    /// The two-phase form of the reference implementation's `from_tpi`: the
+    /// candidates are iterated, then confirmed by the approximation.
+    [[nodiscard]] static std::unique_ptr<ConstantScoreScorer>
+    from_tpi(float score, ScoreMode score_mode, std::unique_ptr<TwoPhaseIterator> iterator);
+
     [[nodiscard]] int32_t doc_id() const override;
     [[nodiscard]] Result<int32_t> next_doc() override;
     [[nodiscard]] Result<int32_t> advance(int32_t target) override;
@@ -54,17 +60,21 @@ public:
 
     [[nodiscard]] Result<float> get_max_score(int32_t upto) override;
 
-    [[nodiscard]] TwoPhaseState has_two_phase_iterator() const override { return TwoPhaseState::No; }
+    [[nodiscard]] TwoPhaseState has_two_phase_iterator() const override {
+        return two_phase_ ? TwoPhaseState::Yes : TwoPhaseState::No;
+    }
 
     [[nodiscard]] Result<float> score() override { return score_; }
 
 private:
-    ConstantScoreScorer(float score, ScoreMode score_mode, std::unique_ptr<DocIdSetIterator> iterator)
-            : score_(score), score_mode_(score_mode), iterator_(std::move(iterator)) {}
+    ConstantScoreScorer(float score, ScoreMode score_mode, std::unique_ptr<DocIdSetIterator> iterator,
+                        bool two_phase = false)
+            : score_(score), score_mode_(score_mode), iterator_(std::move(iterator)), two_phase_(two_phase) {}
 
     float score_;
     ScoreMode score_mode_;
     std::unique_ptr<DocIdSetIterator> iterator_;
+    bool two_phase_{false};
 };
 
 } // namespace lucene

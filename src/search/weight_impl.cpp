@@ -22,6 +22,9 @@ import :weight;
 import :bulk_scorer;
 import :error;
 import :leaf_reader_context;
+import :matches;
+import :matches_utils;
+import :scorable;
 import :scorer;
 import :scorer_supplier;
 import :types;
@@ -29,6 +32,51 @@ import :types;
 import std;
 
 namespace lucene {
+
+Result<std::unique_ptr<Matches>> Weight::matches(const LeafReaderContext &context, int32_t doc,
+                                               const IndexSearcher &searcher) {
+    auto supplier = scorer_supplier(context, searcher);
+    if (!supplier.has_value()) {
+        return std::unexpected(std::move(supplier.error()));
+    }
+    if (supplier.value() == nullptr) {
+        return std::unique_ptr<Matches>{};
+    }
+    // The lead cost of the reference implementation's `matches`.
+    auto scorer_result = supplier.value()->get(1, context, searcher);
+    if (!scorer_result.has_value()) {
+        return std::unexpected(std::move(scorer_result.error()));
+    }
+    if (scorer_result.value() == nullptr) {
+        return std::unique_ptr<Matches>{};
+    }
+    Scorer &scorer = *scorer_result.value();
+    if (scorer.has_two_phase_iterator() == TwoPhaseState::Yes) {
+        auto approx = scorer.approx_advance(doc);
+        if (!approx.has_value()) {
+            return std::unexpected(std::move(approx.error()));
+        }
+        if (approx.value() != doc) {
+            return std::unique_ptr<Matches>{};
+        }
+        auto confirmed = scorer.matches();
+        if (!confirmed.has_value()) {
+            return std::unexpected(std::move(confirmed.error()));
+        }
+        if (!confirmed.value()) {
+            return std::unique_ptr<Matches>{};
+        }
+    } else {
+        auto advanced = scorer.advance(doc);
+        if (!advanced.has_value()) {
+            return std::unexpected(std::move(advanced.error()));
+        }
+        if (advanced.value() != doc) {
+            return std::unique_ptr<Matches>{};
+        }
+    }
+    return match_with_no_terms();
+}
 
 Result<std::unique_ptr<Scorer>> Weight::scorer(const LeafReaderContext &context, const IndexSearcher &searcher) {
     auto supplier = scorer_supplier(context, searcher);

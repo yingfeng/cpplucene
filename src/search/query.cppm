@@ -44,8 +44,11 @@ export class IndexSearcher;
 ///    while its weight is in use;
 ///  * `rewrite` returns a `shared_ptr` (null when the query is unchanged);
 ///  * `PartialEq`/`Hash` of the Rust enum become [`equals`] / [`hash`], which a
-///    query cache keys on.
-export class Query {
+///    query cache keys on;
+///  * the base is `enable_shared_from_this`, so that the searcher can hand the
+///    query cache a shared pointer to the query it is building a weight for; a
+///    query that was not created through a `shared_ptr` simply cannot be cached.
+export class Query : public std::enable_shared_from_this<Query> {
 public:
     virtual ~Query() = default;
 

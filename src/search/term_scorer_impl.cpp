@@ -21,6 +21,9 @@ import :term_scorer;
 
 import :doc_id_set_iterator;
 import :error;
+import :impacts_disi;
+import :impacts_enum;
+import :max_score_cache;
 import :numeric_doc_values;
 import :postings_enum;
 import :scorable;
@@ -36,32 +39,65 @@ TermScorer::TermScorer(std::unique_ptr<PostingsEnum> postings, std::shared_ptr<S
                        std::unique_ptr<NumericDocValues> norms)
         : postings_(std::move(postings)), sim_scorer_(std::move(sim_scorer)), norms_(std::move(norms)) {}
 
-int32_t TermScorer::doc_id() const {
-    return postings_->doc_id();
+Result<std::unique_ptr<TermScorer>> TermScorer::from_impacts(std::unique_ptr<ImpactsEnum> impacts_enum,
+                                                            std::shared_ptr<SimScorer> sim_scorer,
+                                                            std::unique_ptr<NumericDocValues> norms,
+                                                            bool top_level_scoring_clause) {
+    if (impacts_enum == nullptr) {
+        return err(LuceneError::illegal_argument("an impacts term scorer needs an impacts enum"));
+    }
+    std::unique_ptr<TermScorer> scorer(new TermScorer(nullptr, std::move(sim_scorer), std::move(norms)));
+    scorer->impacts_enum_ = std::move(impacts_enum);
+    scorer->max_score_cache_ = std::make_unique<MaxScoreCache>(scorer->impacts_enum_.get(), scorer->sim_scorer_);
+    if (top_level_scoring_clause) {
+        // Iterating through the impacts iterator is what lets the collector's
+        // minimum competitive score prune blocks.
+        auto disi = ImpactsDISI::from_source(scorer->max_score_cache_.get());
+        if (!disi.has_value()) {
+            return std::unexpected(std::move(disi.error()));
+        }
+        scorer->impacts_disi_ = std::move(disi.value());
+    }
+    return scorer;
 }
 
-Result<int32_t> TermScorer::next_doc() {
-    return postings_->next_doc();
-}
+int32_t TermScorer::doc_id() const { return cursor().doc_id(); }
 
-Result<int32_t> TermScorer::advance(int32_t target) {
-    return postings_->advance(target);
-}
+Result<int32_t> TermScorer::next_doc() { return cursor().next_doc(); }
 
-Result<int32_t> TermScorer::slow_advance(int32_t target) {
-    return postings_->slow_advance(target);
-}
+Result<int32_t> TermScorer::advance(int32_t target) { return cursor().advance(target); }
 
-Result<int64_t> TermScorer::cost() const {
-    return postings_->cost();
-}
+Result<int32_t> TermScorer::slow_advance(int32_t target) { return cursor().slow_advance(target); }
+
+Result<int64_t> TermScorer::cost() const { return cursor().cost(); }
 
 Result<int32_t> TermScorer::freq() {
+    if (impacts_enum_ != nullptr) {
+        return impacts_enum_->freq();
+    }
     return postings_->freq();
 }
 
-Result<float> TermScorer::get_max_score(int32_t /*upto*/) {
-    return std::numeric_limits<float>::infinity();
+Result<float> TermScorer::get_max_score(int32_t upto) {
+    if (max_score_cache_ == nullptr) {
+        // A valid upper bound that only disables pruning.
+        return std::numeric_limits<float>::infinity();
+    }
+    return max_score_cache_->get_max_score(upto);
+}
+
+Result<int32_t> TermScorer::advance_shallow(int32_t target) {
+    if (max_score_cache_ == nullptr) {
+        return NO_MORE_DOCS;
+    }
+    return max_score_cache_->advance_shallow(target);
+}
+
+VoidResult TermScorer::set_min_competitive_score(float min_score) {
+    if (impacts_disi_ != nullptr) {
+        impacts_disi_->set_min_competitive_score(min_score);
+    }
+    return {};
 }
 
 Result<std::pair<int32_t, int64_t>> TermScorer::freq_and_norm() {
@@ -79,7 +115,7 @@ Result<std::pair<int32_t, int64_t>> TermScorer::freq_and_norm() {
             norm = value.value();
         }
     }
-    auto frequency = postings_->freq();
+    auto frequency = freq();
     if (!frequency.has_value()) {
         return std::unexpected(std::move(frequency.error()));
     }

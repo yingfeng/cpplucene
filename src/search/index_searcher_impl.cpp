@@ -31,6 +31,8 @@ import :index_reader;
 import :leaf_reader;
 import :leaf_reader_context;
 import :query;
+import :query_cache;
+import :query_caching_policy;
 import :score_doc;
 import :score_mode;
 import :scorer_supplier;
@@ -39,6 +41,9 @@ import :term;
 import :term_statistics;
 import :terms;
 import :top_docs;
+import :top_field_collector;
+import :top_field_docs;
+import :total_hit_count_collector;
 import :top_score_doc_collector_manager;
 import :types;
 import :weight;
@@ -162,6 +167,37 @@ Result<std::shared_ptr<Query>> IndexSearcher::rewrite(const Query &query) const 
 
 Result<TopDocs> IndexSearcher::search(const Query &query, int32_t n) const {
     return search_after_score(nullptr, query, n);
+}
+
+Result<int32_t> IndexSearcher::count(const Query &query) const {
+    TotalHitCountCollector collector;
+    auto collected = search_with_collector(query, collector);
+    if (!collected.has_value()) {
+        return std::unexpected(std::move(collected.error()));
+    }
+    return collector.total_hits();
+}
+
+Result<TopFieldDocs> IndexSearcher::search(const Query &query, const Sort &sort, int32_t num_hits) const {
+    if (num_hits < 0) {
+        return err(LuceneError::illegal_argument("numHits must be >= 0, got " + std::to_string(num_hits)));
+    }
+    auto max_doc = reader_->max_doc();
+    if (!max_doc.has_value()) {
+        return std::unexpected(std::move(max_doc.error()));
+    }
+    // A reader without documents still has to answer a query with no hits.
+    const auto capped = static_cast<int32_t>(
+            std::min(static_cast<size_t>(num_hits), static_cast<size_t>(std::max(1, max_doc.value()))));
+    auto collector = TopFieldCollector::create(sort, capped);
+    if (!collector.has_value()) {
+        return std::unexpected(std::move(collector.error()));
+    }
+    auto collected = search_with_collector(query, *collector.value());
+    if (!collected.has_value()) {
+        return std::unexpected(std::move(collected.error()));
+    }
+    return collector.value()->top_docs();
 }
 
 Result<TopDocs> IndexSearcher::search_after_score(const ScoreDoc *after, const Query &query, int32_t num_hits) const {
@@ -337,6 +373,35 @@ VoidResult IndexSearcher::search_leaf(int32_t ord, int32_t min_doc_id, int32_t m
         }
     }
     return leaf_collector.value()->finish();
+}
+
+
+Result<std::unique_ptr<Weight>> IndexSearcher::create_weight(const Query &query, ScoreMode score_mode,
+                                                            float boost) const {
+    auto weight = query.create_weight(*this, score_mode, boost);
+    if (!weight.has_value()) {
+        return weight;
+    }
+    if (query_cache_ == nullptr || caching_policy_ == nullptr) {
+        return weight;
+    }
+    if (score_mode_needs_scores(score_mode)) {
+        // Cached document sets carry no scores, so the cache only applies when
+        // the search does not need them.
+        return weight;
+    }
+    // The cache keys entries on a shared pointer to the query; a query that was
+    // not created through one simply cannot be cached.
+    auto owned = query.weak_from_this().lock();
+    if (owned == nullptr) {
+        return weight;
+    }
+    std::shared_ptr<const Query> shared(std::move(owned));
+    auto cached = query_cache_->do_cache(std::move(shared), std::move(weight.value()), caching_policy_);
+    if (!cached.has_value()) {
+        return std::unexpected(std::move(cached.error()));
+    }
+    return cached;
 }
 
 } // namespace lucene

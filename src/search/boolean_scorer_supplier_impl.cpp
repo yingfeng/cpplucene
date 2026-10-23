@@ -19,6 +19,12 @@ module lucene_core:boolean_scorer_supplier.impl;
 
 import :boolean_scorer_supplier;
 
+import :block_max_conjunction_bulk_scorer;
+import :block_max_conjunction_scorer;
+import :bulk_scorer;
+import :conjunction_bulk_scorer;
+import :conjunction_utils;
+import :max_score_bulk_scorer;
 import :boolean_clause;
 import :conjunction_utils;
 import :constant_score_scorer;
@@ -136,6 +142,26 @@ Result<std::unique_ptr<Scorer>> BooleanScorerSupplier::required(int64_t lead_cos
             return std::move(filters.front());
         }
         return std::unique_ptr<Scorer>(new FilterScorer(std::move(filters.front())));
+    }
+
+    // With several scoring clauses, a top-level conjunction that is allowed to
+    // score can prune whole blocks that cannot hold a competitive document.
+    if (score_mode_ == ScoreMode::TopScores && musts.size() > 1 && top_level_scoring_clause_) {
+        auto block_max = BlockMaxConjunctionScorer::prepare(std::move(musts));
+        if (!block_max.has_value()) {
+            return std::unexpected(std::move(block_max.error()));
+        }
+        if (filters.empty()) {
+            return std::unique_ptr<Scorer>(std::move(block_max.value()));
+        }
+        std::vector<std::unique_ptr<Scorer>> all;
+        all.reserve(filters.size() + 1);
+        for (auto &scorer : filters) {
+            all.push_back(std::move(scorer));
+        }
+        all.push_back(std::move(block_max.value()));
+        std::vector<size_t> scoring{all.size() - 1};
+        return ConjunctionUtils::intersect_scorers(std::move(all), std::move(scoring));
     }
 
     std::vector<std::unique_ptr<Scorer>> all;
@@ -331,6 +357,155 @@ VoidResult BooleanScorerSupplier::set_top_level_scoring_clause() {
         }
     }
     return {};
+}
+
+
+Result<std::unique_ptr<BulkScorer>> BooleanScorerSupplier::bulk_scorer(const LeafReaderContext &context,
+                                                                     const IndexSearcher &searcher) {
+    // A pure disjunction that is allowed to score can use MAXSCORE, so that low
+    // scoring clauses stop driving the iteration.
+    if (subs_[kMust].empty() && subs_[kMustNot].empty() && subs_[kShould].size() >= 2 &&
+        min_should_match_ <= 1 && score_mode_ == ScoreMode::TopScores) {
+        auto disjunction = disjunction_bulk_scorer(context, searcher);
+        if (disjunction.has_value() && disjunction.value() != nullptr) {
+            return disjunction;
+        }
+        if (!disjunction.has_value()) {
+            return std::unexpected(std::move(disjunction.error()));
+        }
+        // Otherwise fall through to the generic path.
+    }
+
+    // The specialised bulk scorers only cover a plain conjunction: optional
+    // clauses and exclusions change the shape of the iterator too much.
+    if (!subs_[kShould].empty() || !subs_[kMustNot].empty() || subs_[kMust].empty()) {
+        return ScorerSupplier::bulk_scorer(context, searcher);
+    }
+    const size_t clause_count = subs_[kMust].size() + subs_[kFilter].size();
+    if (clause_count < 2) {
+        return ScorerSupplier::bulk_scorer(context, searcher);
+    }
+
+    std::vector<std::unique_ptr<Scorer>> filters;
+    std::vector<std::unique_ptr<Scorer>> musts;
+    std::vector<Scorer *> all;
+    for (auto &supplier : subs_[kFilter]) {
+        if (supplier == nullptr) {
+            continue;
+        }
+        auto scorer = supplier->get(std::numeric_limits<int64_t>::max(), context, searcher);
+        if (!scorer.has_value()) {
+            return std::unexpected(std::move(scorer.error()));
+        }
+        if (scorer.value() != nullptr) {
+            all.push_back(scorer.value().get());
+            filters.push_back(std::move(scorer.value()));
+        }
+    }
+    for (auto &supplier : subs_[kMust]) {
+        if (supplier == nullptr) {
+            continue;
+        }
+        auto scorer = supplier->get(std::numeric_limits<int64_t>::max(), context, searcher);
+        if (!scorer.has_value()) {
+            return std::unexpected(std::move(scorer.error()));
+        }
+        if (scorer.value() != nullptr) {
+            all.push_back(scorer.value().get());
+            musts.push_back(std::move(scorer.value()));
+        }
+    }
+    if (musts.empty() || musts.size() + filters.size() < 2) {
+        return ScorerSupplier::bulk_scorer(context, searcher);
+    }
+    // Two-phase clauses need confirmation by a collector, which the conjunction
+    // bulk scorers do not do.
+    for (const Scorer *scorer : all) {
+        if (scorer->has_two_phase_iterator() == TwoPhaseState::Yes) {
+            return ScorerSupplier::bulk_scorer(context, searcher);
+        }
+    }
+
+    if (score_mode_ == ScoreMode::TopScores && musts.size() > 1) {
+        // Every clause has to score for the block-max window to be an upper
+        // bound, so the filters join as constant-score clauses.
+        std::vector<std::unique_ptr<Scorer>> scorable;
+        scorable.reserve(musts.size() + filters.size());
+        for (auto &scorer : musts) {
+            scorable.push_back(std::move(scorer));
+        }
+        for (auto &filter : filters) {
+            std::unique_ptr<DocIdSetIterator> iterator(filter.release());
+            scorable.push_back(std::unique_ptr<Scorer>(
+                    ConstantScoreScorer::from_disi(0.0F, ScoreMode::Complete, std::move(iterator))));
+        }
+        auto bulk = BlockMaxConjunctionBulkScorer::create(max_doc_, std::move(scorable));
+        if (!bulk.has_value()) {
+            return std::unexpected(std::move(bulk.error()));
+        }
+        return std::unique_ptr<BulkScorer>(std::move(bulk.value()));
+    }
+
+    auto bulk = ConjunctionBulkScorer::create(std::move(musts), std::move(filters));
+    if (!bulk.has_value()) {
+        return std::unexpected(std::move(bulk.error()));
+    }
+    return std::unique_ptr<BulkScorer>(std::move(bulk.value()));
+}
+
+
+Result<std::unique_ptr<BulkScorer>> BooleanScorerSupplier::disjunction_bulk_scorer(const LeafReaderContext &context,
+                                                                                 const IndexSearcher &searcher) {
+    std::vector<std::unique_ptr<Scorer>> optional;
+    for (auto &supplier : subs_[kShould]) {
+        if (supplier == nullptr) {
+            continue;
+        }
+        auto scorer = supplier->get(std::numeric_limits<int64_t>::max(), context, searcher);
+        if (!scorer.has_value()) {
+            return std::unexpected(std::move(scorer.error()));
+        }
+        if (scorer.value() != nullptr) {
+            optional.push_back(std::move(scorer.value()));
+        }
+    }
+    if (optional.size() < 2) {
+        // A single matching clause (or none) has nothing to prune.
+        return std::unique_ptr<BulkScorer>{};
+    }
+
+    // The filters only decide which documents may match; they never score.
+    std::vector<std::unique_ptr<Scorer>> filters;
+    for (auto &supplier : subs_[kFilter]) {
+        if (supplier == nullptr) {
+            continue;
+        }
+        auto scorer = supplier->get(std::numeric_limits<int64_t>::max(), context, searcher);
+        if (!scorer.has_value()) {
+            return std::unexpected(std::move(scorer.error()));
+        }
+        if (scorer.value() != nullptr) {
+            filters.push_back(std::move(scorer.value()));
+        }
+    }
+
+    std::unique_ptr<Scorer> filter;
+    if (filters.size() == 1) {
+        filter = std::move(filters.front());
+    } else if (!filters.empty()) {
+        std::vector<size_t> no_scoring{};
+        auto conjunction = ConjunctionUtils::intersect_scorers(std::move(filters), no_scoring);
+        if (!conjunction.has_value()) {
+            return std::unexpected(std::move(conjunction.error()));
+        }
+        filter = std::move(conjunction.value());
+    }
+
+    auto bulk = MaxScoreBulkScorer::create(max_doc_, std::move(optional), std::move(filter));
+    if (!bulk.has_value()) {
+        return std::unexpected(std::move(bulk.error()));
+    }
+    return std::unique_ptr<BulkScorer>(std::move(bulk.value()));
 }
 
 } // namespace lucene

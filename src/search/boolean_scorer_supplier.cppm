@@ -67,6 +67,11 @@ public:
 
     [[nodiscard]] Result<int64_t> cost(const LeafReaderContext &context, const IndexSearcher &searcher) override;
 
+    /// A conjunction-only bulk scorer when the clauses allow it, the default
+    /// otherwise.
+    [[nodiscard]] Result<std::unique_ptr<BulkScorer>> bulk_scorer(const LeafReaderContext &context,
+                                                                 const IndexSearcher &searcher) override;
+
     [[nodiscard]] VoidResult set_top_level_scoring_clause() override;
 
     [[nodiscard]] int32_t min_should_match() const noexcept { return min_should_match_; }
@@ -84,6 +89,11 @@ private:
     [[nodiscard]] Result<std::unique_ptr<Scorer>> optional(Occur occur, int32_t min_should_match, int64_t lead_cost,
                                                            const LeafReaderContext &context,
                                                            const IndexSearcher &searcher);
+
+    /// A MAXSCORE bulk scorer for a pure disjunction, or a null pointer when the
+    /// clauses do not allow it.
+    [[nodiscard]] Result<std::unique_ptr<BulkScorer>> disjunction_bulk_scorer(const LeafReaderContext &context,
+                                                                             const IndexSearcher &searcher);
 
     /// Wraps `scorer` so that its documents are rejected by the `MUST_NOT`
     /// clauses.

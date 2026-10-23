@@ -22,6 +22,9 @@ import std;
 
 import :doc_id_set_iterator;
 import :error;
+import :impacts_disi;
+import :impacts_enum;
+import :max_score_cache;
 import :numeric_doc_values;
 import :postings_enum;
 import :scorable;
@@ -32,16 +35,19 @@ namespace lucene {
 
 /// Scorer for documents matching one term.
 ///
-/// Port of `TermScorer` (`core/search/term_scorer.rs`), reduced to the postings
-/// path.
+/// Port of `TermScorer` (`core/search/term_scorer.rs`).  Two states are
+/// collapsed into one class:
+///  * over a plain [`PostingsEnum`] (the `PostingsTermState` of the reference
+///    implementation), which cannot skip anything;
+///  * over an [`ImpactsEnum`], where a [`MaxScoreCache`] turns the indexed
+///    impacts into block maximum scores.  When the scorer is the top-level
+///    scoring clause, the documents are iterated *through* an [`ImpactsDISI`],
+///    so the minimum competitive score of the collector prunes whole blocks.
 ///
-/// **Deviations** (C++ mechanics only, all of them "not ported yet"):
-///  * the impacts/`MaxScoreCache` state (`ImpactsTermState`,
-///    `SourceImpactsDISI`, `SlowImpactsEnum`) is not ported, so this scorer
-///    always iterates the postings list and [`get_max_score`] reports
-///    `+infinity` — an upper bound, which only disables competitive skipping and
-///    therefore keeps results correct;
-///  * `advance_shallow` keeps the default (no block skipping);
+/// **Deviations** (C++ mechanics only):
+///  * `SlowImpactsEnum` (an impacts view over a plain postings enum) is not
+///    ported: a plain postings enum simply disables pruning;
+///  * `ScorerEnum2` / `ScorerEnum4` collapse into this one class;
 ///  * the bit-set accessors of the wrapped iterator are forwarded verbatim.
 export class TermScorer final : public Scorer {
 public:
@@ -49,6 +55,13 @@ public:
     /// and `sim_scorer` scores `(freq, norm)` pairs.
     TermScorer(std::unique_ptr<PostingsEnum> postings, std::shared_ptr<SimScorer> sim_scorer,
                std::unique_ptr<NumericDocValues> norms);
+
+    /// A scorer that can skip non-competitive blocks.  With
+    /// `top_level_scoring_clause` the documents are iterated through the
+    /// [`ImpactsDISI`], so [`set_min_competitive_score`] takes effect.
+    [[nodiscard]] static Result<std::unique_ptr<TermScorer>>
+    from_impacts(std::unique_ptr<ImpactsEnum> impacts_enum, std::shared_ptr<SimScorer> sim_scorer,
+                 std::unique_ptr<NumericDocValues> norms, bool top_level_scoring_clause);
 
     [[nodiscard]] int32_t doc_id() const override;
     [[nodiscard]] Result<int32_t> next_doc() override;
@@ -59,13 +72,19 @@ public:
     /// Document frequency of the current document; must be positioned first.
     [[nodiscard]] Result<int32_t> freq();
 
+    /// Whether this scorer can skip non-competitive blocks.
+    [[nodiscard]] bool has_impacts() const noexcept { return max_score_cache_ != nullptr; }
+
     // ---- Scorer ----
 
     [[nodiscard]] Result<int32_t> scoring_doc_id() override { return doc_id(); }
 
-    /// `+infinity`: a valid upper bound that disables pruning (see the class
-    /// note).
+    /// The maximum score of the current block, or `+infinity` without impacts.
     [[nodiscard]] Result<float> get_max_score(int32_t upto) override;
+
+    /// Shallow-advances to the block that contains `target`, or answers
+    /// `NO_MORE_DOCS` without impacts (nothing can be skipped).
+    [[nodiscard]] Result<int32_t> advance_shallow(int32_t target) override;
 
     [[nodiscard]] TwoPhaseState has_two_phase_iterator() const override { return TwoPhaseState::No; }
 
@@ -76,13 +95,45 @@ public:
     /// The score of `doc_id` as if the term did not occur in it.
     [[nodiscard]] Result<float> smoothing_score(int32_t doc_id) override;
 
+    /// Only the top-level scoring clause can prune; the others keep the default
+    /// no-op behaviour.
+    [[nodiscard]] VoidResult set_min_competitive_score(float min_score) override;
+
     /// The current term frequency and encoded norm, for `explain`.
     [[nodiscard]] Result<std::pair<int32_t, int64_t>> freq_and_norm();
 
 private:
+    /// The iterator whose documents are visited: the impacts iterator when
+    /// pruning is possible, the impacts enum when only the impacts are used, the
+    /// postings otherwise.
+    [[nodiscard]] DocIdSetIterator &cursor() noexcept {
+        if (impacts_disi_ != nullptr) {
+            return static_cast<DocIdSetIterator &>(*impacts_disi_);
+        }
+        if (impacts_enum_ != nullptr) {
+            return static_cast<DocIdSetIterator &>(*impacts_enum_);
+        }
+        return static_cast<DocIdSetIterator &>(*postings_);
+    }
+
+    [[nodiscard]] const DocIdSetIterator &cursor() const noexcept {
+        if (impacts_disi_ != nullptr) {
+            return static_cast<const DocIdSetIterator &>(*impacts_disi_);
+        }
+        if (impacts_enum_ != nullptr) {
+            return static_cast<const DocIdSetIterator &>(*impacts_enum_);
+        }
+        return static_cast<const DocIdSetIterator &>(*postings_);
+    }
+
     std::unique_ptr<PostingsEnum> postings_;
     std::shared_ptr<SimScorer> sim_scorer_;
     std::unique_ptr<NumericDocValues> norms_;
+    /// Set when the scorer iterates an impacts enum instead of `postings_`.
+    std::unique_ptr<ImpactsEnum> impacts_enum_;
+    std::unique_ptr<MaxScoreCache> max_score_cache_;
+    /// Set only for the top-level scoring clause.
+    std::unique_ptr<ImpactsDISI> impacts_disi_;
 };
 
 } // namespace lucene
