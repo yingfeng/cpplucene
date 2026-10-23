@@ -19,6 +19,7 @@ export module lucene_core:segment_info;
 
 import :types;
 import :error;
+import :sort_field;
 import :version;
 
 import std;
@@ -78,12 +79,11 @@ export struct SegmentInfo {
     /// Free-form attributes; `Lucene90` uses one entry to store the
     /// `softDeletesField` name.
     std::map<std::string, std::string> attributes;
-    /// Number of index-sort fields the segment was written with.
+    /// The index sort the segment was written with, when it has one.
     ///
-    /// **Deviation:** the reference implementation serialises a real `Sort` here; this port has no
-    /// sort subsystem yet, so only the count is modelled and the format rejects
-    /// a non-zero count when reading.
-    int32_t sort_field_count{0};
+    /// The documents of a sorted segment are in the order this describes, which
+    /// is what lets the search side skip sorting and stop early.
+    std::optional<Sort> sort;
 
     /// Validates the identity fields without touching the file names.
     [[nodiscard]] VoidResult validate() const;

@@ -32,7 +32,11 @@ namespace {
 
 [[nodiscard]] Result<int32_t> bits_required(int64_t max_value) {
     if (max_value < 0) {
-        return err(LuceneError::illegal_argument("max_value must not be negative"));
+        // Values are packed as unsigned bit patterns, so a value whose top bit is
+        // set (a negative delta, or a raw double bit pattern) needs all 64 bits.
+        // Wrapping the page delta can land here, exactly as it does in the
+        // reference implementation, which simply counts the leading zeros.
+        return static_cast<int32_t>(sizeof(int64_t) * 8);
     }
     int32_t bits = 0;
     while (max_value != 0) {

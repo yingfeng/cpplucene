@@ -29,6 +29,8 @@ import :index_output;
 import :io_context;
 import :segment_info;
 import :segment_info_format;
+import :sort_field;
+import :sort_field_provider;
 import :types;
 import :version;
 
@@ -120,10 +122,35 @@ VoidResult Lucene99SegmentInfoFormat::write_segment_info(DataOutput &out, const 
         return written;
     }
 
-    if (info.sort_field_count != 0) {
-        return err(LuceneError::illegal_state("index sorting is not ported yet"));
+    const std::vector<SortField> *sort_fields = info.sort.has_value() ? &info.sort.value().fields() : nullptr;
+    const size_t num_sort_fields = sort_fields == nullptr ? 0 : sort_fields->size();
+    if (auto written = out.write_vint(static_cast<int32_t>(num_sort_fields)); !written.has_value()) {
+        return written;
     }
-    return out.write_vint(0);
+    if (sort_fields == nullptr) {
+        return {};
+    }
+    for (const SortField &field : *sort_fields) {
+        // Only a field that can drive an index sort may be recorded; the same
+        // check the reference implementation does through `get_index_sorter`.
+        auto sorter = field.index_sorter();
+        if (!sorter.has_value()) {
+            auto text = field.to_string();
+            return err(LuceneError::illegal_argument(
+                    "cannot serialize sort field " + (text.has_value() ? text.value() : std::string("?"))));
+        }
+        auto provider = sort_field_provider_name(field);
+        if (!provider.has_value()) {
+            return err(provider.error());
+        }
+        if (auto written = out.write_string(provider.value()); !written.has_value()) {
+            return written;
+        }
+        if (auto written = write_sort_field(field, out); !written.has_value()) {
+            return written;
+        }
+    }
+    return {};
 }
 
 Result<SegmentInfo> Lucene99SegmentInfoFormat::parse_segment_info(DataInput &input, std::string_view segment,
@@ -204,13 +231,26 @@ Result<SegmentInfo> Lucene99SegmentInfoFormat::parse_segment_info(DataInput &inp
                                               std::to_string(num_sort_fields.value()) + " (resource=" +
                                               std::string(input.to_string()) + ")"));
     }
-    if (num_sort_fields.value() != 0) {
-        // The sort descriptor bytes are provider-specific; this port has no sort
-        // providers, so refuse rather than silently mis-parse the rest.
-        return err(LuceneError::illegal_state("reading a sorted segment is not supported yet (index sort fields: " +
-                                              std::to_string(num_sort_fields.value()) + ")"));
+    if (num_sort_fields.value() > 0) {
+        std::vector<SortField> sort_fields;
+        sort_fields.reserve(static_cast<size_t>(num_sort_fields.value()));
+        for (int32_t i = 0; i < num_sort_fields.value(); ++i) {
+            auto provider_name = input.read_string();
+            if (!provider_name.has_value()) {
+                return err(provider_name.error());
+            }
+            auto field = read_sort_field(provider_name.value(), input);
+            if (!field.has_value()) {
+                return err(field.error());
+            }
+            sort_fields.push_back(std::move(field.value()));
+        }
+        auto sort = Sort::with_fields(std::move(sort_fields));
+        if (!sort.has_value()) {
+            return err(sort.error());
+        }
+        info.sort = std::move(sort.value());
     }
-    info.sort_field_count = num_sort_fields.value();
     return info;
 }
 

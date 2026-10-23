@@ -20,6 +20,7 @@ module lucene_core:segment_info.impl;
 import :segment_info;
 
 import :error;
+import :sort_field;
 import :types;
 import :version;
 
@@ -84,8 +85,8 @@ VoidResult SegmentInfo::validate() const {
     if (max_doc < 0) {
         return err(LuceneError::illegal_argument("max_doc must not be negative"));
     }
-    if (sort_field_count != 0) {
-        return err(LuceneError::illegal_state("index sorting is not ported yet"));
+    if (sort.has_value() && sort.value().fields().empty()) {
+        return err(LuceneError::illegal_argument("an index sort must not be empty"));
     }
     return {};
 }

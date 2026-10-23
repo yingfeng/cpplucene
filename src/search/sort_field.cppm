@@ -21,6 +21,8 @@ import :types;
 import std;
 
 import :error;
+import :index_sorter;
+import :leaf_reader;
 
 namespace lucene {
 
@@ -115,6 +117,14 @@ public:
     /// [`kScore`](SortFieldType::kScore).
     [[nodiscard]] bool needs_scores() const noexcept { return type_ == SortFieldType::kScore; }
 
+    /// The sorter that orders the documents of a segment by this field, used when
+    /// an index is created with an index sort.
+    ///
+    /// **Deviation:** the multi-valued types need the search layer's sort-field
+    /// providers, which the port does not have, so only the scalar types are
+    /// supported; `kDoc` cannot be used as an index sort at all.
+    [[nodiscard]] Result<std::unique_ptr<IndexSorter>> index_sorter() const;
+
     /// `<score>`, `<string: "field">` or `<int: "field">`, with `!` appended when
     /// reversed, the form the reference implementation prints.
     [[nodiscard]] Result<std::string> to_string() const;
@@ -160,6 +170,16 @@ public:
 
     /// The fields joined with `,`, the form the reference implementation prints.
     [[nodiscard]] std::string to_string() const;
+
+    /// The permutation that puts the `max_doc` documents of `leaf_reader` into
+    /// this order, or `nullopt` when they are already in it.
+    ///
+    /// This is what an index sort needs: the fields are applied in priority
+    /// order, and a document without a value sorts as the sorter of its field
+    /// says.  Fails when a field cannot drive an index sort (see
+    /// [`SortField::index_sorter`]).
+    [[nodiscard]] Result<std::optional<IndexSortDocMapImpl>> sort_documents(LeafReader &leaf_reader,
+                                                                           int32_t max_doc) const;
 
     [[nodiscard]] bool equals(const Sort &other) const noexcept { return fields_ == other.fields_; }
 

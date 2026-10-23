@@ -22,6 +22,7 @@ import :sort_field;
 import std;
 
 import :error;
+import :index_sorter;
 import :types;
 
 namespace lucene {
@@ -92,6 +93,71 @@ Result<SortField> SortField::with_reverse_selector(std::optional<std::string> fi
 Result<SortField> SortField::score() { return with_reverse(std::nullopt, SortFieldType::kScore, false); }
 
 Result<SortField> SortField::doc() { return with_reverse(std::nullopt, SortFieldType::kDoc, false); }
+
+Result<std::unique_ptr<IndexSorter>> SortField::index_sorter() const {
+    if (needs_scores()) {
+        return err(LuceneError::illegal_argument(
+                "Cannot sort an index with a Sort that refers to the relevance score"));
+    }
+    if (!field_.has_value()) {
+        return err(LuceneError::illegal_argument("Cannot use the document id as an index sort"));
+    }
+    if (is_multi_valued()) {
+        return err(LuceneError::unsupported_operation(
+                "multi-valued sort fields cannot be used as an index sort yet"));
+    }
+
+    std::unique_ptr<IndexSorter> sorter;
+    switch (type_) {
+        case SortFieldType::kInt: {
+            auto created = IntIndexSorter::create(field_.value(), std::nullopt, reverse_);
+            if (!created.has_value()) {
+                return std::unexpected(std::move(created.error()));
+            }
+            sorter.reset(new IntIndexSorter(std::move(created.value())));
+            break;
+        }
+        case SortFieldType::kLong: {
+            auto created = LongIndexSorter::create(field_.value(), std::nullopt, reverse_);
+            if (!created.has_value()) {
+                return std::unexpected(std::move(created.error()));
+            }
+            sorter.reset(new LongIndexSorter(std::move(created.value())));
+            break;
+        }
+        case SortFieldType::kFloat: {
+            auto created = FloatIndexSorter::create(field_.value(), std::nullopt, reverse_);
+            if (!created.has_value()) {
+                return std::unexpected(std::move(created.error()));
+            }
+            sorter.reset(new FloatIndexSorter(std::move(created.value())));
+            break;
+        }
+        case SortFieldType::kDouble: {
+            auto created = DoubleIndexSorter::create(field_.value(), std::nullopt, reverse_);
+            if (!created.has_value()) {
+                return std::unexpected(std::move(created.error()));
+            }
+            sorter.reset(new DoubleIndexSorter(std::move(created.value())));
+            break;
+        }
+        case SortFieldType::kString: {
+            auto created = StringIndexSorter::create(field_.value(), false, reverse_);
+            if (!created.has_value()) {
+                return std::unexpected(std::move(created.error()));
+            }
+            sorter.reset(new StringIndexSorter(std::move(created.value())));
+            break;
+        }
+        case SortFieldType::kScore:
+        case SortFieldType::kDoc:
+        case SortFieldType::kSortedNumeric:
+        case SortFieldType::kSortedNumericDouble:
+        case SortFieldType::kSortedSet:
+            return err(LuceneError::unsupported_operation("this sort field cannot be used as an index sort"));
+    }
+    return sorter;
+}
 
 Result<std::string> SortField::to_string() const {
     std::string buffer;
@@ -170,6 +236,37 @@ size_t Sort::hash() const noexcept {
         result = result * 31 + field.hash();
     }
     return result;
+}
+
+Result<std::optional<IndexSortDocMapImpl>> Sort::sort_documents(LeafReader &leaf_reader, int32_t max_doc) const {
+    if (max_doc < 0) {
+        return err(LuceneError::illegal_argument("max_doc must not be negative"));
+    }
+    std::vector<std::unique_ptr<DocComparator>> comparators;
+    comparators.reserve(fields_.size());
+    for (const SortField &field : fields_) {
+        auto sorter = field.index_sorter();
+        if (!sorter.has_value()) {
+            auto text = field.to_string();
+            return err(LuceneError::illegal_argument(
+                    "cannot sort an index by " + (text.has_value() ? text.value() : std::string("<sort field>")) +
+                    ": " + sorter.error().to_string()));
+        }
+        auto comparator = sorter.value()->doc_comparator(leaf_reader, max_doc);
+        if (!comparator.has_value()) {
+            return std::unexpected(std::move(comparator.error()));
+        }
+        comparators.push_back(std::move(comparator.value()));
+    }
+
+    if (comparators.size() == 1) {
+        return sort_documents_with_comparator(*comparators[0], max_doc);
+    }
+    auto chained = ChainedDocComparator::create(std::move(comparators));
+    if (!chained.has_value()) {
+        return std::unexpected(std::move(chained.error()));
+    }
+    return sort_documents_with_comparator(*chained.value(), max_doc);
 }
 
 } // namespace lucene

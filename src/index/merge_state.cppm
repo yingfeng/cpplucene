@@ -51,8 +51,8 @@ export template <class T>
 /// A [`DocMap`] that only remaps around deletions.
 ///
 /// Port of the reference implementation's `MergeStateDocMapImpl` restricted to its `Deletions` hook:
-/// the index-sort flavour (`Sorted`, which additionally reorders documents) is
-/// not ported because this port has no index sorting.
+/// both flavours are ported: deletions only, and the index-sort one that also
+/// reorders documents.
 export class MergeStateDocMap final : public DocMap {
 public:
     /// `live_docs` is null when the segment has no deletions; `del_doc_map` is
@@ -60,6 +60,11 @@ public:
     [[nodiscard]] static std::shared_ptr<MergeStateDocMap> new_deletions(
             std::shared_ptr<const Bits> live_docs, std::shared_ptr<const PackedLongValues> del_doc_map,
             int32_t doc_base);
+
+    /// A map that reorders the documents of an index-sorted segment:
+    /// `remapped` holds, for every old document, its new document id.
+    [[nodiscard]] static std::shared_ptr<MergeStateDocMap> new_sorted(
+            std::shared_ptr<const Bits> live_docs, std::shared_ptr<const PackedLongValues> remapped);
 
     /// The mapped doc id, or `-1` for a deleted document.
     [[nodiscard]] Result<int32_t> get(int32_t doc_id) const override;
@@ -70,6 +75,8 @@ private:
 
     std::shared_ptr<const Bits> live_docs_;
     std::shared_ptr<const PackedLongValues> del_doc_map_;
+    /// Non-null for the index-sort flavour of the map.
+    std::shared_ptr<const PackedLongValues> sorted_remapped_;
     int32_t doc_base_;
 };
 

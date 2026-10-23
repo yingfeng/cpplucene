@@ -61,8 +61,37 @@ std::shared_ptr<MergeStateDocMap> MergeStateDocMap::new_deletions(std::shared_pt
             new MergeStateDocMap(std::move(live_docs), std::move(del_doc_map), doc_base));
 }
 
+std::shared_ptr<MergeStateDocMap> MergeStateDocMap::new_sorted(
+        std::shared_ptr<const Bits> live_docs, std::shared_ptr<const PackedLongValues> remapped) {
+    std::shared_ptr<MergeStateDocMap> map(new MergeStateDocMap(std::move(live_docs), nullptr, 0));
+    map->sorted_remapped_ = std::move(remapped);
+    return map;
+}
+
 Result<int32_t> MergeStateDocMap::get(int32_t doc_id) const {
     const auto doc_index = static_cast<size_t>(doc_id);
+    if (sorted_remapped_ != nullptr) {
+        // Index-sorted segment: live documents take the position the sort gave them.
+        if (live_docs_ == nullptr) {
+            auto remapped = sorted_remapped_->get(doc_index);
+            if (!remapped.has_value()) {
+                return std::unexpected(std::move(remapped.error()));
+            }
+            return static_cast<int32_t>(remapped.value());
+        }
+        auto live = live_docs_->get(doc_index);
+        if (!live.has_value()) {
+            return std::unexpected(std::move(live.error()));
+        }
+        if (!live.value()) {
+            return -1;
+        }
+        auto remapped = sorted_remapped_->get(doc_index);
+        if (!remapped.has_value()) {
+            return std::unexpected(std::move(remapped.error()));
+        }
+        return static_cast<int32_t>(remapped.value());
+    }
     if (live_docs_ == nullptr && del_doc_map_ == nullptr) {
         // No deletions: the mapping is a plain rebase.
         return doc_base_ + doc_id;

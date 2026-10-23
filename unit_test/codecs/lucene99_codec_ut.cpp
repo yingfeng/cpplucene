@@ -107,7 +107,49 @@ TEST(Lucene99SegmentInfoFormatTest, RoundTripsEveryField) {
     EXPECT_EQ(actual.diagnostics, info.diagnostics);
     EXPECT_EQ(actual.files, info.files);
     EXPECT_EQ(actual.attributes, info.attributes);
-    EXPECT_EQ(actual.sort_field_count, 0);
+    EXPECT_FALSE(actual.sort.has_value());
+}
+
+TEST(Lucene99SegmentInfoFormatTest, RoundTripsTheIndexSort) {
+    ByteBuffersDirectory dir;
+    SegmentInfo info = make_segment_info();
+
+    auto numeric = SortField::with_reverse("num", SortFieldType::kInt, false);
+    ASSERT_TRUE(numeric.has_value()) << (numeric ? "" : numeric.error().to_string());
+    auto text = SortField::with_reverse("tag", SortFieldType::kString, true);
+    ASSERT_TRUE(text.has_value()) << (text ? "" : text.error().to_string());
+    auto sort = Sort::with_fields({numeric.value(), text.value()});
+    ASSERT_TRUE(sort.has_value()) << (sort ? "" : sort.error().to_string());
+    info.sort = std::move(sort.value());
+
+    const auto &format = lucene99_codec().segment_info_format();
+    ASSERT_TRUE(format.write(dir, info, io_context_default()).has_value())
+            << "the write should accept a sortable index sort";
+
+    auto read = format.read(dir, "_0", info.id, io_context_default());
+    ASSERT_TRUE(read.has_value()) << (read ? "" : read.error().to_string());
+    const std::optional<Sort> &actual = read.value().sort;
+    ASSERT_TRUE(actual.has_value());
+    ASSERT_EQ(actual.value().fields().size(), 2U);
+    EXPECT_TRUE(actual.value().fields()[0].equals(numeric.value()));
+    EXPECT_TRUE(actual.value().fields()[1].equals(text.value()));
+}
+
+TEST(Lucene99SegmentInfoFormatTest, RejectsAnUnsortableIndexSort) {
+    ByteBuffersDirectory dir;
+    SegmentInfo info = make_segment_info();
+
+    // The relevance score cannot order the documents of a segment.
+    auto score = SortField::score();
+    ASSERT_TRUE(score.has_value());
+    auto sort = Sort::with_fields({score.value()});
+    ASSERT_TRUE(sort.has_value());
+    info.sort = std::move(sort.value());
+
+    const auto &format = lucene99_codec().segment_info_format();
+    auto written = format.write(dir, info, io_context_default());
+    ASSERT_FALSE(written.has_value());
+    EXPECT_EQ(written.error().kind(), ErrorKind::kIllegalArgument);
 }
 
 TEST(Lucene99SegmentInfoFormatTest, RoundTripsWithoutAMinimumVersion) {

@@ -38,12 +38,35 @@ public:
     [[nodiscard]] virtual int32_t compare(int32_t doc_id1, int32_t doc_id2) const = 0;
 };
 
+/// Applies several comparators in priority order: the first one that reports a
+/// difference decides.
+///
+/// Port of the comparator list `Sorter::sort` takes in
+/// `core/index/sorter.rs`, which an index sort with more than one field needs.
+export class ChainedDocComparator final : public DocComparator {
+public:
+    /// Chains `comparators`, which must not be empty.
+    [[nodiscard]] static Result<std::unique_ptr<ChainedDocComparator>> create(
+            std::vector<std::unique_ptr<DocComparator>> comparators);
+
+    [[nodiscard]] int32_t compare(int32_t doc_id1, int32_t doc_id2) const override;
+
+private:
+    explicit ChainedDocComparator(std::vector<std::unique_ptr<DocComparator>> comparators);
+
+    std::vector<std::unique_ptr<DocComparator>> comparators_;
+};
+
 /// The old-to-new and new-to-old document id permutations of a sorted segment.
 ///
-/// Port of the `DocMap` trait (`core/index/index_sorter.rs`).
-export class DocMap {
+/// Port of the `DocMap` trait of `core/index/index_sorter.rs`.
+///
+/// **Deviation:** the reference implementation has two unrelated `DocMap` traits
+/// (this one and the merge-state one); the port keeps the merge-state
+/// [`DocMap`](:doc_map) name and calls this one `IndexSortDocMap`.
+export class IndexSortDocMap {
 public:
-    virtual ~DocMap() = default;
+    virtual ~IndexSortDocMap() = default;
 
     /// How many documents the map covers.
     [[nodiscard]] virtual int32_t size() const noexcept = 0;
@@ -55,20 +78,28 @@ public:
     [[nodiscard]] virtual Result<int32_t> new_to_old(int32_t new_doc) const = 0;
 };
 
-/// A [`DocMap`] holding both permutations as plain arrays.
+/// An [`IndexSortDocMap`] holding both permutations as plain arrays.
 ///
-/// Port of `DocMapImpl` (`core/index/index_sorter.rs`).
+/// Port of `IndexSortDocMapImpl` (`core/index/index_sorter.rs`).
 ///
 /// **Deviation:** the reference implementation stores the permutations in
 /// monotonic packed long buffers to save memory when the segment is nearly
 /// sorted; the port keeps two `int32_t` arrays, which is simpler and bounded by
 /// the segment size.
-export class DocMapImpl final : public DocMap {
+export class IndexSortDocMapImpl final : public IndexSortDocMap {
 public:
-    /// `new_to_old` lists the documents in their new order.
-    explicit DocMapImpl(std::vector<int32_t> new_to_old);
+    /// `new_to_old` lists the documents in their new order; the map covers as
+    /// many old documents as it has entries.
+    explicit IndexSortDocMapImpl(std::vector<int32_t> new_to_old);
 
+    /// The same, for a segment whose old document space is larger than the number
+    /// of documents that survived (the extra ones are reported as deleted).
+    IndexSortDocMapImpl(std::vector<int32_t> new_to_old, int32_t old_doc_count);
+
+    /// The number of old documents, i.e. the segment's `max_doc`.
     [[nodiscard]] int32_t size() const noexcept override;
+    /// The number of documents that survived the sort.
+    [[nodiscard]] int32_t new_doc_count() const noexcept;
     [[nodiscard]] Result<int32_t> old_to_new(int32_t old_doc) const override;
     [[nodiscard]] Result<int32_t> new_to_old(int32_t new_doc) const override;
 
@@ -80,21 +111,40 @@ private:
     std::vector<int32_t> old_to_new_;
 };
 
+/// Reads one document's sort value as a `long` that sorts in the same order as
+/// the original value, so documents from different segments can be compared.
+///
+/// Port of the `ComparableProvider` trait (`core/index/index_sorter.rs`).
+export class ComparableProvider {
+public:
+    virtual ~ComparableProvider() = default;
+
+    /// The sort key of `doc_id`; a document without a value gets the configured
+    /// missing value.
+    [[nodiscard]] virtual Result<int64_t> get_as_comparable_long(int32_t doc_id) = 0;
+};
+
 /// Decides how the documents of a segment should be sorted.
 ///
 /// Port of the `IndexSorter` trait (`core/index/index_sorter.rs`).
 ///
-/// **Deviation:** the reference implementation can also produce cross-segment
-/// `ComparableProvider`s (through an `OrdinalMap`) which the merge path uses to
-/// compare documents of different segments; the port only implements the
-/// single-segment `doc_comparator` used when a segment is flushed, so
-/// `comparable_provider` is left to a later round along with the merge wiring.
+/// **Deviation:** the reference implementation builds the cross-segment
+/// `ComparableProvider`s through an `OrdinalMap` built from the per-segment term
+/// dictionaries; the port implements that for the numeric sorters only, so
+/// `StringIndexSorter` cannot take part in a merge yet (it reports
+/// `unsupported_operation`).
 export class IndexSorter {
 public:
     virtual ~IndexSorter() = default;
 
-    /// The name that identifies this sorter when the sort is written to the
-    /// segment metadata.
+    /// A short name for this sorter (`int`, `long`, `string`, ...), used by
+    /// [`to_string`].
+    ///
+    /// **Deviation:** the reference implementation returns the name of the
+    /// `SortFieldProvider` here, because that is what it writes into the segment
+    /// metadata.  The port's sorters are coarser (one per value type, not per
+    /// sort-field flavour), so the metadata uses `sort_field_provider_name`
+    /// (`:sort_field_provider`) instead and this name is only for diagnostics.
     [[nodiscard]] virtual std::string_view provider_name() const noexcept = 0;
 
     /// The value a document without the field sorts as, when the sorter has a
@@ -105,26 +155,36 @@ public:
     [[nodiscard]] virtual Result<std::unique_ptr<DocComparator>> doc_comparator(LeafReader &leaf_reader,
                                                                                int32_t max_doc) const = 0;
 
+    /// The cross-segment sort keys of `leaf_reader`'s documents.
+    ///
+    /// The default reports `unsupported_operation`: a sorter that cannot produce
+    /// comparable keys (a term sorter without a global ordinal space, for example)
+    /// can only be used within one segment.
+    [[nodiscard]] virtual Result<std::unique_ptr<ComparableProvider>> comparable_provider(
+            LeafReader &leaf_reader) const;
+
     /// `${provider_name}:${field}`, with `!` appended when the order is reversed.
     [[nodiscard]] std::string to_string() const;
 };
 
 /// Sorts the documents of a leaf by `int` doc values.
-export class IntSorter final : public IndexSorter {
+export class IntIndexSorter final : public IndexSorter {
 public:
-    [[nodiscard]] static Result<IntSorter> create(std::string field, std::optional<int32_t> missing_value,
+    [[nodiscard]] static Result<IntIndexSorter> create(std::string field, std::optional<int32_t> missing_value,
                                                  bool reverse);
 
     [[nodiscard]] std::string_view provider_name() const noexcept override { return "int"; }
     [[nodiscard]] std::optional<Number> missing_value() const noexcept override;
     [[nodiscard]] Result<std::unique_ptr<DocComparator>> doc_comparator(LeafReader &leaf_reader,
                                                                        int32_t max_doc) const override;
+    [[nodiscard]] Result<std::unique_ptr<ComparableProvider>> comparable_provider(
+            LeafReader &leaf_reader) const override;
 
     [[nodiscard]] const std::string &field() const noexcept { return field_; }
     [[nodiscard]] bool reverse() const noexcept { return reverse_mul_ < 0; }
 
 private:
-    IntSorter(std::string field, std::optional<int32_t> missing_value, int32_t reverse_mul);
+    IntIndexSorter(std::string field, std::optional<int32_t> missing_value, int32_t reverse_mul);
 
     std::string field_;
     std::optional<int32_t> missing_value_;
@@ -132,21 +192,23 @@ private:
 };
 
 /// Sorts the documents of a leaf by `long` doc values.
-export class LongSorter final : public IndexSorter {
+export class LongIndexSorter final : public IndexSorter {
 public:
-    [[nodiscard]] static Result<LongSorter> create(std::string field, std::optional<int64_t> missing_value,
+    [[nodiscard]] static Result<LongIndexSorter> create(std::string field, std::optional<int64_t> missing_value,
                                                   bool reverse);
 
     [[nodiscard]] std::string_view provider_name() const noexcept override { return "long"; }
     [[nodiscard]] std::optional<Number> missing_value() const noexcept override;
     [[nodiscard]] Result<std::unique_ptr<DocComparator>> doc_comparator(LeafReader &leaf_reader,
                                                                        int32_t max_doc) const override;
+    [[nodiscard]] Result<std::unique_ptr<ComparableProvider>> comparable_provider(
+            LeafReader &leaf_reader) const override;
 
     [[nodiscard]] const std::string &field() const noexcept { return field_; }
     [[nodiscard]] bool reverse() const noexcept { return reverse_mul_ < 0; }
 
 private:
-    LongSorter(std::string field, std::optional<int64_t> missing_value, int32_t reverse_mul);
+    LongIndexSorter(std::string field, std::optional<int64_t> missing_value, int32_t reverse_mul);
 
     std::string field_;
     std::optional<int64_t> missing_value_;
@@ -155,21 +217,23 @@ private:
 
 /// Sorts the documents of a leaf by `float` doc values (raw bits, as the float
 /// doc values field stores them).
-export class FloatSorter final : public IndexSorter {
+export class FloatIndexSorter final : public IndexSorter {
 public:
-    [[nodiscard]] static Result<FloatSorter> create(std::string field, std::optional<float> missing_value,
+    [[nodiscard]] static Result<FloatIndexSorter> create(std::string field, std::optional<float> missing_value,
                                                    bool reverse);
 
     [[nodiscard]] std::string_view provider_name() const noexcept override { return "float"; }
     [[nodiscard]] std::optional<Number> missing_value() const noexcept override;
     [[nodiscard]] Result<std::unique_ptr<DocComparator>> doc_comparator(LeafReader &leaf_reader,
                                                                        int32_t max_doc) const override;
+    [[nodiscard]] Result<std::unique_ptr<ComparableProvider>> comparable_provider(
+            LeafReader &leaf_reader) const override;
 
     [[nodiscard]] const std::string &field() const noexcept { return field_; }
     [[nodiscard]] bool reverse() const noexcept { return reverse_mul_ < 0; }
 
 private:
-    FloatSorter(std::string field, std::optional<float> missing_value, int32_t reverse_mul);
+    FloatIndexSorter(std::string field, std::optional<float> missing_value, int32_t reverse_mul);
 
     std::string field_;
     std::optional<float> missing_value_;
@@ -177,21 +241,23 @@ private:
 };
 
 /// Sorts the documents of a leaf by `double` doc values.
-export class DoubleSorter final : public IndexSorter {
+export class DoubleIndexSorter final : public IndexSorter {
 public:
-    [[nodiscard]] static Result<DoubleSorter> create(std::string field, std::optional<double> missing_value,
+    [[nodiscard]] static Result<DoubleIndexSorter> create(std::string field, std::optional<double> missing_value,
                                                     bool reverse);
 
     [[nodiscard]] std::string_view provider_name() const noexcept override { return "double"; }
     [[nodiscard]] std::optional<Number> missing_value() const noexcept override;
     [[nodiscard]] Result<std::unique_ptr<DocComparator>> doc_comparator(LeafReader &leaf_reader,
                                                                        int32_t max_doc) const override;
+    [[nodiscard]] Result<std::unique_ptr<ComparableProvider>> comparable_provider(
+            LeafReader &leaf_reader) const override;
 
     [[nodiscard]] const std::string &field() const noexcept { return field_; }
     [[nodiscard]] bool reverse() const noexcept { return reverse_mul_ < 0; }
 
 private:
-    DoubleSorter(std::string field, std::optional<double> missing_value, int32_t reverse_mul);
+    DoubleIndexSorter(std::string field, std::optional<double> missing_value, int32_t reverse_mul);
 
     std::string field_;
     std::optional<double> missing_value_;
@@ -199,10 +265,10 @@ private:
 };
 
 /// Sorts the documents of a leaf by `SortedDocValues` terms.
-export class StringSorter final : public IndexSorter {
+export class StringIndexSorter final : public IndexSorter {
 public:
     /// Documents without the field sort first unless `missing_last`.
-    [[nodiscard]] static Result<StringSorter> create(std::string field, bool missing_last, bool reverse);
+    [[nodiscard]] static Result<StringIndexSorter> create(std::string field, bool missing_last, bool reverse);
 
     [[nodiscard]] std::string_view provider_name() const noexcept override { return "string"; }
     [[nodiscard]] std::optional<Number> missing_value() const noexcept override { return std::nullopt; }
@@ -214,7 +280,7 @@ public:
     [[nodiscard]] bool reverse() const noexcept { return reverse_mul_ < 0; }
 
 private:
-    StringSorter(std::string field, bool missing_last, int32_t reverse_mul);
+    StringIndexSorter(std::string field, bool missing_last, int32_t reverse_mul);
 
     std::string field_;
     bool missing_last_{false};
@@ -225,12 +291,18 @@ private:
 /// `nullopt` when they are already in order.
 ///
 /// Port of `Sorter::sort` (`core/index/sorter.rs`).
-[[nodiscard]] Result<std::optional<DocMapImpl>> sort_documents(const IndexSorter &sorter, LeafReader &leaf_reader,
+[[nodiscard]] Result<std::optional<IndexSortDocMapImpl>> sort_documents(const IndexSorter &sorter, LeafReader &leaf_reader,
                                                               int32_t max_doc);
+
+/// The same, for a caller that already built the comparator — which is what an
+/// index sort over several fields does, by chaining them with
+/// [`ChainedDocComparator`].
+[[nodiscard]] Result<std::optional<IndexSortDocMapImpl>> sort_documents_with_comparator(
+        const DocComparator &comparator, int32_t max_doc);
 
 /// Whether the permutations of `doc_map` are inverses of each other.
 ///
 /// Port of `Sorter::is_consistent` (`core/index/sorter.rs`).
-[[nodiscard]] bool is_doc_map_consistent(const DocMap &doc_map);
+[[nodiscard]] bool is_index_sort_doc_map_consistent(const IndexSortDocMap &doc_map);
 
 } // namespace lucene
