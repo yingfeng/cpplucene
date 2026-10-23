@@ -30,6 +30,7 @@ import :info_stream;
 import :io_context;
 import :segment_commit_info;
 import :segment_info;
+import :segment_info_format;
 import :segment_merger;
 import :segment_reader;
 import :sort_field;
@@ -38,6 +39,20 @@ import :types;
 import :version;
 
 namespace lucene {
+
+namespace {
+
+/// A file belongs to `segment` when it is `<segment>.<ext>` or
+/// `<segment>_<something>.<ext>`.
+[[nodiscard]] bool is_segment_file(std::string_view file, std::string_view segment) {
+    if (file.size() <= segment.size() || file.substr(0, segment.size()) != segment) {
+        return false;
+    }
+    const char separator = file[segment.size()];
+    return separator == '.' || separator == '_';
+}
+
+} // namespace
 
 Result<std::shared_ptr<SegmentReader>> rewrite_sorted_segment(std::span<CodecReader *const> readers,
                                                              const Sort &sort, Directory &directory,
@@ -116,7 +131,12 @@ Result<std::shared_ptr<SegmentReader>> rewrite_sorted_segment(std::span<CodecRea
     info.id = std::move(segment_id);
     info.codec_name = std::string(CodecFormats::default_codec().name());
     info.version = LUCENE_CURRENT_VERSION;
-    info.sort = sort;
+    info.min_version = LUCENE_CURRENT_VERSION;
+    info.diagnostics.emplace("source", "sort");
+    info.diagnostics.emplace("lucene.version", LUCENE_CURRENT_VERSION.to_string());
+    // `info.sort` is deliberately left unset here: the documents are already in
+    // the sorted order, so a merger that saw the sort would merge-sort the inputs
+    // a second time.  The sort is recorded once the merge is done.
 
     {
         auto merger =
@@ -133,8 +153,35 @@ Result<std::shared_ptr<SegmentReader>> rewrite_sorted_segment(std::span<CodecRea
         }
     }
 
+    // The inputs were reordered before the merge, so the result is sorted: record
+    // the sort for the readers that want to exploit it.
+    info.sort = sort;
+
+    // The merger's file list does not contain every file it wrote (it is the
+    // caller's job to collect them), and the commit that registers the segment
+    // needs the full list, otherwise the files look like orphans.
+    auto names = directory.list_all();
+    if (!names.has_value()) {
+        return std::unexpected(std::move(names.error()));
+    }
+    std::set<std::string> files;
+    for (const std::string &name : names.value()) {
+        if (is_segment_file(name, info.name)) {
+            files.insert(name);
+        }
+    }
+    if (auto set = info.set_files(std::move(files)); !set.has_value()) {
+        return std::unexpected(std::move(set.error()));
+    }
+
+    if (auto written = CodecFormats::default_codec().segment_info_format().write(directory, info,
+                                                                                io_context_default());
+        !written.has_value()) {
+        return std::unexpected(std::move(written.error()));
+    }
+
     SegmentCommitInfo commit;
-    commit.info = info;
+    commit.info = std::move(info);
     return SegmentReader::open(directory, commit, LUCENE_CURRENT_VERSION.major, io_context_default());
 }
 

@@ -48,17 +48,24 @@ namespace lucene {
 ///  * no delete queue / delete slices: deletes are buffered by
 ///    [`DocumentsWriter`](:documents_writer) and applied when the index is
 ///    committed, so a DWPT never needs to resolve a term;
-///  * no index sorting, no `pending_num_docs` accounting and no
-///    `TrackingDirectoryWrapper`: the segment files are collected from the
-///    directory after the codecs wrote them;
+///  * index sorting is implemented by writing the segment twice (see
+///    [`flush`]): the port has no `sort_map` plumbing through the per-format
+///    writers, so a sorted segment is first written unsorted into a scratch
+///    directory and then rewritten in sorted order;
+///  * no `pending_num_docs` accounting and no `TrackingDirectoryWrapper`: the
+///    segment files are collected from the directory after the codecs wrote
+///    them;
 ///  * non-aborting failures do not abort the writer.  The document keeps its id
 ///    and is recorded as deleted, so the segment stays consistent
 ///    (`delete_last_docs` in the reference implementation).
 export class DocumentsWriterPerThread {
 public:
+    /// `sort` orders the documents of the segment; the default writes them in
+    /// insertion order.
     DocumentsWriterPerThread(Directory &directory, const Codec &codec, SegmentInfo segment_info,
                              int32_t index_created_version_major, Analyzer &analyzer,
-                             std::shared_ptr<const Similarity> similarity);
+                             std::shared_ptr<const Similarity> similarity,
+                             std::optional<Sort> sort = std::nullopt);
 
     DocumentsWriterPerThread(const DocumentsWriterPerThread &) = delete;
     DocumentsWriterPerThread &operator=(const DocumentsWriterPerThread &) = delete;

@@ -487,6 +487,11 @@ export import :standard_analyzer;
 
 // ---- geo ----
 export import :geo_component2d;
+export import :geo_circle;
+export import :geo_geometry;
+export import :geo_rectangle;
+export import :geo_point;
+export import :geo_line;
 export import :geo_utils;
 export import :geo_encoding_utils;
 export import :edge_tree;

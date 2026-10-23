@@ -50,9 +50,8 @@ export template <class T>
 
 /// A [`DocMap`] that only remaps around deletions.
 ///
-/// Port of the reference implementation's `MergeStateDocMapImpl` restricted to its `Deletions` hook:
-/// both flavours are ported: deletions only, and the index-sort one that also
-/// reorders documents.
+/// Port of the reference implementation's `MergeStateDocMapImpl`: both flavours,
+/// the deletion-only one and the index-sort one that also reorders documents.
 export class MergeStateDocMap final : public DocMap {
 public:
     /// `live_docs` is null when the segment has no deletions; `del_doc_map` is
@@ -113,8 +112,10 @@ export struct MergeStateMeta {
 ///  * built through [`create`] (a constructor cannot report `LuceneError`), and
 ///    handed out as a `unique_ptr`, which is why `segment_info` stays a
 ///    reference the caller must keep alive;
-///  * no index sorting: `needs_index_sort` is always `false` and the doc maps are
-///    built from deletions alone (`MergeStateDocMap::Sorted` is not ported);
+///  * the doc maps are built from deletions alone here.  When the segment carries
+///    an index sort, [`SegmentMerger`](:segment_merger) replaces them with the
+///    ones the multi sorter produces (and sets `needs_index_sort`), because the
+///    multi sorter depends on this module and importing it would form a cycle;
 ///  * no intra-merge `TaskExecutor` (the port merges single threaded);
 ///  * readers are held in `shared_ptr`s that may be non-owning aliases of the
 ///    segment reader, so a merge instance is closed when the merge state dies;
@@ -164,7 +165,8 @@ public:
     std::shared_ptr<const FieldInfosList> field_infos;
     /// Live docs of each segment, null when it has no deletions.
     std::vector<std::shared_ptr<const Bits>> live_docs;
-    /// `true` when the merged segment has to be re-sorted (never, in this port).
+    /// `true` when the doc maps reorder the documents rather than just rebase
+    /// them, which turns off the bulk merge optimizations.
     bool needs_index_sort{false};
     /// `max_doc` of each input segment.
     std::vector<int32_t> max_docs;

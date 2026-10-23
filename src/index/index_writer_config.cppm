@@ -25,6 +25,7 @@ import :codec;
 import :merge_policy;
 import :merge_scheduler;
 import :similarity;
+import :sort_field;
 
 namespace lucene {
 
@@ -36,8 +37,8 @@ namespace lucene {
 /// writer copies when it is created.
 ///
 /// **Not modelled yet** (they belong to subsystems the port does not have):
-/// index sorting, deletes policy (soft deletes keep their own field), RAM
-/// accounting for the `Accountable` tree (which is why flushing is driven by
+/// deletes policy (soft deletes keep their own field), RAM accounting for the
+/// `Accountable` tree (which is why flushing is driven by
 /// [`max_buffered_docs`] only), commit data and event listeners.
 export class IndexWriterConfig {
 public:
@@ -81,6 +82,17 @@ public:
     [[nodiscard]] const std::shared_ptr<MergeScheduler> &merge_scheduler() const noexcept { return merge_scheduler_; }
     void set_merge_scheduler(std::shared_ptr<MergeScheduler> merge_scheduler);
 
+    /// The order the documents of a segment are written in.
+    ///
+    /// **Deviation:** the reference implementation sorts the buffered documents
+    /// once, while the segment is being written.  The port writes the segment
+    /// unsorted into a scratch directory and then sorts it into the real
+    /// directory (see [`rewrite_sorted_segment`](:sorting_rewriter)), so a sorted
+    /// flush costs two writes.  The result is the same.
+    [[nodiscard]] const std::optional<Sort> &index_sort() const noexcept { return index_sort_; }
+    void set_index_sort(Sort sort) noexcept { index_sort_ = std::move(sort); }
+    void clear_index_sort() noexcept { index_sort_.reset(); }
+
     /// Number of index-created versions recorded in the segments.
     ///
     /// Kept so a caller can pin the "created version" of the index; the port
@@ -96,6 +108,7 @@ private:
     std::shared_ptr<const Similarity> similarity_;
     std::shared_ptr<MergePolicy> merge_policy_;
     std::shared_ptr<MergeScheduler> merge_scheduler_;
+    std::optional<Sort> index_sort_;
     int32_t max_buffered_docs_{-1};
     int32_t index_created_version_major_{0};
 };

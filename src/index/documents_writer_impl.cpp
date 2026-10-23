@@ -27,6 +27,7 @@ import :error;
 import :index_writer_config;
 import :segment_commit_info;
 import :segment_info;
+import :sort_field;
 import :string_helper;
 import :term;
 import :types;
@@ -57,6 +58,7 @@ struct DocumentsWriter::Impl {
           similarity_(config.similarity()),
           index_created_version_major_(config.index_created_version_major()),
           max_buffered_docs_(config.max_buffered_docs()),
+          index_sort_(config.index_sort()),
           next_segment_counter_(next_segment_counter) {}
 
     [[nodiscard]] SegmentInfo new_segment_info() {
@@ -77,7 +79,8 @@ struct DocumentsWriter::Impl {
             return {};
         }
         current_ = std::make_unique<DocumentsWriterPerThread>(
-                directory_, codec_, new_segment_info(), index_created_version_major_, analyzer_, similarity_);
+                directory_, codec_, new_segment_info(), index_created_version_major_, analyzer_, similarity_,
+                index_sort_);
         return {};
     }
 
@@ -152,6 +155,7 @@ struct DocumentsWriter::Impl {
     std::shared_ptr<const Similarity> similarity_;
     int32_t index_created_version_major_;
     int32_t max_buffered_docs_;
+    std::optional<Sort> index_sort_;
     int64_t next_segment_counter_;
 
     std::unique_ptr<DocumentsWriterPerThread> current_;

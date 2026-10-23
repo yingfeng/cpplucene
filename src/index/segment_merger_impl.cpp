@@ -35,6 +35,7 @@ import :field_infos_format;
 import :info_stream;
 import :io_context;
 import :merge_state;
+import :multi_sorter;
 import :norms_consumer;
 import :norms_format;
 import :norms_producer;
@@ -102,6 +103,30 @@ Result<std::unique_ptr<SegmentMerger>> SegmentMerger::create(std::span<CodecRead
     auto merge_state = MergeState::create(readers, segment_info, std::move(info_stream));
     if (!merge_state.has_value()) {
         return std::unexpected(std::move(merge_state.error()));
+    }
+
+    // The segment is being written with an index sort: the documents of the
+    // inputs have to interleave in that order, so the doc maps come from the
+    // multi sorter instead of the deletion-only mapping.
+    //
+    // This lives here rather than in `MergeState::create` because the multi
+    // sorter depends on the merge state, so the two modules would form an import
+    // cycle.
+    if (segment_info.sort.has_value()) {
+        std::vector<std::shared_ptr<CodecReader>> shared_readers;
+        shared_readers.reserve(readers.size());
+        for (CodecReader *reader : readers) {
+            shared_readers.push_back(merge_state_borrow(reader));
+        }
+        auto sorted = MultiSorter::sort(segment_info.sort.value(), shared_readers);
+        if (!sorted.has_value()) {
+            return std::unexpected(std::move(sorted.error()));
+        }
+        if (sorted.value().has_value()) {
+            merge_state.value()->doc_maps =
+                    std::make_shared<const MergeState::DocMaps>(std::move(sorted.value().value()));
+            merge_state.value()->needs_index_sort = true;
+        }
     }
 
     const auto random = StringHelper::random_id();

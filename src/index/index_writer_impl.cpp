@@ -40,6 +40,7 @@ import :segment_commit_info;
 import :segment_infos;
 import :segment_merger;
 import :segment_reader;
+import :sort_field;
 import :string_helper;
 import :term;
 import :term_query;
@@ -285,6 +286,22 @@ struct IndexWriter::Impl : MergeSource {
         merged_info.codec_name = std::string(config_.codec().name());
         merged_info.diagnostics.emplace("source", "merge");
         merged_info.diagnostics.emplace("lucene.version", LUCENE_CURRENT_VERSION.to_string());
+
+        // A merge keeps the index sort, but only when every input is sorted by it:
+        // otherwise the merged documents would not be in that order and the
+        // metadata would lie.  The merger then reorders the documents itself.
+        if (config_.index_sort().has_value()) {
+            bool sorted_like_config = true;
+            for (const SegmentCommitInfo &segment : merge.segments()) {
+                if (!segment.info.sort.has_value() || !segment.info.sort.value().equals(config_.index_sort().value())) {
+                    sorted_like_config = false;
+                    break;
+                }
+            }
+            if (sorted_like_config) {
+                merged_info.sort = config_.index_sort().value();
+            }
+        }
 
         auto merge_context = IOContext::with_merge(MergeInfo(static_cast<int32_t>(merge.total_max_doc()), bytes.value(),
                                                              false, static_cast<int32_t>(merge.size())));
@@ -607,6 +624,20 @@ Result<std::unique_ptr<IndexWriter>> IndexWriter::open(Directory &directory, con
             return std::unexpected(std::move(read.error()));
         }
         infos = std::move(read.value());
+    }
+
+    // Fail early when the configured index sort cannot order documents: the
+    // flush path would otherwise fail on every segment.
+    if (config.index_sort().has_value()) {
+        for (const SortField &field : config.index_sort().value().fields()) {
+            auto sorter = field.index_sorter();
+            if (!sorter.has_value()) {
+                auto text = field.to_string();
+                return err(LuceneError::illegal_argument(
+                        "cannot sort the index by " + (text.has_value() ? text.value() : std::string("?")) + ": " +
+                        sorter.error().to_string()));
+            }
+        }
     }
 
     writer->impl_->infos_ = infos;
