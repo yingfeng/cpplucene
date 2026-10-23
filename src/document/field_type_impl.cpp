@@ -30,7 +30,9 @@ namespace {
 // `core/index/point_values.rs`
 constexpr size_t MAX_DIMENSIONS = 16;
 constexpr size_t MAX_INDEX_DIMENSIONS = 8;
-constexpr size_t MAX_NUM_BYTES = 8;
+// Sixteen bytes per dimension is what the point index supports: an `InetAddressPoint`
+// is a single 128-bit dimension.
+constexpr size_t MAX_NUM_BYTES = 16;
 } // namespace
 
 FieldType FieldType::from(const FieldType &other) {

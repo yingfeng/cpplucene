@@ -54,11 +54,17 @@ TEST(FieldTypeTest, DimensionValidation) {
     EXPECT_EQ(type.point_index_dimension_count(), 1u);
     EXPECT_EQ(type.point_num_bytes(), 4u);
 
+    // A dimension may hold up to sixteen bytes, which is what an `InetAddressPoint`
+    // (a single 128-bit dimension) needs.
+    FieldType wide;
+    EXPECT_TRUE(wide.set_dimensions(1, 16).has_value());
+    EXPECT_EQ(wide.point_num_bytes(), 16u);
+
     FieldType invalid;
     EXPECT_FALSE(invalid.set_dimensions(0, 0, 4).has_value());
     EXPECT_FALSE(invalid.set_dimensions(1, 0, 4).has_value());
     EXPECT_FALSE(invalid.set_dimensions(17, 17, 4).has_value());
-    EXPECT_FALSE(invalid.set_dimensions(1, 1, 9).has_value());
+    EXPECT_FALSE(invalid.set_dimensions(1, 1, 17).has_value());
 }
 
 TEST(FieldTypeTest, ToStringMatchesLucene) {
