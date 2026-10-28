@@ -142,8 +142,10 @@ public:
     Impl(int32_t max_size, int64_t max_ram_bytes_used)
             : max_size_(max_size), max_ram_bytes_used_(max_ram_bytes_used) {}
 
+    /// Bytes a cached leaf set retains.  The bit set reports its own footprint
+    /// ([`Accountable`]) and the wrapper adds its own overhead.
     [[nodiscard]] int64_t doc_id_set_ram_bytes(const FixedBitSet &bits) const {
-        return static_cast<int64_t>(FixedBitSet::bits_to_words(bits.length()) * sizeof(uint64_t)) + kDocIdSetOverhead;
+        return bits.ram_bytes_used() + kDocIdSetOverhead;
     }
 
     [[nodiscard]] Result<std::shared_ptr<const FixedBitSet>> get(const Identity &core,

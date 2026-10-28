@@ -161,10 +161,13 @@ TEST(IndexWriterTest, FlushesWhenTheBufferIsFull) {
     ASSERT_TRUE(writer.value()->add_document(make_doc("b", "two")).has_value());
     EXPECT_TRUE(writer.value()->segment_infos().segments.empty());
 
-    // Adding the third document flushes the first two into a segment.
+    // Adding the third document flushes the first two into a segment, which waits
+    // in the flush queue until the commit publishes it.
     ASSERT_TRUE(writer.value()->add_document(make_doc("c", "three")).has_value());
-    EXPECT_EQ(writer.value()->segment_infos().segments.size(), 1U);
-    EXPECT_EQ(writer.value()->num_docs().value(), 3);
+    EXPECT_EQ(writer.value()->flush_count(), 1);
+    EXPECT_EQ(writer.value()->pending_flush_count(), 1U);
+    EXPECT_TRUE(writer.value()->segment_infos().segments.empty()) << "a flushed segment is not committed yet";
+    EXPECT_EQ(writer.value()->num_docs().value(), 3) << "the queued documents count as pending";
 
     ASSERT_TRUE(writer.value()->commit().has_value());
     EXPECT_EQ(writer.value()->segment_infos().segments.size(), 2U);

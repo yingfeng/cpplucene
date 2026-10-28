@@ -174,7 +174,7 @@ const FieldInfo *FieldInfos::by_number(int32_t number) const {
 
 std::set<std::string> FieldInfos::indexed_fields() const {
     std::set<std::string> names;
-    for (const auto &field : fields_) {
+    for (const auto &field : fields()) {
         if (field.is_indexed()) {
             names.insert(field.name);
         }
@@ -197,39 +197,39 @@ bool any_field(const std::vector<FieldInfo> &fields, Predicate predicate) {
 } // namespace
 
 bool FieldInfos::has_freqs() const {
-    return any_field(fields_, [](const FieldInfo &field) { return field.has_freqs(); });
+    return any_field(fields(), [](const FieldInfo &field) { return field.has_freqs(); });
 }
 
 bool FieldInfos::has_positions() const {
-    return any_field(fields_, [](const FieldInfo &field) { return field.has_positions(); });
+    return any_field(fields(), [](const FieldInfo &field) { return field.has_positions(); });
 }
 
 bool FieldInfos::has_payloads() const {
-    return any_field(fields_, [](const FieldInfo &field) { return field.has_payloads(); });
+    return any_field(fields(), [](const FieldInfo &field) { return field.has_payloads(); });
 }
 
 bool FieldInfos::has_offsets() const {
-    return any_field(fields_, [](const FieldInfo &field) { return field.has_offsets(); });
+    return any_field(fields(), [](const FieldInfo &field) { return field.has_offsets(); });
 }
 
 bool FieldInfos::has_norms() const {
-    return any_field(fields_, [](const FieldInfo &field) { return field.has_norms(); });
+    return any_field(fields(), [](const FieldInfo &field) { return field.has_norms(); });
 }
 
 bool FieldInfos::has_term_vectors() const {
-    return any_field(fields_, [](const FieldInfo &field) { return field.has_term_vectors(); });
+    return any_field(fields(), [](const FieldInfo &field) { return field.has_term_vectors(); });
 }
 
 bool FieldInfos::has_postings() const {
-    return any_field(fields_, [](const FieldInfo &field) { return field.is_indexed(); });
+    return any_field(fields(), [](const FieldInfo &field) { return field.is_indexed(); });
 }
 
 bool FieldInfos::has_doc_values() const {
-    return any_field(fields_, [](const FieldInfo &field) { return field.has_doc_values(); });
+    return any_field(fields(), [](const FieldInfo &field) { return field.has_doc_values(); });
 }
 
 bool FieldInfos::has_point_values() const {
-    return any_field(fields_, [](const FieldInfo &field) { return field.has_point_values(); });
+    return any_field(fields(), [](const FieldInfo &field) { return field.has_point_values(); });
 }
 
 std::string Lucene94FieldInfosFormat::file_name(std::string_view segment, std::string_view suffix) {

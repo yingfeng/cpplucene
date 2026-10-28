@@ -25,6 +25,7 @@ import :automaton;
 import :compiled_automaton;
 import :error;
 import :multi_term_query;
+import :query_visitor;
 import :query;
 import :term;
 import :terms;
@@ -69,6 +70,13 @@ Result<std::string> AutomatonQuery::to_string(std::string_view field) const {
         return std::format("AutomatonQuery({})", term_.text());
     }
     return std::format("{}:AutomatonQuery({})", term_.field(), term_.text());
+}
+
+
+VoidResult AutomatonQuery::visit(QueryVisitor &visitor) const {
+    // The compiled automaton knows which terms it accepts, so it does the talking;
+    // it also asks the visitor whether the field is of interest.
+    return compiled_.visit(visitor, *this, term_.field());
 }
 
 } // namespace lucene

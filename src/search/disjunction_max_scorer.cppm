@@ -20,6 +20,7 @@ export module lucene_core:disjunction_max_scorer;
 import :types;
 import std;
 
+import :disjunction_score_block_boundary_propagator;
 import :doc_id_set_iterator;
 import :error;
 import :score_mode;
@@ -40,9 +41,12 @@ namespace lucene {
 ///    keeps the same shape as [`DisjunctionSumScorer`](lucene_core:disjunction_scorer),
 ///    scoring by walking the sub-scorers that sit on the current document,
 ///    which is equivalent and much simpler in C++;
-///  * the block boundary propagator (`DisjunctionScoreBlockBoundaryPropagator`)
-///    is not ported, because it needs impacts; `advance_shallow` therefore keeps
-///    the base implementation that reports `NO_MORE_DOCS`.
+///  * the block boundary propagator
+///    ([`DisjunctionScoreBlockBoundaryPropagator`](lucene_core:disjunction_score_block_boundary_propagator))
+///    is built when the score mode is `TopScores`, which is when a minimum
+///    competitive score can prune whole blocks; with another mode
+///    `advance_shallow` keeps the base implementation that reports
+///    `NO_MORE_DOCS`.
 export class DisjunctionMaxScorer final : public Scorer {
 public:
     /// `sub_scorers` must hold at least two scorers; `tie_breaker_multiplier`
@@ -56,6 +60,10 @@ public:
     [[nodiscard]] Result<int32_t> next_doc() override;
     [[nodiscard]] Result<int32_t> advance(int32_t target) override;
     [[nodiscard]] Result<int64_t> cost() const override;
+
+    /// The last document of the block that the clauses which can still compete
+    /// share, so a caller may skip straight to it.
+    [[nodiscard]] Result<int32_t> advance_shallow(int32_t target) override;
 
     // ---- Scorer ----
 
@@ -75,17 +83,22 @@ public:
     [[nodiscard]] float tie_breaker_multiplier() const noexcept { return tie_breaker_multiplier_; }
 
 private:
-    DisjunctionMaxScorer(std::vector<std::unique_ptr<Scorer>> sub_scorers,
+    DisjunctionMaxScorer(std::vector<std::unique_ptr<Scorer>> sub_scorers, std::vector<Scorer *> raw_scorers,
                          std::unique_ptr<DocIdSetIterator> disi, float tie_breaker_multiplier, ScoreMode score_mode)
             : sub_scorers_(std::move(sub_scorers)),
+              raw_scorers_(std::move(raw_scorers)),
               disi_(std::move(disi)),
               tie_breaker_multiplier_(tie_breaker_multiplier),
               score_mode_(score_mode) {}
 
     std::vector<std::unique_ptr<Scorer>> sub_scorers_;
+    /// The same scorers, in the order the propagator and the approximation want.
+    std::vector<Scorer *> raw_scorers_;
     std::unique_ptr<DocIdSetIterator> disi_;
     float tie_breaker_multiplier_;
     ScoreMode score_mode_;
+    /// Set when the score mode is `TopScores`; it answers [`advance_shallow`].
+    std::optional<DisjunctionScoreBlockBoundaryPropagator> propagator_;
 };
 
 } // namespace lucene

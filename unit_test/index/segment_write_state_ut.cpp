@@ -44,9 +44,13 @@ TEST(SegmentWriteStateTest, ValidatesSegmentSuffix) {
     // Base36 generation.
     EXPECT_TRUE(SegmentWriteState::is_valid_segment_suffix("1a"));
     EXPECT_TRUE(SegmentWriteState::is_valid_segment_suffix("ZZ"));
+    // A generation followed by the group a per-field writer appends.
+    EXPECT_TRUE(SegmentWriteState::is_valid_segment_suffix("1_Lucene90_0"));
+    EXPECT_TRUE(SegmentWriteState::is_valid_segment_suffix("2_Lucene101_1"));
 
     EXPECT_FALSE(SegmentWriteState::is_valid_segment_suffix("_a_b"));
     EXPECT_FALSE(SegmentWriteState::is_valid_segment_suffix("_0_0_0"));
+    EXPECT_FALSE(SegmentWriteState::is_valid_segment_suffix("1_a_b_c"));
     EXPECT_FALSE(SegmentWriteState::is_valid_segment_suffix("!"));
     EXPECT_FALSE(SegmentWriteState::is_valid_segment_suffix("a-b"));
 }

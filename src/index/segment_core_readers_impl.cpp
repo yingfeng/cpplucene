@@ -25,6 +25,7 @@ import :compound_format;
 import :doc_values_format;
 import :error;
 import :field_infos_format;
+import :index_file_names;
 import :lucene101_codec;
 import :norms_format;
 import :points_format;
@@ -83,9 +84,18 @@ Result<std::shared_ptr<SegmentCoreReaders>> SegmentCoreReaders::open(Directory &
         core->cfs_reader_ = std::move(opened.value());
     }
 
-    // 2. Field infos: the ones the segment was created with.
+    // 2. Field infos.  A doc values update writes a new generation of them, so a
+    //    segment may have several; the current one carries the doc values
+    //    generation of every updated field.
+    //
+    //    An update is always written *outside* the compound file (the segment is
+    //    packed once, at flush or merge, and never repacked), so only the base
+    //    generation lives inside `_N.cfs`.
     const FieldInfosFormat &field_infos_format = codec.value()->field_infos_format();
-    auto infos = field_infos_format.read(core->directory(), si.info, "", context);
+    const std::string infos_suffix =
+            si.field_infos_gen == -1 ? std::string{} : IndexFileNames::base36_encode(si.field_infos_gen);
+    Directory &infos_dir = si.field_infos_gen == -1 && core->cfs_reader_ != nullptr ? *core->cfs_reader_ : dir;
+    auto infos = field_infos_format.read(infos_dir, si.info, infos_suffix, context);
     if (!infos.has_value()) {
         return std::unexpected(std::move(infos.error()));
     }
@@ -158,17 +168,23 @@ Result<std::shared_ptr<SegmentCoreReaders>> SegmentCoreReaders::open(Directory &
         core->points_reader_ = std::move(opened.value());
     }
 
-    // 8. Doc values.
+    // 8. Doc values.  A field may have been updated in place, which writes a new
+    //    generation of just that field, so the readers are resolved per field.
     if (core_infos->has_doc_values()) {
         const DocValuesFormat *doc_values = codec.value()->doc_values_format();
         if (doc_values == nullptr) {
             return err(LuceneError::illegal_state("codec " + si.info.codec_name + " has no doc values format"));
         }
-        auto opened = doc_values->fields_producer(state, si.info);
-        if (!opened.has_value()) {
-            return std::unexpected(std::move(opened.error()));
+        // `dir` is the plain directory: an in-place update is written there, never
+        // into the compound file the segment was packed into.
+        auto generations =
+                SegmentDocValues::open(core->directory(), *doc_values, si.info, core_infos, context, &dir);
+        if (!generations.has_value()) {
+            return std::unexpected(std::move(generations.error()));
         }
-        core->doc_values_producer_ = std::move(opened.value());
+        core->segment_doc_values_ = std::move(generations.value());
+        core->doc_values_producer_ =
+                std::make_unique<SegmentDocValuesProducer>(core->segment_doc_values_, core_infos);
     }
 
     return core;

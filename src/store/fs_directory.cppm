@@ -36,8 +36,9 @@ namespace lucene {
 ///
 /// Port of the behaviour of `nio_fs_directory.rs` / `fs_directory_base.rs`,
 /// restricted to what the codecs need: buffered sequential writes, positional
-/// reads, slicing, random access and `sync`.  Memory mapping
-/// (`MMapDirectory`) is not ported yet and is not required for correctness.
+/// reads, slicing, random access and `sync`.  Reads are memory mapped by default,
+/// which is what the reference implementation's [`MMapDirectory`] does; the
+/// buffered fallback covers files that cannot be mapped.
 export class FSDirectory : public Directory {
 public:
     using Directory::create_output;
@@ -66,15 +67,52 @@ public:
 
     [[nodiscard]] const std::filesystem::path &directory_path() const noexcept { return path_; }
 
-private:
+    /// Whether `open_input` memory maps files (the default).
+    ///
+    /// Mapping is what the reference implementation does for its default file
+    /// system directory.  Setting this to `false` falls back to a
+    /// [`BufferedIndexInput`] over positional reads, which is far slower for
+    /// random access but avoids keeping address space mapped.
+    void set_use_mmap(bool value) noexcept { use_mmap_ = value; }
+    [[nodiscard]] bool use_mmap() const noexcept { return use_mmap_; }
+
+protected:
     explicit FSDirectory(std::filesystem::path path);
+
+private:
 
     [[nodiscard]] std::filesystem::path file_path(std::string_view name) const;
     [[nodiscard]] std::string new_file_name(std::string_view prefix, std::string_view suffix);
 
+    /// Opens `path` as a non-mapped, buffered input (`use_buffer` picks
+    /// between cache sizes derived from `context`).
+    [[nodiscard]] Result<std::unique_ptr<IndexInput>> open_buffered_input(std::string_view name,
+                                                                         const IOContext &context) const;
+
     std::filesystem::path path_;
     std::unique_ptr<LockFactory> lock_factory_;
     std::atomic<int64_t> counter_{0};
+    bool use_mmap_{true};
+};
+
+/// The file system directory under the name the reference implementation uses for
+/// the mapping one.
+///
+/// Port of `MMapDirectory` (`core/store/mmap_directory.rs`).  [`FSDirectory`]
+/// already memory maps every file it reads, so this class pins that behaviour:
+/// it exists so a caller that asks for the reference's `MMapDirectory` gets the
+/// mapping directory, and so `to_string` says which one was opened.
+export class MMapDirectory final : public FSDirectory {
+public:
+    /// Opens (creating it when missing) the directory at `path`.
+    [[nodiscard]] static Result<std::unique_ptr<MMapDirectory>> open(const std::filesystem::path &path);
+
+    [[nodiscard]] std::string to_string() const override {
+        return std::format("MMapDirectory({})", directory_path().string());
+    }
+
+private:
+    explicit MMapDirectory(std::filesystem::path path) : FSDirectory(std::move(path)) { set_use_mmap(true); }
 };
 
 } // namespace lucene

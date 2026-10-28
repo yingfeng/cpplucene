@@ -43,4 +43,9 @@ namespace lucene {
 /// `Character.isLetterOrDigit`.
 [[nodiscard]] bool char_is_letter_or_digit(char32_t codepoint) noexcept;
 
+/// `Character.toLowerCase` for the scripts covered by the approximation:
+/// ASCII, Latin-1 supplement, Latin Extended-A, Greek and Cyrillic.  Other code
+/// points are returned unchanged, which is what the approximation implies.
+[[nodiscard]] char32_t char_to_lower(char32_t codepoint) noexcept;
+
 } // namespace lucene

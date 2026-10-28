@@ -37,10 +37,16 @@ namespace lucene {
 /// intersects without scoring, which is the `scoring_idx` list of the reference implementation.
 ///
 /// **Deviations** (C++ mechanics only):
-///  * the reference implementation selects between plain, two-phase and block-max implementations at
-///    construction (`ConjunctionScorerDisi`); the port always builds the plain
-///    conjunction and lets the two-phase confirmation run afterwards, which is
-///    slower but exact (block-max needs impacts, which are not ported);
+///  * the two-phase conjunction is reported rather than built as a separate
+///    class: [`has_two_phase_iterator`] answers `Yes` as soon as one child has
+///    one, [`matches`] confirms every such child and [`match_cost`] sums their
+///    costs, which is exactly what the reference implementation's
+///    `ConjunctionScorerDisi::prepare` builds.  Its approximation is the
+///    conjunction of the children's iterators in both implementations;
+///  * the block-max conjunction lives in
+///    [`BlockMaxConjunctionScorer`](lucene_core:block_max_conjunction_scorer) and
+///    is chosen by [`BooleanScorerSupplier`](lucene_core:boolean_scorer_supplier),
+///    which is where the reference implementation chooses it as well;
 ///  * the sub-scorers are owned; a single-clause conjunction has to be unwrapped
 ///    by the caller ([`ConjunctionUtils::intersect_scorers`](lucene_core:conjunction_utils)
 ///    does that).

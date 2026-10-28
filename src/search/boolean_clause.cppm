@@ -22,37 +22,11 @@ import :types;
 import std;
 
 import :query;
+import :occur;
+
+export import :occur;
 
 namespace lucene {
-
-/// How often a clause has to occur in a matching document.
-///
-/// Port of `Occur` (`core/search/boolean_clause.rs`).
-///
-/// The numeric values are the slot indices `BooleanQuery` uses for its four
-/// clause lists, so they must not be reordered.
-export enum class Occur : int32_t {
-    /// The clause must appear, and it contributes to the score.
-    Must = 0,
-    /// The clause must appear but does not contribute to the score.
-    Filter = 1,
-    /// The clause may appear; when the query has no `MUST`/`FILTER` clause at
-    /// least `minimum_should_match` of them must match.
-    Should = 2,
-    /// The clause must not appear; it does not contribute to the score.
-    MustNot = 3,
-};
-
-/// Whether the clause has to match.
-[[nodiscard]] constexpr bool occur_is_required(Occur occur) noexcept {
-    return occur == Occur::Must || occur == Occur::Filter;
-}
-
-/// Whether the clause contributes to the score.
-[[nodiscard]] constexpr bool occur_is_scoring(Occur occur) noexcept { return occur == Occur::Must || occur == Occur::Should; }
-
-/// Whether the clause excludes documents.
-[[nodiscard]] constexpr bool occur_is_prohibited(Occur occur) noexcept { return occur == Occur::MustNot; }
 
 /// The one-character prefix [`BooleanQuery::to_string`] uses: `+`, `#`, `""`, `-`.
 [[nodiscard]] std::string_view occur_prefix(Occur occur);

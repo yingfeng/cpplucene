@@ -24,6 +24,7 @@ import :close;
 import :compound_directory;
 import :directory;
 import :doc_values_producer;
+import :segment_doc_values;
 import :error;
 import :field_infos;
 import :fields_producer;
@@ -107,6 +108,9 @@ private:
     std::unique_ptr<TermVectorsReader> term_vectors_reader_;
     std::unique_ptr<PointsReader> points_reader_;
     std::unique_ptr<DocValuesProducer> doc_values_producer_;
+    /// The per-generation doc values producers `doc_values_producer_` resolves
+    /// fields through; kept here so the generations outlive the producer.
+    std::shared_ptr<SegmentDocValues> segment_doc_values_;
 };
 
 } // namespace lucene

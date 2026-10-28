@@ -146,6 +146,11 @@ bool StringHelper::starts_with(std::span<const uint8_t> ref,
     }
     debug_check(ref_offset + prefix_length <= ref.size());
     debug_check(prefix_offset + prefix_length <= prefix.size());
+    // An empty prefix matches everything, and `memcmp` must not be handed a null
+    // pointer (an empty span may have one) even when no byte is compared.
+    if (prefix_length == 0) {
+        return true;
+    }
     return std::memcmp(ref.data() + ref_offset, prefix.data() + prefix_offset, prefix_length) == 0;
 }
 
@@ -154,6 +159,10 @@ bool StringHelper::ends_with(std::span<const uint8_t> ref, std::span<const uint8
         return false;
     }
     const size_t start_at = ref.size() - suffix.size();
+    // Same null-pointer caveat as [`starts_with`]: an empty suffix always matches.
+    if (suffix.empty()) {
+        return true;
+    }
     return std::memcmp(ref.data() + start_at, suffix.data(), suffix.size()) == 0;
 }
 

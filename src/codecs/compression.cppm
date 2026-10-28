@@ -70,6 +70,13 @@ export enum class CompressionModeType : uint8_t {
     Fast = 0,
     /// Trades write speed for a better compression ratio, but still fast to read.
     FastDecompression = 1,
+    /// LZ4 with a preset dictionary: one dictionary block followed by sub blocks
+    /// that may reference it.  This is Lucene's `BEST_SPEED`, the default for the
+    /// stored fields and term vectors formats.
+    BestSpeed = 2,
+    /// Deflate with a preset dictionary: much better compression at the cost of
+    /// speed.  This is Lucene's `HIGH_COMPRESSION`.
+    HighCompression = 3,
 };
 
 /// A compression mode.
@@ -78,9 +85,10 @@ export enum class CompressionModeType : uint8_t {
 /// (`codecs/compression/compression_mode.rs`).  Both modes are LZ4: `Fast` picks
 /// matches greedily, `FastDecompression` searches harder while writing.
 ///
-/// **Deviation:** the reference implementation also offers `HIGH_COMPRESSION`, which is Deflate; this
-/// port keeps only the LZ4 modes, because the index formats use them exclusively
-/// and the Deflate code would need a zlib port that nothing else uses.
+/// All three reference modes are ported: the two LZ4 modes, `BEST_SPEED` (LZ4
+/// with a preset dictionary) and `HIGH_COMPRESSION` (Deflate with a preset
+/// dictionary, see
+/// [`DeflateWithPresetDictCompressor`](lucene_core:deflate_with_preset_dict_compression_mode)).
 export class CompressionMode {
 public:
     CompressionMode() = default;
@@ -94,9 +102,27 @@ public:
         return CompressionMode(CompressionModeType::FastDecompression);
     }
 
+    /// LZ4 with a preset dictionary, Lucene's `BEST_SPEED`.
+    ///
+    /// Port of `LZ4WithPresetDictCompressionMode`: the chunk is split into a
+    /// dictionary block and ten sub blocks, and every sub block is compressed
+    /// against that shared dictionary.
+    [[nodiscard]] static CompressionMode best_speed() {
+        return CompressionMode(CompressionModeType::BestSpeed);
+    }
+
+    /// Deflate with a preset dictionary, Lucene's `HIGH_COMPRESSION`.
+    ///
+    /// Port of `DeflateWithPresetDictCompressionMode`: the chunk is split the same
+    /// way as `best_speed`, but the blocks are Deflate streams, which compress much
+    /// better and decode much slower.
+    [[nodiscard]] static CompressionMode high_compression() {
+        return CompressionMode(CompressionModeType::HighCompression);
+    }
+
     [[nodiscard]] CompressionModeType type() const noexcept { return type_; }
 
-    /// `"FAST"` or `"FAST_DECOMPRESSION"`, as the reference implementation displays them.
+    /// `"FAST"`, `"FAST_DECOMPRESSION"`, `"BEST_SPEED"` or `"BEST_COMPRESSION"`.
     [[nodiscard]] std::string_view name() const noexcept;
 
     [[nodiscard]] std::unique_ptr<Compressor> new_compressor() const;

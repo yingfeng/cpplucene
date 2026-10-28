@@ -228,15 +228,20 @@ public:
         }
 
         std::unique_ptr<TwoPhaseIterator> iterator;
+        // The single-valued fast path needs the numeric view of the field.  A field
+        // that is stored as sorted numeric doc values has none, so the values are
+        // read through the sorted numeric cursor instead — which is what the
+        // multi-valued path does anyway.
+        std::unique_ptr<NumericDocValues> singleton;
         if (values.value()->is_single_valued()) {
-            auto singleton = context.reader()->get_numeric_doc_values(field_);
-            if (!singleton.has_value()) {
-                return std::unexpected(std::move(singleton.error()));
+            auto maybe_singleton = context.reader()->get_numeric_doc_values(field_);
+            if (!maybe_singleton.has_value()) {
+                return std::unexpected(std::move(maybe_singleton.error()));
             }
-            if (singleton.value() == nullptr) {
-                return std::unique_ptr<ScorerSupplier>{};
-            }
-            iterator = std::make_unique<SingletonRangeMatch>(std::move(singleton.value()), lower_value_, upper_value_);
+            singleton = std::move(maybe_singleton.value());
+        }
+        if (singleton != nullptr) {
+            iterator = std::make_unique<SingletonRangeMatch>(std::move(singleton), lower_value_, upper_value_);
         } else {
             iterator = std::make_unique<SortedNumericRangeMatch>(std::move(values.value()), lower_value_, upper_value_);
         }

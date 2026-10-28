@@ -32,8 +32,14 @@ Result<std::string> parse_segment_name(std::string_view file_name) {
     if (file_name.empty()) {
         return err(LuceneError::illegal_argument("a file name must not be empty"));
     }
-    const size_t dot = file_name.find('.');
-    const std::string_view segment = dot == std::string_view::npos ? file_name : file_name.substr(0, dot);
+    // The segment name ends at the first '_' (skipping the leading one) or, when
+    // there is no suffix, at the first '.'.  A per-field codec produces names
+    // like `_0_Lucene101_0.doc`, which must still parse to `_0`.
+    size_t end = file_name.find('_', 1);
+    if (end == std::string_view::npos) {
+        end = file_name.find('.');
+    }
+    const std::string_view segment = end == std::string_view::npos ? file_name : file_name.substr(0, end);
     if (segment.empty()) {
         // ".fnm" has no segment part, which is what Lucene reports too.
         return err(LuceneError::illegal_argument("cannot parse segment index from file name " +

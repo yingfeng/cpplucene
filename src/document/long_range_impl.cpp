@@ -295,13 +295,19 @@ VoidResult LongRangeDocValuesField::set_range_values(Field &field, std::span<con
 Result<BinaryRangeFieldRangeQuery> LongRangeDocValuesField::new_slow_intersects_query(std::string field,
                                                                                   std::span<const int64_t> min,
                                                                                   std::span<const int64_t> max) {
+    return new_slow_range_query(std::move(field), min, max, QueryType::Intersects);
+}
+
+Result<BinaryRangeFieldRangeQuery> LongRangeDocValuesField::new_slow_range_query(std::string field,
+                                                                              std::span<const int64_t> min,
+                                                                              std::span<const int64_t> max,
+                                                                              QueryType query_type) {
     auto ranges = LongRange::encode(min, max);
     if (!ranges.has_value()) {
         return std::unexpected(std::move(ranges.error()));
     }
     return BinaryRangeFieldRangeQuery::create(std::move(field), std::move(ranges.value()), LongRange::BYTES,
-                                              min.size(), QueryType::Intersects,
-                                              long_range_range_text(min, max));
+                                              min.size(), query_type, long_range_range_text(min, max));
 }
 
 } // namespace lucene

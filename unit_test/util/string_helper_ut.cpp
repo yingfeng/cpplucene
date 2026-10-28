@@ -45,6 +45,26 @@ TEST(StringHelperTest, StartsWithAndEndsWith) {
     EXPECT_FALSE(StringHelper::ends_with(as_bytes("ar"), as_bytes("bar")));
 }
 
+TEST(StringHelperTest, EmptyPrefixWithoutStorageNeverReachesMemcmp) {
+    // A default constructed span has a null `data()` pointer, and the block-tree
+    // writer builds exactly such a prefix span for the terms of a top-level
+    // block.  `memcmp` declares its pointer arguments non-null, so an empty
+    // prefix has to be answered without comparing anything.
+    const std::span<const uint8_t> no_storage;
+    ASSERT_TRUE(no_storage.empty());
+    ASSERT_EQ(no_storage.data(), nullptr);
+
+    EXPECT_TRUE(StringHelper::starts_with(as_bytes("foobar"), no_storage));
+    EXPECT_TRUE(StringHelper::starts_with(as_bytes(""), no_storage));
+    EXPECT_TRUE(StringHelper::ends_with(as_bytes("foobar"), no_storage));
+    EXPECT_TRUE(StringHelper::ends_with(as_bytes(""), no_storage));
+
+    // The offset/length overload takes the prefix length on its own, so the
+    // emptiness of the prefix span is not what decides it.
+    EXPECT_TRUE(StringHelper::starts_with(as_bytes("foobar"), 2, 4, no_storage, 0, 0));
+    EXPECT_FALSE(StringHelper::starts_with(as_bytes("fo"), 0, 1, as_bytes("foo"), 0, 3));
+}
+
 TEST(StringHelperTest, BytesDifference) {
     auto difference = StringHelper::bytes_difference(as_bytes("abc"), as_bytes("abd"));
     ASSERT_TRUE(difference.has_value());

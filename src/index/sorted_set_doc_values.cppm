@@ -36,8 +36,10 @@ export inline constexpr int64_t NO_MORE_ORDS = -1;
 /// reports a run of increasing ordinals.
 ///
 /// Port of the `SortedSetDocValues` trait (`core/index/sorted_set_doc_values.rs`).
-/// `terms_enum()` has the same deviation as its single-valued counterpart: the
-/// adapter arrives with the search layer, and [`lookup_term`] covers lookups.
+/// `terms_enum()` follows the same rule as its single-valued counterpart: the
+/// base default reports `not_implemented`, every cursor of this port overrides
+/// it with a [`SortedSetDocValuesTermsEnum`], and [`lookup_term`] covers
+/// lookups.
 export class SortedSetDocValues : public DocValuesIterator {
 public:
     /// The next ordinal of the current document, or [`NO_MORE_ORDS`].

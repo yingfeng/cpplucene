@@ -30,6 +30,7 @@ import :query;
 import :query_visitor;
 import :score_mode;
 import :scorer;
+import :two_phase_iterator;
 import :scorer_supplier;
 import :segment_cacheable;
 import :types;
@@ -38,6 +39,26 @@ import :weight;
 namespace lucene {
 
 namespace {
+
+/// Presents a scorer's confirmation step as a [`TwoPhaseIterator`], so a
+/// constant-score wrapper keeps it.
+///
+/// The reference implementation gets this for free: its `ConstantScoreScorer`
+/// constructor takes the scorer itself and reads `twoPhaseIterator()` from it.
+class ScorerTwoPhase final : public TwoPhaseIterator {
+public:
+    explicit ScorerTwoPhase(std::unique_ptr<Scorer> scorer) : scorer_(std::move(scorer)) {}
+
+    [[nodiscard]] int32_t approx_doc_id() const override { return scorer_->approx_doc_id(); }
+    [[nodiscard]] Result<int32_t> approx_next_doc() override { return scorer_->approx_next_doc(); }
+    [[nodiscard]] Result<int32_t> approx_advance(int32_t target) override { return scorer_->approx_advance(target); }
+    [[nodiscard]] Result<int64_t> approx_cost() const override { return scorer_->approx_cost(); }
+    [[nodiscard]] Result<bool> matches() override { return scorer_->matches(); }
+    [[nodiscard]] float match_cost() const override { return scorer_->match_cost(); }
+
+private:
+    std::unique_ptr<Scorer> scorer_;
+};
 
 /// The scorer supplier of [`ConstantScoreQuery`]: asks the wrapped query for a
 /// scorer and gives every document the same score.
@@ -55,7 +76,15 @@ public:
         if (inner.value() == nullptr) {
             return std::unique_ptr<Scorer>{};
         }
-        return ConstantScoreScorer::from_disi(score_, score_mode_, std::move(inner.value()));
+        std::unique_ptr<Scorer> scorer = std::move(inner.value());
+        if (scorer->has_two_phase_iterator() == TwoPhaseState::No) {
+            return ConstantScoreScorer::from_disi(score_, score_mode_, std::move(scorer));
+        }
+        // The wrapped scorer confirms its candidates in `matches()`, and that
+        // confirmation has to survive the constant scoring: dropping it would
+        // collect every candidate of the approximation (e.g. a disjunction that
+        // requires `minimum_should_match`, whose iterator yields the union).
+        return ConstantScoreScorer::from_tpi(score_, score_mode_, std::make_unique<ScorerTwoPhase>(std::move(scorer)));
     }
 
     [[nodiscard]] Result<int64_t> cost(const LeafReaderContext &context, const IndexSearcher &searcher) override {

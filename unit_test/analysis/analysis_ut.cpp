@@ -246,6 +246,27 @@ TEST(StopFilterTest, RemovesStopWordsAndKeepsPositions) {
     EXPECT_EQ(tokens[1].position_increment, 2u);
 }
 
+TEST(StopFilterTest, TakesACharArraySetInsteadOfAStdSet) {
+    // The set the analyzers share is a `CharArraySet`, exactly like in the reference
+    // implementation; a case-insensitive one also drops "The".
+    CharArraySet stop_words(true);
+    stop_words.add_str("the");
+    stop_words.add_str("of");
+    EXPECT_EQ(stop_words.size(), 2U);
+
+    StopFilter filter(std::make_unique<WhitespaceTokenizer>(), stop_words);
+    ASSERT_NE(filter.char_array_stop_words(), nullptr);
+    EXPECT_TRUE(filter.char_array_stop_words()->ignore_case());
+    auto *tokenizer = dynamic_cast<Tokenizer *>(&filter.input());
+    ASSERT_NE(tokenizer, nullptr);
+    ASSERT_TRUE(tokenizer->set_reader("The quick of fox").has_value());
+    ASSERT_TRUE(filter.reset().has_value());
+    const auto tokens = collect(filter);
+    ASSERT_EQ(tokens.size(), 2u);
+    EXPECT_EQ(tokens[0].term, "quick");
+    EXPECT_EQ(tokens[1].term, "fox");
+}
+
 TEST(SimpleAnalyzerTest, ProducesLowerCasedLetterRuns) {
     SimpleAnalyzer analyzer;
     EXPECT_EQ(analyzer.reuse_strategy(), ReuseStrategy::Global);

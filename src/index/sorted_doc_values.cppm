@@ -33,11 +33,9 @@ namespace lucene {
 /// Port of the `SortedDocValues` trait (`core/index/sorted_doc_values.rs`): each
 /// document points at one ordinal, and ordinals are dense and in sorted order.
 ///
-/// **Deviation:** `terms_enum()` reports `not_implemented` by default.  The
-/// [`SortedDocValuesTermsEnum`] adapter needs the dummy postings/impacts enums of
-/// the search layer, which this port does not have yet; every codec that writes
-/// sorted doc values works without it, and `lookup_term` covers the lookups the
-/// merge path needs.
+/// `terms_enum()` reports `not_implemented` by default; every cursor of this
+/// port overrides it with a [`SortedDocValuesTermsEnum`], and `lookup_term`
+/// covers the lookups the merge path needs.
 export class SortedDocValues : public DocValuesIterator {
 public:
     /// The ordinal of the current document, or `-1` when it has no value.

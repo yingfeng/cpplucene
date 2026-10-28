@@ -27,6 +27,16 @@ import std;
 
 namespace lucene {
 
+StopFilter::StopFilter(std::unique_ptr<TokenStream> input, const CharArraySet &stop_words)
+        : TokenFilter(std::move(input)), char_stop_words_(stop_words) {}
+
+bool StopFilter::is_stop_word(std::string_view word) const {
+    if (char_stop_words_.has_value()) {
+        return char_stop_words_.value().contains_key_str(word);
+    }
+    return stop_words_.contains(word);
+}
+
 StopFilter::StopFilter(std::unique_ptr<TokenStream> input, std::set<std::string, std::less<>> stop_words)
     : TokenFilter(std::move(input)), stop_words_(std::move(stop_words)) {
     attributes().add_attribute<CharTermAttribute>();
@@ -45,7 +55,7 @@ Result<bool> StopFilter::increment_token() {
         auto *term = attributes().get_attribute<CharTermAttribute>();
         auto *position_increment = attributes().get_attribute<PositionIncrementAttribute>();
         const std::string_view text = term->text();
-        if (!stop_words_.contains(text)) {
+        if (!is_stop_word(text)) {
             if (skipped_positions_ != 0) {
                 position_increment->set_position_increment(position_increment->position_increment() +
                                                            skipped_positions_);

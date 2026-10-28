@@ -127,6 +127,8 @@ TEST(PointIndexingTest, WritesThePointFiles) {
     ByteBuffersDirectory dir;
     WhitespaceAnalyzer analyzer;
     IndexWriterConfig config(analyzer);
+    // The test inspects the files of a segment, so it must not be packed.
+    config.set_use_compound_file(false);
     auto writer = IndexWriter::open(dir, config);
     ASSERT_TRUE(writer.has_value());
 

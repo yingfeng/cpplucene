@@ -115,8 +115,25 @@ export struct DoubleRangeDocValuesField {
                                                      std::span<const double> max);
     /// Matches the encoded ranges that intersect the given range, reading doc
     /// values only.  This does not use the point index and may be slow.
+    /// Matches the encoded ranges that intersect the given range, reading doc
+    /// values only.  This does not use the point index and may be slow.
+    ///
+    /// Port of `new_slow_intersects_query`: [`new_slow_range_query`] with
+    /// [`QueryType::Intersects`].
     [[nodiscard]] static Result<BinaryRangeFieldRangeQuery>
     new_slow_intersects_query(std::string field, std::span<const double> min, std::span<const double> max);
+
+    /// Matches the encoded ranges according to `query_type`, reading doc values
+    /// only.  This does not use the point index and may be slow.
+    ///
+    /// **Only [`QueryType::Intersects`] is implemented**, as in the reference
+    /// implementation: [`BinaryRangeFieldRangeQuery`] reports
+    /// `unsupported_operation` for the other two.
+    ///
+    /// Port of `DoubleRangeDocValuesField::new_slow_range_query`.
+    [[nodiscard]] static Result<BinaryRangeFieldRangeQuery>
+    new_slow_range_query(std::string field, std::span<const double> min, std::span<const double> max,
+                         QueryType query_type);
 };
 
 } // namespace lucene

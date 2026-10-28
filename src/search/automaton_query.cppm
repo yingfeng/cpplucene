@@ -24,6 +24,7 @@ import :automaton;
 import :compiled_automaton;
 import :error;
 import :multi_term_query;
+import :query_visitor;
 import :term;
 import :terms;
 import :terms_enum;
@@ -68,6 +69,9 @@ public:
     // ---- Query ----
 
     [[nodiscard]] Result<std::string> to_string(std::string_view field) const override;
+
+    /// Tells the visitor which terms the automaton accepts.
+    [[nodiscard]] VoidResult visit(QueryVisitor &visitor) const override;
 
 protected:
     AutomatonQuery(Term term, CompiledAutomaton compiled, MultiTermRewriteMethod rewrite_method);

@@ -65,7 +65,11 @@ public:
         return copy;
     }
 
-    /// A suffix is either empty, `_X` (one underscore) or a base36 generation.
+    /// A suffix is empty, `_X` (one underscore) or a base36 generation.
+    ///
+    /// A per-field format appends its own group, so a doc values update writes
+    /// `<generation>_<format>_<format suffix>` (e.g. `1_Lucene90_0`): three parts
+    /// are accepted as long as the first one, the generation, is not empty.
     ///
     /// The reference implementation keeps this check private and only runs it from a `debug_assert`;
     /// it is exported here so the writers using it can be tested directly.
@@ -73,12 +77,19 @@ public:
         if (suffix.empty()) {
             return true;
         }
-        const auto first_underscore = suffix.find('_');
-        if (first_underscore == std::string_view::npos) {
-            return is_base36(suffix);
+        for (const char c : suffix) {
+            const bool allowed = c == '_' || (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') ||
+                                 (c >= 'A' && c <= 'Z');
+            if (!allowed) {
+                return false;
+            }
         }
-        // `_X`: one underscore and nothing after the second part.
-        return suffix.find('_', first_underscore + 1) == std::string_view::npos;
+        const size_t underscores = static_cast<size_t>(std::count(suffix.begin(), suffix.end(), '_'));
+        if (underscores <= 1) {
+            return true;
+        }
+        // `<generation>_<format>_<suffix>`, which always starts with the generation.
+        return underscores == 2 && suffix.front() != '_';
     }
 
     /// Info stream used for debugging messages.

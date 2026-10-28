@@ -23,6 +23,8 @@ import std;
 
 import :constant_score_scorer;
 import :doc_id_set_iterator;
+import :doc_values_range_iterator;
+import :doc_values_skipper;
 import :error;
 import :explanation;
 import :fixed_bit_set;
@@ -35,6 +37,8 @@ import :query_visitor;
 import :score_mode;
 import :scorer;
 import :scorer_supplier;
+import :singleton_sorted_set_doc_values;
+import :sorted_doc_values;
 import :sorted_set_doc_values;
 import :sorted_set_doc_values_terms_enum;
 import :terms;
@@ -128,6 +132,41 @@ private:
 };
 
 /// Hands out the constant score scorer over the doc values of one leaf.
+/// A [`TwoPhaseIterator`] over a single-valued cursor: a document matches when its
+/// ordinal is one of the terms the query selected.
+///
+/// Port of `SingletonTermSetTwoPhaseIterator`
+/// (`core/search/doc_values_rewrite_method.rs`).
+///
+/// **Deviation:** the reference implementation wraps a `SortedDocValues` in a
+/// `TwoPhaseIterator` whose approximation is that same cursor; here the
+/// [`TwoPhaseIterator`] already carries the approximation.
+class SingletonTermSetTwoPhaseIterator final : public TwoPhaseIterator {
+public:
+    SingletonTermSetTwoPhaseIterator(std::unique_ptr<SortedDocValues> values, FixedBitSet term_set)
+            : values_(std::move(values)), term_set_(std::move(term_set)) {}
+
+    [[nodiscard]] int32_t approx_doc_id() const override { return values_->doc_id(); }
+    [[nodiscard]] Result<int32_t> approx_next_doc() override { return values_->next_doc(); }
+    [[nodiscard]] Result<int32_t> approx_advance(int32_t target) override { return values_->advance(target); }
+    [[nodiscard]] Result<int64_t> approx_cost() const override { return values_->cost(); }
+
+    [[nodiscard]] Result<bool> matches() override {
+        auto ord = values_->ord_value();
+        if (!ord.has_value()) {
+            return std::unexpected(std::move(ord.error()));
+        }
+        return ord.value() >= 0 && term_set_.get_bit(static_cast<size_t>(ord.value()));
+    }
+
+    /// One ordinal to look up per document.
+    [[nodiscard]] float match_cost() const override { return 1.0F; }
+
+private:
+    std::unique_ptr<SortedDocValues> values_;
+    FixedBitSet term_set_;
+};
+
 class DocValuesScorerSupplier final : public ScorerSupplier {
 public:
     DocValuesScorerSupplier(std::shared_ptr<const MultiTermQuery> query, std::string field, int64_t cost, float score,
@@ -169,6 +208,7 @@ public:
         // A bit per ordinal of the field's dictionary, marking the terms the
         // query selected and the field actually has.
         FixedBitSet term_set(static_cast<size_t>(std::max<int64_t>(value_count.value(), 0)));
+        int64_t min_ord = -1;
         int64_t max_ord = -1;
         while (true) {
             auto ord = terms_enum.ord();
@@ -179,6 +219,9 @@ public:
                 return err(LuceneError::illegal_state("a doc values term enum reported a negative ord"));
             }
             term_set.set(static_cast<size_t>(ord.value()));
+            if (min_ord < 0) {
+                min_ord = ord.value();
+            }
             max_ord = ord.value();
             auto next = terms_enum.next();
             if (!next.has_value()) {
@@ -189,8 +232,33 @@ public:
             }
         }
 
-        std::unique_ptr<TwoPhaseIterator> two_phase(
-                new SortedSetTermSetTwoPhaseIterator(std::move(shared), std::move(term_set), max_ord));
+        // The skip index of the field, when it has one, prunes whole blocks of
+        // documents whose ordinals cannot intersect the terms the query selected.
+        auto skipper = context.reader()->get_doc_values_skipper(field_);
+        if (!skipper.has_value()) {
+            return std::unexpected(std::move(skipper.error()));
+        }
+        std::shared_ptr<DocValuesSkipper> shared_skipper(std::move(skipper.value()));
+        if (shared_skipper != nullptr &&
+            (min_ord > shared_skipper->global_max_value() || max_ord < shared_skipper->global_min_value())) {
+            // No document can hold one of the selected ordinals at all.
+            return empty_scorer();
+        }
+
+        std::unique_ptr<TwoPhaseIterator> two_phase;
+        if (auto *singleton = dynamic_cast<SingletonSortedSetDocValues *>(shared.get()); singleton != nullptr) {
+            // The field has at most one value per document, so the cursor itself is
+            // the approximation and only the ordinal has to be looked up.
+            two_phase = std::make_unique<SingletonTermSetTwoPhaseIterator>(singleton->release(), std::move(term_set));
+        } else {
+            two_phase = std::make_unique<SortedSetTermSetTwoPhaseIterator>(std::move(shared), std::move(term_set),
+                                                                          max_ord);
+        }
+        if (shared_skipper != nullptr) {
+            std::unique_ptr<TwoPhaseIterator> pruned(new DocValuesRangeIterator(
+                    std::move(two_phase), std::move(shared_skipper), min_ord, max_ord, /*has_gaps=*/true));
+            return std::unique_ptr<Scorer>(ConstantScoreScorer::from_tpi(score_, score_mode_, std::move(pruned)));
+        }
         return std::unique_ptr<Scorer>(ConstantScoreScorer::from_tpi(score_, score_mode_, std::move(two_phase)));
     }
 

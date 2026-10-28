@@ -46,6 +46,16 @@ public:
         return {};
     }
 
+    /// Counting does not need the documents one by one.
+    [[nodiscard]] VoidResult collect_stream(DocIdStream &stream, Scorable &scorer) override {
+        auto counted = stream.count(scorer);
+        if (!counted.has_value()) {
+            return std::unexpected(std::move(counted.error()));
+        }
+        collector_->add_hits(counted.value());
+        return {};
+    }
+
     [[nodiscard]] std::string to_string() const override { return "TotalHitCountLeafCollector"; }
 
 private:

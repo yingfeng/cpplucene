@@ -33,6 +33,24 @@ import std;
 
 namespace lucene {
 
+namespace {
+
+/// Process-wide clause limit, the reference implementation's
+/// `IndexSearcher.maxClauseCount`.
+std::atomic<size_t> g_max_clause_count{BooleanQuery::DEFAULT_MAX_CLAUSE_COUNT};
+
+} // namespace
+
+size_t BooleanQuery::max_clause_count() noexcept { return g_max_clause_count.load(std::memory_order_relaxed); }
+
+VoidResult BooleanQuery::set_max_clause_count(size_t count) {
+    if (count == 0) {
+        return err(LuceneError::illegal_argument("maxClauseCount must be >= 1"));
+    }
+    g_max_clause_count.store(count, std::memory_order_relaxed);
+    return {};
+}
+
 BooleanQuery::BooleanQuery(std::vector<BooleanClause> clauses, int32_t min_should_match)
     : clauses_(std::move(clauses)), min_should_match_(min_should_match) {
     for (size_t index = 0; index < clauses_.size(); ++index) {

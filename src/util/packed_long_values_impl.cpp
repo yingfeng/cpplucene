@@ -30,6 +30,21 @@ namespace lucene {
 
 namespace {
 
+/// `left + right`, wrapping like the reference implementation's `wrapping_add`.
+///
+/// A page may legitimately span more than `INT64_MAX` (`INT64_MIN` round-trips
+/// through the packed values, and a delta page then adds its minimum back), and
+/// signed overflow is undefined behaviour in C++, so the arithmetic goes through
+/// `uint64_t` where the wrap is well defined.
+[[nodiscard]] int64_t wrapping_add(int64_t left, int64_t right) noexcept {
+    return static_cast<int64_t>(static_cast<uint64_t>(left) + static_cast<uint64_t>(right));
+}
+
+/// `left - right`, wrapping like the reference implementation's `wrapping_sub`.
+[[nodiscard]] int64_t wrapping_sub(int64_t left, int64_t right) noexcept {
+    return static_cast<int64_t>(static_cast<uint64_t>(left) - static_cast<uint64_t>(right));
+}
+
 [[nodiscard]] Result<int32_t> bits_required(int64_t max_value) {
     if (max_value < 0) {
         // Values are packed as unsigned bit patterns, so a value whose top bit is
@@ -102,7 +117,7 @@ Result<int64_t> PackedLongValues::get(size_t index) const {
     const size_t offset = index % page_size_;
     const auto &page = pages_.at(block);
     debug_check(offset < page.count, "the packed page is shorter than the page size");
-    return page.data.get(offset) + page.base;
+    return wrapping_add(page.data.get(offset), page.base);
 }
 
 Result<size_t> PackedLongValues::decode_block(size_t block, std::vector<int64_t> &dest) const {
@@ -112,7 +127,7 @@ Result<size_t> PackedLongValues::decode_block(size_t block, std::vector<int64_t>
     const auto &page = pages_[block];
     dest.resize(page.count);
     for (size_t i = 0; i < page.count; ++i) {
-        dest[i] = page.data.get(i) + page.base;
+        dest[i] = wrapping_add(page.data.get(i), page.base);
     }
     return page.count;
 }
@@ -152,7 +167,7 @@ VoidResult PackedLongValues::Builder::pack(std::vector<int64_t> &pending, size_t
             min = std::min(min, value);
         }
         for (auto &value : pending) {
-            value -= min;
+            value = wrapping_sub(value, min);
         }
         mins_.push_back(min);
     }

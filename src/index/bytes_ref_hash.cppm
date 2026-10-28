@@ -17,6 +17,7 @@
 
 export module lucene_core:bytes_ref_hash;
 
+import :accountable;
 import :types;
 import std;
 
@@ -87,7 +88,7 @@ private:
 ///    `StringSorterImpl` additionally keeps a per-bucket cache in the tail of
 ///    the id array to make reordering cheaper.  That is a performance
 ///    optimisation only; the resulting order is the same.
-export class BytesRefHash {
+export class BytesRefHash : public Accountable {
 public:
     /// A hash with the default capacity.
     BytesRefHash();
@@ -147,7 +148,7 @@ public:
     [[nodiscard]] const BytesStartArray *bytes_start_array() const noexcept { return bytes_start_array_.get(); }
 
     /// Estimated retained bytes, for the writer's RAM buffer accounting.
-    [[nodiscard]] int64_t ram_bytes_used() const;
+    [[nodiscard]] int64_t ram_bytes_used() const override;
 
 private:
     [[nodiscard]] Result<size_t> find_hash(const BytesRef &bytes, const ByteBlockPool &pool) const;

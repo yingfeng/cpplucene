@@ -392,3 +392,60 @@ TEST(DisjunctionMaxQueryTest, DisjunctionMaxScorerValidatesItsArguments) {
     EXPECT_FALSE(bad_tie.has_value());
     EXPECT_EQ(bad_tie.error().kind(), ErrorKind::kIllegalArgument);
 }
+
+TEST(DisjunctionMaxQueryTest, TheBulkPathAgreesWithTheCountAndTheFullSearch) {
+    // A plain maximum in `TopScores` mode is scored a block at a time, so the
+    // block path has to agree with the count and with the full search.
+    ByteBuffersDirectory directory;
+    {
+        WhitespaceAnalyzer analyzer;
+        IndexWriterConfig config(analyzer);
+        config.set_max_buffered_docs(7); // several segments
+        auto writer = IndexWriter::open(directory, config);
+        ASSERT_TRUE(writer.has_value()) << (writer.has_value() ? "" : writer.error().to_string());
+        FieldType type;
+        ASSERT_TRUE(type.set_index_options(IndexOptions::DocsAndFreqs).has_value());
+        for (int32_t doc = 0; doc < 40; ++doc) {
+            Document document;
+            document.add(std::make_unique<Field>("alpha", FieldValue{std::string("alpha")}, type));
+            if (doc % 3 == 0) {
+                document.add(std::make_unique<Field>("beta", FieldValue{std::string("beta")}, type));
+            }
+            ASSERT_TRUE(writer.value()->add_document(std::move(document)).has_value());
+        }
+        ASSERT_TRUE(writer.value()->close().has_value());
+    }
+
+    auto reader = DirectoryReader::open(directory);
+    ASSERT_TRUE(reader.has_value()) << (reader.has_value() ? "" : reader.error().to_string());
+    const IndexSearcher searcher(reader.value());
+
+    std::vector<std::shared_ptr<Query>> disjuncts{std::make_shared<TermQuery>(Term::from_text("alpha", "alpha")),
+                                                  std::make_shared<TermQuery>(Term::from_text("beta", "beta"))};
+    auto query = DisjunctionMaxQuery::create(std::move(disjuncts), 0.0F);
+    ASSERT_TRUE(query.has_value()) << query.error().to_string();
+
+    auto counted = searcher.count(*query.value());
+    ASSERT_TRUE(counted.has_value()) << counted.error().to_string();
+    EXPECT_EQ(counted.value(), 40); // every document holds "alpha"
+
+    auto top_five = searcher.search(*query.value(), 5);
+    ASSERT_TRUE(top_five.has_value()) << top_five.error().to_string();
+    auto all = searcher.search(*query.value(), 40);
+    ASSERT_TRUE(all.has_value()) << all.error().to_string();
+
+    EXPECT_EQ(top_five.value().total_hits.value, counted.value());
+    EXPECT_EQ(all.value().total_hits.value, counted.value());
+    ASSERT_EQ(top_five.value().score_docs.size(), 5U);
+    ASSERT_EQ(all.value().score_docs.size(), 40U);
+    // The first page is the head of the full result, scores included.
+    for (size_t i = 0; i < top_five.value().score_docs.size(); ++i) {
+        EXPECT_EQ(top_five.value().score_docs[i].doc, all.value().score_docs[i].doc) << i;
+        EXPECT_FLOAT_EQ(top_five.value().score_docs[i].score, all.value().score_docs[i].score) << i;
+    }
+
+    // A document holding both terms scores higher than one holding only "alpha".
+    auto with_both = searcher.search(*query.value(), 40);
+    ASSERT_TRUE(with_both.has_value());
+    EXPECT_GT(with_both.value().score_docs.front().score, with_both.value().score_docs.back().score);
+}

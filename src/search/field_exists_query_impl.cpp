@@ -180,6 +180,76 @@ bool FieldExistsQuery::equals(const Query &other) const {
 
 size_t FieldExistsQuery::hash() const { return std::hash<std::string>{}(field_); }
 
+Result<int32_t> FieldExistsWeight::count(const LeafReaderContext &context, const IndexSearcher & /*searcher*/) {
+    LeafReader *reader = context.reader();
+    if (reader == nullptr) {
+        return 0;
+    }
+    auto field_infos = reader->field_infos();
+    if (!field_infos.has_value()) {
+        return std::unexpected(std::move(field_infos.error()));
+    }
+    const FieldInfo *field_info = field_infos.value()->by_name(query_.field());
+    if (field_info == nullptr) {
+        // The field does not exist in this segment, so no document has a value.
+        return 0;
+    }
+    const std::string &field = query_.field();
+
+    if (field_info->has_norms()) {
+        // Norms are dense, so when the field has a norm for every document the
+        // count is just the number of live documents.
+        auto covered = reader->doc_count(field);
+        if (!covered.has_value()) {
+            return std::unexpected(std::move(covered.error()));
+        }
+        auto max_doc = reader->max_doc();
+        if (!max_doc.has_value()) {
+            return std::unexpected(std::move(max_doc.error()));
+        }
+        if (covered.value() == max_doc.value()) {
+            return reader->num_docs();
+        }
+        return default_count(context);
+    }
+
+    if (field_info->has_vector_values()) {
+        // The port has no vector values to read the size from.
+        return default_count(context);
+    }
+
+    if (field_info->has_doc_values()) {
+        // The point and term counts skip deleted documents, so they can only be
+        // used while the leaf has none.
+        auto deletions = reader->has_deletions();
+        if (!deletions.has_value()) {
+            return std::unexpected(std::move(deletions.error()));
+        }
+        if (!deletions.value()) {
+            if (field_info->point_dimension_count > 0) {
+                auto points = reader->point_values(field);
+                if (!points.has_value()) {
+                    return std::unexpected(std::move(points.error()));
+                }
+                return points.value() == nullptr ? 0 : points.value()->get_doc_count();
+            }
+            if (field_info->index_options != IndexOptions::None) {
+                auto terms = reader->terms(field);
+                if (!terms.has_value()) {
+                    return std::unexpected(std::move(terms.error()));
+                }
+                return terms.value() == nullptr ? 0 : terms.value()->doc_count();
+            }
+        }
+        return default_count(context);
+    }
+
+    return err(LuceneError::illegal_argument(std::format(
+            "FieldExistsQuery requires that the field indexes doc values, norms or vectors, but field '{}' "
+            "exists and indexes neither of these data structures",
+            field)));
+}
+
 Result<std::unique_ptr<ScorerSupplier>> FieldExistsWeight::scorer_supplier(const LeafReaderContext &context,
                                                                           const IndexSearcher &searcher) {
     (void)searcher;

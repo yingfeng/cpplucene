@@ -483,3 +483,48 @@ TEST(BooleanQueryTest, RejectsNegativeMinimumShouldMatch) {
     ASSERT_FALSE(query.has_value());
     EXPECT_EQ(query.error().kind(), ErrorKind::kIllegalArgument);
 }
+
+TEST(BooleanQueryTest, TheClauseLimitIsConfigurable) {
+    // The default is the reference implementation's 1024.
+    EXPECT_EQ(BooleanQuery::max_clause_count(), BooleanQuery::DEFAULT_MAX_CLAUSE_COUNT);
+    EXPECT_EQ(IndexSearcher::get_max_clause_count(), BooleanQuery::DEFAULT_MAX_CLAUSE_COUNT);
+
+    // A limit smaller than the clause count rejects the query, like Lucene's
+    // `TooManyClauses`.
+    auto lowered = IndexSearcher::set_max_clause_count(2);
+    ASSERT_TRUE(lowered.has_value()) << (lowered ? "" : lowered.error().to_string());
+    EXPECT_EQ(BooleanQuery::max_clause_count(), 2U);
+    EXPECT_EQ(IndexSearcher::get_max_clause_count(), 2U);
+
+    {
+        // The limit is enforced when a clause is added, not when the query is
+        // built (the reference implementation does the same).
+        BooleanQuery::Builder builder;
+        EXPECT_TRUE(builder.add(std::make_shared<TermQuery>(Term::from_text("body", "a")), Occur::Should).has_value());
+        EXPECT_TRUE(builder.add(std::make_shared<TermQuery>(Term::from_text("body", "b")), Occur::Should).has_value());
+        auto too_many = builder.add(std::make_shared<TermQuery>(Term::from_text("body", "c")), Occur::Should);
+        ASSERT_FALSE(too_many.has_value());
+        EXPECT_EQ(too_many.error().kind(), ErrorKind::kTooManyClauses);
+        EXPECT_TRUE(builder.build().has_value());
+    }
+
+    // A query that fits the limit is still accepted.
+    {
+        BooleanQuery::Builder builder;
+        for (const std::string_view text : {"a", "b"}) {
+            EXPECT_TRUE(builder.add(std::make_shared<TermQuery>(Term::from_text("body", text)), Occur::Should)
+                                .has_value());
+        }
+        EXPECT_TRUE(builder.build().has_value());
+    }
+
+    // Zero is not a legal limit.
+    auto rejected = IndexSearcher::set_max_clause_count(0);
+    ASSERT_FALSE(rejected.has_value());
+    EXPECT_EQ(rejected.error().kind(), ErrorKind::kIllegalArgument);
+    EXPECT_EQ(BooleanQuery::max_clause_count(), 2U);
+
+    // Leave the process-wide limit as it was for the other tests.
+    ASSERT_TRUE(IndexSearcher::set_max_clause_count(BooleanQuery::DEFAULT_MAX_CLAUSE_COUNT).has_value());
+    EXPECT_EQ(BooleanQuery::max_clause_count(), BooleanQuery::DEFAULT_MAX_CLAUSE_COUNT);
+}

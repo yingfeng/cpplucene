@@ -41,14 +41,15 @@ namespace lucene {
 ///
 /// The reference implementation wraps it in a
 /// [`ConstantScoreQuery`](lucene_core:constant_score_query) when it rewrites, so
-/// every match scores the query boost.
+/// every match scores the query boost.  A field with a doc values skip index is
+/// read through [`DocValuesRangeIterator`](:doc_values_range_iterator), which
+/// skips the blocks whose ordinals cannot intersect the selected terms.
 ///
 /// **Deviations:**
-///  * the "singleton" fast path (a single-valued `SortedDocValues` probed with
-///    one `ord` per document) is not ported; the port always walks the sorted set
-///    ordinals, which gives the same documents;
-///  * the doc values skipper shortcut is not ported, because
-///    `DocValuesRangeIterator` is not ported yet;
+///  * the "singleton" fast path is ported: a `Sorted` field arrives as a
+///    [`SingletonSortedSetDocValues`](lucene_core:singleton_sorted_set_doc_values),
+///    whose cursor becomes the approximation and only the ordinal is looked up per
+///    document;
 ///  * `Weight::matches` is not ported, for the same reason as elsewhere.
 export class MultiTermQueryDocValuesWrapper final : public Query {
 public:

@@ -102,10 +102,15 @@ Result<FixedBitSet> Lucene90LiveDocsFormat::read_live_docs(const Directory &dir,
         if (!bits.has_value()) {
             return err(bits.error());
         }
+        // A soft delete lands in the same `.liv` as a hard one, so the bits have to
+        // cover both counters.
         const size_t deleted = length - bits->cardinality();
-        if (deleted != static_cast<size_t>(info.del_count)) {
+        const auto expected_deleted = static_cast<size_t>(info.del_count) +
+                                      static_cast<size_t>(info.soft_del_count);
+        if (deleted != expected_deleted) {
             return err(LuceneError::corrupt_index("bits.deleted=" + std::to_string(deleted) + " info.delcount=" +
-                                                 std::to_string(info.del_count)));
+                                                 std::to_string(info.del_count) + " info.softdelcount=" +
+                                                 std::to_string(info.soft_del_count)));
         }
         if (auto footer = CodecUtil::check_footer(in); !footer.has_value()) {
             return err(footer.error());
@@ -164,7 +169,9 @@ VoidResult Lucene90LiveDocsFormat::write_live_docs(const Bits &bits, Directory &
         return closed;
     }
 
-    const int32_t expected = info.del_count + new_del_count;
+    // `new_del_count` counts the documents this write adds on top of everything the
+    // commit already hides, hard and soft deletions alike.
+    const int32_t expected = info.del_count + info.soft_del_count + new_del_count;
     if (written_count.value() != expected) {
         (void)dir.delete_file(name);
         return err(LuceneError::corrupt_index("bits.deleted=" + std::to_string(written_count.value()) +

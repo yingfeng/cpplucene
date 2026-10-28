@@ -22,6 +22,7 @@ import :disjunction_max_scorer;
 import std;
 
 import :disjunction_disi_approximation;
+import :disjunction_score_block_boundary_propagator;
 import :doc_id_set_iterator;
 import :error;
 import :score_mode;
@@ -55,8 +56,22 @@ DisjunctionMaxScorer::create(float tie_breaker_multiplier, std::vector<std::uniq
     if (!approximation.has_value()) {
         return std::unexpected(std::move(approximation.error()));
     }
-    return std::unique_ptr<DisjunctionMaxScorer>(new DisjunctionMaxScorer(
-            std::move(sub_scorers), std::move(approximation.value()), tie_breaker_multiplier, score_mode));
+    std::vector<Scorer *> propagator_scorers = raw;
+    auto propagator = std::optional<DisjunctionScoreBlockBoundaryPropagator>{};
+    if (score_mode == ScoreMode::TopScores) {
+        // The propagator shallow-advances every clause once, so it has to be built
+        // before the scorer hands them out.
+        auto built = DisjunctionScoreBlockBoundaryPropagator::create(propagator_scorers);
+        if (!built.has_value()) {
+            return std::unexpected(std::move(built.error()));
+        }
+        propagator = std::move(built.value());
+    }
+    std::unique_ptr<DisjunctionMaxScorer> scorer(new DisjunctionMaxScorer(
+            std::move(sub_scorers), std::move(raw), std::move(approximation.value()), tie_breaker_multiplier,
+            score_mode));
+    scorer->propagator_ = std::move(propagator);
+    return scorer;
 }
 
 int32_t DisjunctionMaxScorer::doc_id() const { return disi_->doc_id(); }
@@ -162,7 +177,19 @@ Result<float> DisjunctionMaxScorer::score() {
     return static_cast<float>(static_cast<double>(score_max) + other_score_sum * tie_breaker_multiplier_);
 }
 
+Result<int32_t> DisjunctionMaxScorer::advance_shallow(int32_t target) {
+    if (!propagator_.has_value()) {
+        return NO_MORE_DOCS;
+    }
+    return propagator_->advance_shallow(target, raw_scorers_);
+}
+
 VoidResult DisjunctionMaxScorer::set_min_competitive_score(float min_score) {
+    if (propagator_.has_value()) {
+        // Raising the threshold drops the clauses that can no longer contribute a
+        // competitive hit from the block boundary computation.
+        propagator_->set_min_competitive_score(min_score);
+    }
     for (auto &scorer : sub_scorers_) {
         if (auto set = scorer->set_min_competitive_score(min_score); !set.has_value()) {
             return set;

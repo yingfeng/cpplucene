@@ -372,9 +372,13 @@ TEST(FieldInfosTest, SortsByNumberAndRejectsBadNumbering) {
 TEST(SegmentInfoTest, BuildsFileNames) {
     EXPECT_EQ(segment_file_name("_0", "", "si"), "_0.si");
     EXPECT_EQ(segment_file_name("_0", "1", "fnm"), "_0_1.fnm");
-    EXPECT_EQ(parse_segment_name("_3_Lucene99_0.dvm").value(), "_3_Lucene99_0");
-    EXPECT_EQ(parse_segment_name("segments_1").value(), "segments_1");
+    // The segment name ends at the first `_` after the leading one, so the
+    // per-field suffixes of a codec file name are not part of it.
+    EXPECT_EQ(parse_segment_name("_3_Lucene99_0.dvm").value(), "_3");
+    EXPECT_EQ(parse_segment_name("segments_1").value(), "segments");
+    EXPECT_EQ(parse_segment_name("_0.si").value(), "_0");
     EXPECT_FALSE(parse_segment_name("").has_value());
     EXPECT_TRUE(check_file_name("_0.si", "_0").has_value());
+    EXPECT_TRUE(check_file_name("_0_Lucene101_0.tim", "_0").has_value());
     EXPECT_FALSE(check_file_name("_1.si", "_0").has_value());
 }

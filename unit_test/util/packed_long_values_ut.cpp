@@ -20,6 +20,7 @@ module;
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 module lucene_core:ut.packed_long_values;
@@ -129,6 +130,25 @@ TEST(PackedLongValuesTest, DeltaBuilderFallsBackWhenValuesDecrease) {
     ASSERT_TRUE(values.has_value());
     // The first page is increasing, the second one is not: both must decode.
     EXPECT_EQ(iterate(values.value()), expected);
+}
+
+TEST(PackedLongValuesTest, DeltaBuilderWrapsAroundTheExtremes) {
+    // A page whose values span more than `INT64_MAX` cannot store `value - min`
+    // as a signed difference; the reference implementation wraps, so the packed
+    // values have to wrap as well instead of overflowing.
+    PackedLongValues::Builder builder(4, 64, 0, true);
+    const std::vector<int64_t> expected{std::numeric_limits<int64_t>::min(), std::numeric_limits<int64_t>::max(), 0,
+                                        std::numeric_limits<int64_t>::min()};
+    for (const auto value : expected) {
+        ASSERT_TRUE(builder.add(value).has_value());
+    }
+
+    auto values = builder.build();
+    ASSERT_TRUE(values.has_value());
+    EXPECT_EQ(iterate(values.value()), expected);
+    for (size_t i = 0; i < expected.size(); ++i) {
+        EXPECT_EQ(values.value().get(i).value(), expected[i]);
+    }
 }
 
 TEST(PackedLongValuesTest, BuilderCannotBeBuiltTwice) {

@@ -23,6 +23,8 @@ import std;
 
 import :boolean_clause;
 import :boolean_query;
+import :bulk_scorer;
+import :disjunction_max_bulk_scorer;
 import :disjunction_max_scorer;
 import :error;
 import :explanation;
@@ -94,6 +96,34 @@ public:
             cost_ = cost;
         }
         return cost_;
+    }
+
+    /// A plain maximum in `TopScores` mode can score a whole block at once, which
+    /// is what the bulk scorers of the clauses are for.
+    ///
+    /// Port of the `bulk_scorer` of
+    /// `DisjunctionMaxWeight`'s scorer supplier (`core/search/disjunction_max_query.rs`).
+    [[nodiscard]] Result<std::unique_ptr<BulkScorer>> bulk_scorer(const LeafReaderContext &context,
+                                                                  const IndexSearcher &searcher) override {
+        if (tie_breaker_multiplier_ != 0.0F || score_mode_ != ScoreMode::TopScores) {
+            return ScorerSupplier::bulk_scorer(context, searcher);
+        }
+        std::vector<std::unique_ptr<BulkScorer>> scorers;
+        scorers.reserve(suppliers_.size());
+        for (auto &supplier : suppliers_) {
+            auto scorer = supplier->bulk_scorer(context, searcher);
+            if (!scorer.has_value()) {
+                return std::unexpected(std::move(scorer.error()));
+            }
+            if (scorer.value() != nullptr) {
+                scorers.push_back(std::move(scorer.value()));
+            }
+        }
+        auto bulk = DisjunctionMaxBulkScorer::create(std::move(scorers));
+        if (!bulk.has_value()) {
+            return std::unexpected(std::move(bulk.error()));
+        }
+        return std::unique_ptr<BulkScorer>(std::move(bulk.value()));
     }
 
     [[nodiscard]] VoidResult set_top_level_scoring_clause() override {

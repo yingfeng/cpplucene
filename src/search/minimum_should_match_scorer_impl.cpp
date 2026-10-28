@@ -82,6 +82,15 @@ Result<bool> MinimumShouldMatchScorer::matches() {
     const int32_t doc = approximation_->doc_id();
     int32_t matching = 0;
     for (auto &scorer : sub_scorers_) {
+        // The approximation only moves its head, so a sub-scorer may still be
+        // behind the current document.  Bring it forward before counting, which
+        // is what the reference implementation's `DisjunctionScorer` does.
+        if (scorer->doc_id() < doc) {
+            auto advanced = scorer->advance(doc);
+            if (!advanced.has_value()) {
+                return std::unexpected(std::move(advanced.error()));
+            }
+        }
         if (scorer->doc_id() != doc) {
             continue;
         }

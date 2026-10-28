@@ -162,8 +162,10 @@ export struct SortedSetEntry {
 ///  * `get_merge_instance` clones the data input and shares the entries, because
 ///    the only difference in the reference implementation is the merge-optimized direct reader, which
 ///    this port does not have;
-///  * `terms_enum` is not implemented (it needs the search layer), so
-///    `lookup_term` uses the generic binary search over `lookup_ord`.
+///  * `lookup_term` uses the generic binary search over `lookup_ord` because the
+///    terms dictionary's reverse index is not read; `terms_enum` is provided by
+///    the sorted and sorted-set cursors themselves (see
+///    `:sorted_doc_values_terms_enum` and `:sorted_set_doc_values_terms_enum`).
 export class Lucene90DocValuesProducer final : public DocValuesProducer {
 public:
     /// Opens the data and metadata files and parses the `.dvm` file.

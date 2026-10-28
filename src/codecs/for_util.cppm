@@ -37,13 +37,11 @@ namespace lucene {
 ///  - if `bits_per_value <= 16`, 2 integers per `int32_t` (short lanes),
 ///  - otherwise one integer per `int32_t`.
 ///
-/// Deviation from the reference implementation: the hand-unrolled `decode1` .. `decode16` SIMD
-/// kernels and the `bits_per_value == 18` packed-tail special case of the
-/// encoder are not ported.  They only reshuffle the same bits into the same
-/// planes; [`decode`] therefore always uses the scalar reference algorithm
-/// ([`decode_slow`]) and still applies `expand8`/`expand16`.  The on-disk
-/// format is unchanged because the layout produced by the generic encoder is
-/// identical.
+/// [`decode`] dispatches to the same hand-unrolled `decode1` .. `decode16`
+/// kernels as the reference implementation and falls back to the scalar
+/// [`decode_slow`] for `bits_per_value` in `[17, 32]`, which is exactly what the
+/// reference does as well.  The kernels are scalar (`split_ints_same` /
+/// `split_ints_diff` plus `expand8`/`expand16`); no SIMD variants are provided.
 export class ForUtil {
 public:
     static constexpr size_t BLOCK_SIZE = 128;

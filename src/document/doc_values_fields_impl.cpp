@@ -134,4 +134,22 @@ VoidResult SortedNumericDocValuesField::set_value(Field &field, int64_t value) {
     return field.set_i64_value(value);
 }
 
+Result<SortedSetDocValuesRangeQuery> SortedSetDocValuesField::new_slow_range_query(
+        std::string field, std::optional<BytesRef> lower_value, std::optional<BytesRef> upper_value,
+        bool lower_inclusive, bool upper_inclusive) {
+    return SortedSetDocValuesRangeQuery::create(std::move(field), std::move(lower_value), std::move(upper_value),
+                                                lower_inclusive, upper_inclusive);
+}
+
+Result<SortedSetDocValuesRangeQuery> SortedSetDocValuesField::new_slow_exact_query(
+        std::string field, std::optional<BytesRef> value) {
+    return SortedSetDocValuesRangeQuery::create(std::move(field), value, value, true, true);
+}
+
+Result<SortedNumericDocValuesRangeQuery> SortedNumericDocValuesField::new_slow_range_query(std::string field,
+                                                                                          int64_t lower_value,
+                                                                                          int64_t upper_value) {
+    return SortedNumericDocValuesRangeQuery::create(std::move(field), lower_value, upper_value);
+}
+
 } // namespace lucene

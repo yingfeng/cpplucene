@@ -23,7 +23,13 @@ import :error;
 import std;
 
 import :field_type;
+import :index_or_doc_values_query;
+import :index_sort_sorted_numeric_doc_values_range_query;
 import :indexable_field;
+import :numeric_utils;
+import :point_fields;
+import :query;
+import :sorted_numeric_doc_values_range_query;
 
 namespace lucene {
 
@@ -51,20 +57,49 @@ export struct KeywordField {
 };
 
 /// Numeric fields indexed as points, with optional doc values and stored copy.
+///
+/// The range queries are the reference implementation's entry points for numeric
+/// ranges: they answer an [`IndexOrDocValuesQuery`](lucene_core:index_or_doc_values_query)
+/// over the points and the doc values, and the integer ones wrap it in an
+/// [`IndexSortSortedNumericDocValuesRangeQuery`](lucene_core:index_sort_sorted_numeric_doc_values_range_query)
+/// so that an index sorted by the field is searched by binary search.
+///
+/// **Deviation:** the queries are handed out as `shared_ptr<Query>` instead of the
+/// concrete reference types, which is what every consumer in the port takes.
 export struct IntField {
     [[nodiscard]] static Result<Field> create(std::string name, int32_t value, bool stored);
+
+    /// The documents whose value is in `[lower_value, upper_value]`.
+    [[nodiscard]] static Result<std::shared_ptr<Query>> new_range_query(std::string field, int32_t lower_value,
+                                                                      int32_t upper_value);
+    /// The documents whose value is `value`.
+    [[nodiscard]] static Result<std::shared_ptr<Query>> new_exact_query(std::string field, int32_t value);
 };
 
 export struct LongField {
     [[nodiscard]] static Result<Field> create(std::string name, int64_t value, bool stored);
+
+    [[nodiscard]] static Result<std::shared_ptr<Query>> new_range_query(std::string field, int64_t lower_value,
+                                                                      int64_t upper_value);
+    [[nodiscard]] static Result<std::shared_ptr<Query>> new_exact_query(std::string field, int64_t value);
 };
 
 export struct FloatField {
     [[nodiscard]] static Result<Field> create(std::string name, float value, bool stored);
+
+    /// The doc values of a float field hold the sortable-int encoding of the
+    /// value, which is what the range is translated into.
+    [[nodiscard]] static Result<std::shared_ptr<Query>> new_range_query(std::string field, float lower_value,
+                                                                      float upper_value);
+    [[nodiscard]] static Result<std::shared_ptr<Query>> new_exact_query(std::string field, float value);
 };
 
 export struct DoubleField {
     [[nodiscard]] static Result<Field> create(std::string name, double value, bool stored);
+
+    [[nodiscard]] static Result<std::shared_ptr<Query>> new_range_query(std::string field, double lower_value,
+                                                                      double upper_value);
+    [[nodiscard]] static Result<std::shared_ptr<Query>> new_exact_query(std::string field, double value);
 };
 
 } // namespace lucene

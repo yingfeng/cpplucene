@@ -19,6 +19,7 @@ module lucene_core:packed_stream.impl;
 
 import :packed_stream;
 
+import :bulk_operation;
 import :data_input;
 import :data_output;
 import :error;
@@ -46,15 +47,9 @@ VoidResult write_packed_stream(DataOutput &out, std::span<const int64_t> values,
         return {};
     }
     std::vector<uint8_t> bytes(byte_count, 0);
-    size_t bit_position = 0;
-    for (const int64_t value : values) {
-        const uint64_t bits = static_cast<uint64_t>(value);
-        for (int32_t bit = bits_per_value - 1; bit >= 0; --bit) {
-            if (((bits >> bit) & 1U) != 0) {
-                bytes[bit_position >> 3] |= static_cast<uint8_t>(0x80U >> (bit_position & 7));
-            }
-            ++bit_position;
-        }
+    if (bits_per_value > 0) {
+        std::vector<int64_t> copy(values.begin(), values.end());
+        bulk_operation(bits_per_value).encode(std::span<int64_t>(copy), 0, std::span<uint8_t>(bytes));
     }
     return out.write_bytes(std::span<const uint8_t>(bytes));
 }
@@ -73,14 +68,9 @@ Result<std::vector<int64_t>> read_packed_stream(DataInput &in, size_t value_coun
     if (!bytes.has_value()) {
         return std::unexpected(std::move(bytes.error()));
     }
-    size_t bit_position = 0;
-    for (size_t i = 0; i < value_count; ++i) {
-        uint64_t value = 0;
-        for (int32_t bit = 0; bit < bits_per_value; ++bit, ++bit_position) {
-            const uint8_t byte = (*bytes)[bit_position >> 3];
-            value = (value << 1) | static_cast<uint64_t>((byte >> (7 - (bit_position & 7))) & 1U);
-        }
-        values[i] = static_cast<int64_t>(value);
+    if (bits_per_value > 0) {
+        bulk_operation(bits_per_value)
+                .decode(std::span<const uint8_t>(bytes.value()), 0, std::span<int64_t>(values));
     }
     return values;
 }

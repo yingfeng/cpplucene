@@ -169,6 +169,14 @@ Result<BytesRef> ByteBlockPool::bytes_ref(int64_t offset, size_t length) const {
     return BytesRef(std::move(bytes));
 }
 
+int64_t ByteBlockPool::ram_bytes_used() const {
+    int64_t total = static_cast<int64_t>(buffers_.capacity() * sizeof(std::vector<uint8_t>));
+    for (const std::vector<uint8_t> &block : buffers_) {
+        total += static_cast<int64_t>(block.capacity());
+    }
+    return total;
+}
+
 int64_t ByteBlockPool::get_bytes_used() const noexcept {
     return get_position();
 }

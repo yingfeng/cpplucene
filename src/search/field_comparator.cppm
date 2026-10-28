@@ -66,8 +66,10 @@ public:
     /// Records the value of `slot` as the new bottom of the queue.
     virtual void set_bottom(int32_t slot) = 0;
 
-    /// The value a paged search starts after.
-    virtual void set_top_value(const SortValue &value) = 0;
+    /// The value a paged search starts after, as reported by [`value`] of the
+    /// same comparator; a value of the wrong type is rejected, because a page
+    /// positioned by a value of another type would silently skip hits.
+    [[nodiscard]] virtual VoidResult set_top_value(const SortValue &value) = 0;
 
     /// The value collected in `slot`.
     [[nodiscard]] virtual Result<SortValue> value(int32_t slot) const = 0;
@@ -80,8 +82,9 @@ public:
     [[nodiscard]] virtual Result<int32_t> compare_values(const SortValue &first, const SortValue &second) const = 0;
 };
 
-/// Compares the values of one leaf; the collected slots live in the
-/// [`FieldComparator`] it came from.
+/// Compares the values of one leaf; the collected slots, the bottom and the top
+/// value all live in the [`FieldComparator`] it came from, which is why a leaf
+/// does not have its own `set_top_value`.
 ///
 /// Port of the `LeafFieldComparator` trait (`core/search/leaf_field_comparator.rs`).
 export class LeafFieldComparator {
@@ -94,17 +97,27 @@ public:
     /// Records the value of `slot` as the bottom of the queue.
     virtual void set_bottom(int32_t slot) = 0;
 
-    /// The value a paged search starts after.
-    virtual void set_top_value(const SortValue &value) = 0;
-
     /// `> 0` when the value of `doc` sorts after the bottom, `< 0` when before.
     [[nodiscard]] virtual Result<int32_t> compare_bottom(int32_t doc) = 0;
 
-    /// `> 0` when the value of `doc` sorts after the top value.
+    /// `< 0` when the value of `doc` sorts before the top value, `> 0` when
+    /// after, `0` when it ties it.
     [[nodiscard]] virtual Result<int32_t> compare_top(int32_t doc) = 0;
 
     /// Copies the value of `doc` into `slot`.
     [[nodiscard]] virtual VoidResult copy(int32_t slot, int32_t doc) = 0;
+
+    /// Tells the comparator that the hit count reached the total-hits threshold.
+    /// Only the first comparator of a sort is told.
+    ///
+    /// Port of `LeafFieldComparator::set_hits_threshold_reached`
+    /// (`core/search/leaf_field_comparator.rs`).
+    ///
+    /// **Deviation:** every comparator ignores it.  In the reference
+    /// implementation it only drives the competitive iterators (which skip
+    /// documents that can no longer win), and the port has none of those; the
+    /// score comparator's implementation there is the default no-op as well.
+    virtual void set_hits_threshold_reached() {}
 };
 
 /// Sorts a leaf by relevance.
@@ -119,7 +132,7 @@ public:
     [[nodiscard]] int32_t compare_bottom(int32_t slot) const override;
     [[nodiscard]] int32_t compare_top(int32_t slot) const override;
     void set_bottom(int32_t slot) override;
-    void set_top_value(const SortValue &value) override;
+    [[nodiscard]] VoidResult set_top_value(const SortValue &value) override;
     [[nodiscard]] Result<SortValue> value(int32_t slot) const override;
     [[nodiscard]] Result<std::unique_ptr<LeafFieldComparator>>
     get_leaf_comparator(const LeafReaderContext &context) override;
@@ -144,7 +157,7 @@ public:
     [[nodiscard]] int32_t compare_bottom(int32_t slot) const override;
     [[nodiscard]] int32_t compare_top(int32_t slot) const override;
     void set_bottom(int32_t slot) override;
-    void set_top_value(const SortValue &value) override;
+    [[nodiscard]] VoidResult set_top_value(const SortValue &value) override;
     [[nodiscard]] Result<SortValue> value(int32_t slot) const override;
     [[nodiscard]] Result<std::unique_ptr<LeafFieldComparator>>
     get_leaf_comparator(const LeafReaderContext &context) override;
@@ -184,7 +197,7 @@ public:
     [[nodiscard]] int32_t compare_bottom(int32_t slot) const override;
     [[nodiscard]] int32_t compare_top(int32_t slot) const override;
     void set_bottom(int32_t slot) override;
-    void set_top_value(const SortValue &value) override;
+    [[nodiscard]] VoidResult set_top_value(const SortValue &value) override;
     [[nodiscard]] Result<SortValue> value(int32_t slot) const override;
     [[nodiscard]] Result<std::unique_ptr<LeafFieldComparator>>
     get_leaf_comparator(const LeafReaderContext &context) override;

@@ -36,9 +36,16 @@ export class IndexSearcher;
 ///
 /// Port of `MultiCollector` (`core/search/multi_collector.rs`).
 ///
-/// **Deviations:** the reference implementation's `DocIdStream` fan-out and its
-/// merging of the collectors' competitive iterators are not ported; the port
-/// reports no competitive iterator, which only costs the skipping optimization.
+/// A hit is handed to every wrapped collector.  When all of them may skip
+/// low-scoring hits, the smallest threshold any of them asks for is passed on to
+/// the scorer; otherwise the thresholds are swallowed, so one collector's limit
+/// cannot hide documents another one still needs.
+///
+/// **Deviations:** `DocIdStream` is not fanned out either — a stream is terminal,
+/// so the per-document `collect` is used instead (the reference implementation
+/// says the same and does not propagate it).  Reporting no competitive iterator is
+/// *not* a deviation: the reference implementation's multi leaf collector answers
+/// `EmptyDISI` as well, because it cannot merge the iterators of its children.
 export class MultiCollector final : public Collector {
 public:
     /// A collector over `collectors`, which must not be empty and have to outlive
@@ -62,6 +69,8 @@ private:
 
     std::vector<Collector *> collectors_;
     ScoreMode score_mode_{ScoreMode::CompleteNoScores};
+    /// Whether every wrapped collector may skip low-scoring hits.
+    bool skip_non_competitive_scores_{false};
 };
 
 } // namespace lucene

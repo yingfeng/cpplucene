@@ -565,7 +565,9 @@ TEST(SortTest, RelevanceSortPutsTheHighestScoreFirst) {
     auto top = searcher.search(AllDocsQuery(), Sort::relevance().value(), 10);
     ASSERT_TRUE(top.has_value()) << top.error().to_string();
     EXPECT_EQ(hit_docs(top.value()), (std::vector<int32_t>{3, 2, 1, 0}));
-    EXPECT_EQ(top.value().total_hits.relation, TotalHits::Relation::GreaterThanOrEqualTo);
+    // Four hits stay below the total-hits threshold, so the count is exact.
+    EXPECT_EQ(top.value().total_hits.relation, TotalHits::Relation::EqualTo);
+    EXPECT_EQ(top.value().total_hits.value, 4);
     EXPECT_FLOAT_EQ(top.value().score_docs.front().score, 40.0F);
 }
 
@@ -732,4 +734,152 @@ TEST(SortTest, MultiValuedSortFieldsIncludeTheSelectorInTheirText) {
     EXPECT_EQ(min.value().to_string().value(), "<sorted_numeric: \"sizes\">(min)");
     EXPECT_EQ(max.value().to_string().value(), "<sorted_numeric: \"sizes\">(max)");
     EXPECT_FALSE(min.value().equals(max.value()));
+}
+// ---------------------------------------------------------------------------
+// paging (search_after) over a sort
+// ---------------------------------------------------------------------------
+
+namespace {
+
+/// Walks every page of `sort` and returns the documents in order; a page that
+/// comes back empty ends the walk, so a truncating page shows up as a short
+/// result rather than a hang.
+std::vector<int32_t> pages_of(const IndexSearcher &searcher, const Sort &sort, int32_t page_size,
+                             int32_t max_pages = 8) {
+    std::vector<int32_t> docs;
+    std::optional<FieldDoc> after;
+    for (int32_t page = 0; page < max_pages; ++page) {
+        auto top = searcher.search_after(after.has_value() ? &after.value() : nullptr, AllDocsQuery(), sort, page_size);
+        EXPECT_TRUE(top.has_value()) << (top.has_value() ? "" : top.error().to_string());
+        if (!top.has_value() || top.value().score_docs.empty()) {
+            break;
+        }
+        for (const FieldDoc &hit : top.value().score_docs) {
+            docs.push_back(hit.doc);
+        }
+        after = top.value().score_docs.back();
+    }
+    return docs;
+}
+
+} // namespace
+
+TEST(SortTest, PagesThroughANumericSort) {
+    // price = 30, 10, 20, 10: ascending is 1, 3, 2, 0, and the two 10s are a tie
+    // that the cursor has to break by document number.
+    const IndexSearcher searcher = make_searcher();
+    auto sort = Sort::with_fields({SortField::create("price", SortFieldType::kInt).value()});
+    ASSERT_TRUE(sort.has_value());
+    EXPECT_EQ(pages_of(searcher, sort.value(), 2), (std::vector<int32_t>{1, 3, 2, 0}));
+    EXPECT_EQ(pages_of(searcher, sort.value(), 3), (std::vector<int32_t>{1, 3, 2, 0}));
+    EXPECT_EQ(pages_of(searcher, sort.value(), 1), (std::vector<int32_t>{1, 3, 2, 0}));
+}
+
+TEST(SortTest, PagesThroughAReversedSort) {
+    // Descending: 0 (30), 2 (20), 1 (10), 3 (10).
+    const IndexSearcher searcher = make_searcher();
+    auto sort = Sort::with_fields({SortField::with_reverse("price", SortFieldType::kInt, true).value()});
+    ASSERT_TRUE(sort.has_value());
+    EXPECT_EQ(pages_of(searcher, sort.value(), 2), (std::vector<int32_t>{0, 2, 1, 3}));
+}
+
+TEST(SortTest, PagesThroughATermSort) {
+    // author = b, a, c, a: ascending is 1, 3, 0, 2.
+    const IndexSearcher searcher = make_searcher();
+    auto sort = Sort::with_fields({SortField::create("author", SortFieldType::kString).value()});
+    ASSERT_TRUE(sort.has_value());
+    EXPECT_EQ(pages_of(searcher, sort.value(), 3), (std::vector<int32_t>{1, 3, 0, 2}));
+}
+
+TEST(SortTest, PagesThroughARelevanceSort) {
+    // The scores are 10, 20, 30, 40, so the order is 3, 2, 1, 0.
+    const IndexSearcher searcher = make_searcher();
+    auto top = searcher.search_after(nullptr, AllDocsQuery(), Sort::relevance().value(), 2);
+    ASSERT_TRUE(top.has_value()) << top.error().to_string();
+    ASSERT_EQ(top.value().score_docs.size(), 2U);
+    EXPECT_EQ(top.value().score_docs[0].doc, 3);
+    EXPECT_EQ(top.value().score_docs[1].doc, 2);
+    EXPECT_FLOAT_EQ(top.value().score_docs[1].score, 30.0F);
+
+    auto next = searcher.search_after(&top.value().score_docs.back(), AllDocsQuery(), Sort::relevance().value(), 2);
+    ASSERT_TRUE(next.has_value()) << next.error().to_string();
+    ASSERT_EQ(next.value().score_docs.size(), 2U);
+    EXPECT_EQ(next.value().score_docs[0].doc, 1);
+    EXPECT_EQ(next.value().score_docs[1].doc, 0);
+}
+
+TEST(SortTest, PagesThroughAnIndexOrderSort) {
+    const IndexSearcher searcher = make_searcher();
+    EXPECT_EQ(pages_of(searcher, Sort::index_order().value(), 2), (std::vector<int32_t>{0, 1, 2, 3}));
+}
+
+TEST(SortTest, PagesThroughAMultiFieldSort) {
+    // author then reversed price: 1 (a/10), 3 (a/10), 0 (b/30), 2 (c/20).
+    const IndexSearcher searcher = make_searcher();
+    std::vector<SortField> fields{SortField::create("author", SortFieldType::kString).value(),
+                                  SortField::with_reverse("price", SortFieldType::kInt, true).value()};
+    auto sort = Sort::with_fields(std::move(fields));
+    ASSERT_TRUE(sort.has_value());
+    EXPECT_EQ(pages_of(searcher, sort.value(), 3), (std::vector<int32_t>{1, 3, 0, 2}));
+}
+
+TEST(SortTest, APageLargerThanTheHitsGivesEverythingAndThenNothing) {
+    const IndexSearcher searcher = make_searcher();
+    auto sort = Sort::with_fields({SortField::create("price", SortFieldType::kInt).value()});
+    ASSERT_TRUE(sort.has_value());
+
+    auto first = searcher.search_after(nullptr, AllDocsQuery(), sort.value(), 4);
+    ASSERT_TRUE(first.has_value()) << first.error().to_string();
+    EXPECT_EQ(hit_docs(first.value()), (std::vector<int32_t>{1, 3, 2, 0}));
+    EXPECT_EQ(first.value().total_hits.value, 4);
+
+    auto second = searcher.search_after(&first.value().score_docs.back(), AllDocsQuery(), sort.value(), 4);
+    ASSERT_TRUE(second.has_value()) << second.error().to_string();
+    EXPECT_TRUE(second.value().score_docs.empty());
+    // The hits of the previous page are still matches, so they are counted.
+    EXPECT_EQ(second.value().total_hits.value, 4);
+}
+
+TEST(SortTest, AnAfterCursorKeepsOnlyTheHitsStrictlyAfterIt) {
+    // A cursor that is not one of the hits still positions the page: everything
+    // with a price above 15 is kept, in order.
+    const IndexSearcher searcher = make_searcher();
+    auto sort = Sort::with_fields({SortField::create("price", SortFieldType::kInt).value()});
+    ASSERT_TRUE(sort.has_value());
+    const FieldDoc cursor = FieldDoc::create(0, 0.0F, {SortValue(int64_t{15})});
+    auto top = searcher.search_after(&cursor, AllDocsQuery(), sort.value(), 10);
+    ASSERT_TRUE(top.has_value()) << top.error().to_string();
+    EXPECT_EQ(hit_docs(top.value()), (std::vector<int32_t>{2, 0}));
+}
+
+TEST(SortTest, AnAfterCursorNeedsOneValuePerSortField) {
+    const IndexSearcher searcher = make_searcher();
+    std::vector<SortField> fields{SortField::create("author", SortFieldType::kString).value(),
+                                  SortField::create("price", SortFieldType::kInt).value()};
+    auto sort = Sort::with_fields(std::move(fields));
+    ASSERT_TRUE(sort.has_value());
+    const FieldDoc cursor = FieldDoc::create(1, 0.0F, {SortValue(std::string("a"))});
+    auto top = searcher.search_after(&cursor, AllDocsQuery(), sort.value(), 2);
+    ASSERT_FALSE(top.has_value());
+    EXPECT_EQ(top.error().kind(), ErrorKind::kIllegalArgument);
+}
+
+TEST(SortTest, AnAfterCursorNeedsValuesOfTheSortedType) {
+    const IndexSearcher searcher = make_searcher();
+    auto sort = Sort::with_fields({SortField::create("price", SortFieldType::kInt).value()});
+    ASSERT_TRUE(sort.has_value());
+    const FieldDoc cursor = FieldDoc::create(1, 0.0F, {SortValue(std::string("10"))});
+    auto top = searcher.search_after(&cursor, AllDocsQuery(), sort.value(), 2);
+    ASSERT_FALSE(top.has_value());
+    EXPECT_EQ(top.error().kind(), ErrorKind::kIllegalState);
+}
+
+TEST(SortTest, AnAfterCursorPastTheLastDocumentIsRejected) {
+    const IndexSearcher searcher = make_searcher();
+    auto sort = Sort::with_fields({SortField::create("price", SortFieldType::kInt).value()});
+    ASSERT_TRUE(sort.has_value());
+    const FieldDoc cursor = FieldDoc::create(4, 0.0F, {SortValue(int64_t{10})});
+    auto top = searcher.search_after(&cursor, AllDocsQuery(), sort.value(), 2);
+    ASSERT_FALSE(top.has_value());
+    EXPECT_EQ(top.error().kind(), ErrorKind::kIllegalArgument);
 }

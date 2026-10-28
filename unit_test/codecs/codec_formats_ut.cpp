@@ -79,10 +79,12 @@ TEST(Lucene101CodecTest, WiresEveryFormat) {
     EXPECT_EQ(codec.name(), "Lucene101");
     EXPECT_EQ(created.value()->mode(), Lucene101Codec::Mode::BestSpeed);
 
+    // Postings and doc values go through the per-field wrappers, which is what
+    // gives their files a `Lucene101_0` / `Lucene90_0` suffix.
     ASSERT_NE(codec.postings_format(), nullptr);
-    EXPECT_EQ(codec.postings_format()->name(), "Lucene101");
+    EXPECT_EQ(codec.postings_format()->name(), PER_FIELD_POSTINGS_NAME);
     ASSERT_NE(codec.doc_values_format(), nullptr);
-    EXPECT_EQ(codec.doc_values_format()->name(), "Lucene90");
+    EXPECT_EQ(codec.doc_values_format()->name(), PER_FIELD_DV_NAME);
     ASSERT_NE(codec.stored_fields_format(), nullptr);
     EXPECT_EQ(codec.stored_fields_format()->name(), "Lucene90StoredFields");
     ASSERT_NE(codec.term_vectors_format(), nullptr);

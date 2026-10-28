@@ -117,4 +117,49 @@ bool char_is_letter_or_digit(char32_t codepoint) noexcept {
     return char_is_letter(codepoint) || char_is_digit(codepoint);
 }
 
+char32_t char_to_lower(char32_t cp) noexcept {
+    // ASCII.
+    if (cp >= U'A' && cp <= U'Z') {
+        return cp + 0x20;
+    }
+    // Latin-1 supplement, except the multiplication sign (U+00D7).
+    if (cp >= 0x00C0 && cp <= 0x00DE && cp != 0x00D7) {
+        return cp + 0x20;
+    }
+    // Latin Extended-A: mostly even/odd pairs, with the usual exceptions.
+    if (cp >= 0x0100 && cp <= 0x017F) {
+        if (cp == 0x0130) { // LATIN CAPITAL LETTER I WITH DOT ABOVE
+            return 0x0069;
+        }
+        if ((cp & 1) == 0) {
+            return cp + 1;
+        }
+        return cp;
+    }
+    // Greek.
+    if (cp >= 0x0391 && cp <= 0x03A9 && cp != 0x03A2) {
+        return cp + 0x20;
+    }
+    if (cp == 0x0386) {
+        return 0x03AC;
+    }
+    if (cp >= 0x0388 && cp <= 0x038A) {
+        return cp + 0x25;
+    }
+    if (cp == 0x038C) {
+        return 0x03CC;
+    }
+    if (cp == 0x038E || cp == 0x038F) {
+        return cp + 0x3F;
+    }
+    // Cyrillic.
+    if (cp >= 0x0410 && cp <= 0x042F) {
+        return cp + 0x20;
+    }
+    if (cp >= 0x0400 && cp <= 0x040F) {
+        return cp + 0x50;
+    }
+    return cp;
+}
+
 } // namespace lucene

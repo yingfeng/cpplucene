@@ -36,8 +36,9 @@ namespace lucene {
 ///  * the reference implementation's `TopDocs<S>` is generic over `ScoreDocLike`; the port keeps one
 ///    `TopDocs` over [`ScoreDoc`] until the sorting layer (which is what needs
 ///    `TopFieldScoreDoc`) is ported, and `TopDocsLike` disappears with it;
-///  * `merge_top_field_docs*` / `MergeSortQueueCmp` are not ported: they sort by
-///    `Sort` and compare field values, neither of which exists yet.
+///  * the sorted merges (`merge_top_field_docs*`) live in
+///    [`TopFieldDocs`](:top_field_docs), next to the type they answer, so that
+///    this module does not have to depend on `Sort`.
 export struct TopDocs {
     /// The total number of hits of the query.
     TotalHits total_hits;

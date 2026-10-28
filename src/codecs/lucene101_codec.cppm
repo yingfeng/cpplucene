@@ -36,6 +36,8 @@ import :lucene90_stored_fields_format;
 import :lucene90_term_vectors_format;
 import :lucene99_segment_info_format;
 import :norms_format;
+import :per_field_doc_values_format;
+import :per_field_postings_format;
 import :points_format;
 import :postings_format;
 import :segment_info_format;
@@ -50,13 +52,10 @@ namespace lucene {
 /// instance of every format and hands them out by name.
 ///
 /// **Deviations**:
-///  * the reference implementation routes postings and doc values through
-///    `PerFieldPostingsFormat` / `PerFieldDocValuesFormat`, whose
-///    `get_*_format_for_field` always returns the default format.  Those wrappers
-///    also change the per-file segment suffix (`Lucene101_0` style).  This port
-///    wires the default formats directly; the per-field wrappers land with the
-///    `perfield` package.  Since the port only writes and reads its own segments,
-///    the suffix difference is invisible;
+///  * the reference implementation's per-field wrappers resolve a recorded
+///    format name through a format registry; this port has none, so the wrappers
+///    check the recorded name and then use the codec's default format, which is
+///    the only one they can hand out (see [`PerFieldPostingsFormat`]);
 ///  * the KNN vectors format is absent: HNSW formats are out of scope;
 ///  * `Mode::BestCompression` fails at `stored_fields_format()` time because the
 ///    Deflate compressor is not ported (see [`Lucene90StoredFieldsFormat`]).
@@ -97,8 +96,12 @@ private:
     Lucene101Codec(Lucene90StoredFieldsFormat stored_fields, Lucene90TermVectorsFormat term_vectors)
             : stored_fields_format_(std::move(stored_fields)), term_vectors_format_(std::move(term_vectors)) {}
 
-    Lucene101PostingsFormat postings_format_{};
-    Lucene90DocValuesFormat doc_values_format_{};
+    /// The format the per-field wrappers fall back to; declared before them
+    /// because they hold a borrowed pointer to it.
+    Lucene101PostingsFormat default_postings_format_{};
+    Lucene90DocValuesFormat default_doc_values_format_{};
+    PerFieldPostingsFormat postings_format_{default_postings_format_};
+    PerFieldDocValuesFormat doc_values_format_{default_doc_values_format_};
     Lucene90StoredFieldsFormat stored_fields_format_{};
     Lucene90TermVectorsFormat term_vectors_format_;
     Lucene90NormsFormat norms_format_{};

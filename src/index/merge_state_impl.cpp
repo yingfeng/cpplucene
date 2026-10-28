@@ -270,6 +270,25 @@ Result<std::unique_ptr<MergeState>> MergeState::create(std::span<CodecReader *co
     return state;
 }
 
+std::unique_ptr<MergeState> MergeState::copy_replacing(
+        const MergeState &other, std::vector<std::shared_ptr<FieldsProducer>> fields_producers,
+        std::shared_ptr<const FieldInfos> merge_field_infos, FieldInfosList field_infos) {
+    std::unique_ptr<MergeState> copy{new MergeState(other.segment_info, other.info_stream)};
+    copy->doc_maps = other.doc_maps;
+    copy->merge_field_infos = std::move(merge_field_infos);
+    copy->stored_fields_readers = other.stored_fields_readers;
+    copy->term_vectors_readers = other.term_vectors_readers;
+    copy->norms_producers = other.norms_producers;
+    copy->doc_values_producers = other.doc_values_producers;
+    copy->fields_producers = std::move(fields_producers);
+    copy->points_readers = other.points_readers;
+    copy->field_infos = std::make_shared<const FieldInfosList>(std::move(field_infos));
+    copy->live_docs = other.live_docs;
+    copy->needs_index_sort = other.needs_index_sort;
+    copy->max_docs = other.max_docs;
+    return copy;
+}
+
 MergeStateMeta MergeState::get_meta() const {
     MergeStateMeta meta;
     meta.fields_producers_len = fields_producers.size();

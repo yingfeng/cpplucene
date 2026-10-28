@@ -35,8 +35,13 @@ namespace lucene {
 
 namespace {
 
-/// Format name recorded in the `.fdt` header of the fast (LZ4) variant.
+/// Format name recorded in the `.fdt` header of the fast (plain LZ4) variant.
 constexpr std::string_view FAST_DATA_FORMAT_NAME = "Lucene90StoredFieldsFastData";
+
+/// Format name of Lucene's default `BEST_SPEED` variant: LZ4 with a preset
+/// dictionary.  Segments written before this port had that mode carry
+/// [`FAST_DATA_FORMAT_NAME`] instead, which `fields_reader` still accepts.
+constexpr std::string_view BEST_SPEED_DATA_FORMAT_NAME = "Lucene90StoredFieldsData";
 
 /// Lucene's `BEST_SPEED` parameters: 10 x 8 KB sub blocks, 1024 documents or
 /// 10 x 8 KB bytes per chunk, 10 chunks per index block.
@@ -69,8 +74,9 @@ Result<Lucene90StoredFieldsFormat::Mode> Lucene90StoredFieldsFormat::mode_from_n
 Result<Lucene90CompressingStoredFieldsFormat> Lucene90StoredFieldsFormat::format_for_mode(Mode mode) {
     switch (mode) {
         case Mode::BestSpeed:
-            return Lucene90CompressingStoredFieldsFormat::create(std::string(FAST_DATA_FORMAT_NAME),
-                                                                 CompressionMode::fast(), BEST_SPEED_CHUNK_SIZE,
+            return Lucene90CompressingStoredFieldsFormat::create(std::string(BEST_SPEED_DATA_FORMAT_NAME),
+                                                                 CompressionMode::best_speed(),
+                                                                 BEST_SPEED_CHUNK_SIZE,
                                                                  BEST_SPEED_MAX_DOCS_PER_CHUNK,
                                                                  BEST_SPEED_BLOCK_SHIFT);
         case Mode::BestCompression:
@@ -100,7 +106,26 @@ Result<std::unique_ptr<StoredFieldsReader>> Lucene90StoredFieldsFormat::fields_r
     if (!format.has_value()) {
         return std::unexpected(std::move(format.error()));
     }
-    return format.value().fields_reader(directory, segment_info, std::move(field_infos), context);
+    auto reader = format.value().fields_reader(directory, segment_info, field_infos, context);
+    if (reader.has_value() || mode.value() != Mode::BestSpeed) {
+        return reader;
+    }
+    // A segment written by an earlier version of this port records the fast data
+    // format name under the `BEST_SPEED` attribute; its chunks are plain LZ4.
+    auto legacy = Lucene90CompressingStoredFieldsFormat::create(std::string(FAST_DATA_FORMAT_NAME),
+                                                               CompressionMode::fast(), BEST_SPEED_CHUNK_SIZE,
+                                                               BEST_SPEED_MAX_DOCS_PER_CHUNK,
+                                                               BEST_SPEED_BLOCK_SHIFT);
+    if (!legacy.has_value()) {
+        return std::unexpected(std::move(legacy.error()));
+    }
+    auto legacy_reader = legacy.value().fields_reader(directory, segment_info, std::move(field_infos), context);
+    if (legacy_reader.has_value()) {
+        return legacy_reader;
+    }
+    // Neither name matched: report the error of the format the attribute asked
+    // for, which is the one a caller expects to see.
+    return reader;
 }
 
 Result<std::unique_ptr<StoredFieldsWriter>> Lucene90StoredFieldsFormat::fields_writer(

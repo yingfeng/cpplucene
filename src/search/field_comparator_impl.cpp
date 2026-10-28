@@ -93,10 +93,13 @@ int32_t ScoreFieldComparator::compare_top(int32_t slot) const {
 
 void ScoreFieldComparator::set_bottom(int32_t slot) { bottom_ = values_[static_cast<size_t>(slot)]; }
 
-void ScoreFieldComparator::set_top_value(const SortValue &value) {
-    if (const auto *score = std::get_if<float>(&value); score != nullptr) {
-        top_ = *score;
+VoidResult ScoreFieldComparator::set_top_value(const SortValue &value) {
+    const auto *score = std::get_if<float>(&value);
+    if (score == nullptr) {
+        return err(LuceneError::illegal_state("a score comparator needs a float top value"));
     }
+    top_ = *score;
+    return {};
 }
 
 Result<SortValue> ScoreFieldComparator::value(int32_t slot) const { return SortValue(values_[static_cast<size_t>(slot)]); }
@@ -116,8 +119,6 @@ Result<std::unique_ptr<LeafFieldComparator>> ScoreFieldComparator::get_leaf_comp
 
         void set_bottom(int32_t /*slot*/) override {}
 
-        void set_top_value(const SortValue & /*value*/) override {}
-
         [[nodiscard]] Result<int32_t> compare_bottom(int32_t /*doc*/) override {
             if (scorer_ == nullptr) {
                 return err(LuceneError::illegal_state("a score comparator needs a scorer"));
@@ -130,7 +131,21 @@ Result<std::unique_ptr<LeafFieldComparator>> ScoreFieldComparator::get_leaf_comp
             return parent_.reverse_ ? result : -result;
         }
 
-        [[nodiscard]] Result<int32_t> compare_top(int32_t /*doc*/) override { return 0; }
+        [[nodiscard]] Result<int32_t> compare_top(int32_t /*doc*/) override {
+            if (!parent_.top_.has_value()) {
+                return 0;
+            }
+            if (scorer_ == nullptr) {
+                return err(LuceneError::illegal_state("a score comparator needs a scorer"));
+            }
+            auto score = scorer_->score();
+            if (!score.has_value()) {
+                return std::unexpected(std::move(score.error()));
+            }
+            const int32_t result =
+                    score.value() < parent_.top_.value() ? -1 : (score.value() > parent_.top_.value() ? 1 : 0);
+            return parent_.reverse_ ? result : -result;
+        }
 
         [[nodiscard]] VoidResult copy(int32_t slot, int32_t /*doc*/) override {
             if (scorer_ == nullptr) {
@@ -181,10 +196,13 @@ int32_t DocFieldComparator::compare_top(int32_t slot) const {
 
 void DocFieldComparator::set_bottom(int32_t slot) { bottom_ = values_[static_cast<size_t>(slot)]; }
 
-void DocFieldComparator::set_top_value(const SortValue &value) {
-    if (const auto *doc = std::get_if<int32_t>(&value); doc != nullptr) {
-        top_ = *doc;
+VoidResult DocFieldComparator::set_top_value(const SortValue &value) {
+    const auto *doc = std::get_if<int32_t>(&value);
+    if (doc == nullptr) {
+        return err(LuceneError::illegal_state("a doc comparator needs an int top value"));
     }
+    top_ = *doc;
+    return {};
 }
 
 Result<SortValue> DocFieldComparator::value(int32_t slot) const { return SortValue(values_[static_cast<size_t>(slot)]); }
@@ -201,7 +219,6 @@ Result<std::unique_ptr<LeafFieldComparator>> DocFieldComparator::get_leaf_compar
         Leaf(DocFieldComparator &parent, int32_t doc_base) : parent_(parent), doc_base_(doc_base) {}
 
         void set_bottom(int32_t /*slot*/) override {}
-        void set_top_value(const SortValue & /*value*/) override {}
 
         [[nodiscard]] Result<int32_t> compare_bottom(int32_t doc) override {
             const int32_t value = doc + doc_base_;
@@ -209,7 +226,14 @@ Result<std::unique_ptr<LeafFieldComparator>> DocFieldComparator::get_leaf_compar
             return parent_.reverse_ ? -result : result;
         }
 
-        [[nodiscard]] Result<int32_t> compare_top(int32_t /*doc*/) override { return 0; }
+        [[nodiscard]] Result<int32_t> compare_top(int32_t doc) override {
+            if (!parent_.top_.has_value()) {
+                return 0;
+            }
+            const int32_t value = doc + doc_base_;
+            const int32_t result = value < parent_.top_.value() ? -1 : (value > parent_.top_.value() ? 1 : 0);
+            return parent_.reverse_ ? -result : result;
+        }
 
         [[nodiscard]] VoidResult copy(int32_t slot, int32_t doc) override {
             parent_.values_[static_cast<size_t>(slot)] = doc + doc_base_;
@@ -265,7 +289,22 @@ int32_t DocValuesFieldComparator::compare_top(int32_t slot) const {
 
 void DocValuesFieldComparator::set_bottom(int32_t slot) { bottom_ = values_[static_cast<size_t>(slot)]; }
 
-void DocValuesFieldComparator::set_top_value(const SortValue &value) { top_ = value; }
+VoidResult DocValuesFieldComparator::set_top_value(const SortValue &value) {
+    if (type_ == SortFieldType::kString || type_ == SortFieldType::kSortedSet) {
+        if (!std::holds_alternative<std::string>(value)) {
+            return err(LuceneError::illegal_state("a term comparator needs a string top value"));
+        }
+    } else if (type_ == SortFieldType::kFloat || type_ == SortFieldType::kDouble ||
+               type_ == SortFieldType::kSortedNumericDouble) {
+        if (!std::holds_alternative<float>(value) && !std::holds_alternative<double>(value)) {
+            return err(LuceneError::illegal_state("a floating point comparator needs a float top value"));
+        }
+    } else if (!std::holds_alternative<int32_t>(value) && !std::holds_alternative<int64_t>(value)) {
+        return err(LuceneError::illegal_state("a numeric comparator needs an integer top value"));
+    }
+    top_ = value;
+    return {};
+}
 
 Result<SortValue> DocValuesFieldComparator::value(int32_t slot) const {
     return values_[static_cast<size_t>(slot)];
@@ -326,7 +365,6 @@ Result<std::unique_ptr<LeafFieldComparator>> DocValuesFieldComparator::get_leaf_
                   is_string_(is_string), is_double_(is_double), type_(type), selector_(selector) {}
 
         void set_bottom(int32_t /*slot*/) override {}
-        void set_top_value(const SortValue &value) override { top_ = value; has_top_ = true; }
 
         [[nodiscard]] Result<int32_t> compare_bottom(int32_t doc) override {
             auto value = read(doc);
@@ -337,14 +375,14 @@ Result<std::unique_ptr<LeafFieldComparator>> DocValuesFieldComparator::get_leaf_
         }
 
         [[nodiscard]] Result<int32_t> compare_top(int32_t doc) override {
-            if (!has_top_) {
+            if (!parent_.top_.has_value()) {
                 return 0;
             }
             auto value = read(doc);
             if (!value.has_value()) {
                 return std::unexpected(std::move(value.error()));
             }
-            return parent_.compare_held(value.value(), top_);
+            return parent_.compare_held(value.value(), parent_.top_.value());
         }
 
         [[nodiscard]] VoidResult copy(int32_t slot, int32_t doc) override {
@@ -498,8 +536,6 @@ Result<std::unique_ptr<LeafFieldComparator>> DocValuesFieldComparator::get_leaf_
         bool is_double_{false};
         SortFieldType type_{SortFieldType::kString};
         SortFieldSelector selector_{SortFieldSelector::kMin};
-        SortValue top_{};
-        bool has_top_{false};
     };
 
     return std::unique_ptr<LeafFieldComparator>(
@@ -529,6 +565,13 @@ Result<std::unique_ptr<FieldComparator>> comparator_for(const SortField &sort_fi
             return std::unique_ptr<FieldComparator>(new DocValuesFieldComparator(
                     sort_field.field().value(), sort_field.type(), sort_field.reverse(), num_hits,
                     sort_field.selector()));
+        case SortFieldType::kCustom: {
+            const auto &factory = sort_field.custom_comparator_factory();
+            if (!factory) {
+                return err(LuceneError::illegal_argument("the custom sort field has no comparator factory"));
+            }
+            return factory(num_hits);
+        }
     }
     return err(LuceneError::illegal_argument("unknown sort field type"));
 }

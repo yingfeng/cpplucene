@@ -90,6 +90,10 @@ public:
     [[nodiscard]] VoidResult abort();
 
     [[nodiscard]] int32_t num_docs_in_ram() const noexcept;
+
+    /// Bytes of document data buffered in RAM; see
+    /// [`IndexWriterConfig::ram_buffer_size_mb`] about how it is measured.
+    [[nodiscard]] int64_t bytes_used_in_ram() const noexcept;
     /// Number of documents that were marked deleted because indexing failed.
     [[nodiscard]] int32_t num_deleted_doc_ids() const noexcept;
     [[nodiscard]] const SegmentInfo &segment_info() const noexcept;

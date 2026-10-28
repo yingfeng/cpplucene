@@ -41,6 +41,13 @@ export struct SegmentCommitInfo {
     /// Documents deleted by hard deletes.
     int32_t del_count{0};
     /// Documents deleted by soft deletes.
+    ///
+    /// **Deviation:** the reference implementation keeps soft-deleted documents in
+    /// the segment files and hides them when reading, so a retention merge policy
+    /// can bring them back.  This port materializes deletes at commit time (see the
+    /// class note), so a soft delete lands in the same `.liv` as a hard delete and
+    /// the document is gone for good.  The two counters stay disjoint: together
+    /// they cover every document the `.liv` hides.
     int32_t soft_del_count{0};
 
     /// Generation of the `.fnm` file after a field-infos update, `-1` if none.
@@ -72,6 +79,29 @@ export struct SegmentCommitInfo {
 
     /// `true` once a live docs file exists for this commit.
     [[nodiscard]] bool has_deletions() const noexcept { return del_gen != -1; }
+
+    /// Generation the next `.fnm` write after a doc values update has to use.
+    ///
+    /// Generations start at `1`: `0` is the generation-less base file, whose name
+    /// carries no suffix at all.
+    [[nodiscard]] int64_t next_field_infos_gen() const noexcept {
+        return field_infos_gen == -1 ? 1 : field_infos_gen + 1;
+    }
+
+    /// Marks the just-written `.fnm` generation as the current one.
+    void advance_field_infos_gen() noexcept {
+        field_infos_gen = next_field_infos_gen();
+    }
+
+    /// Generation the next doc values update has to use; see [`next_field_infos_gen`].
+    [[nodiscard]] int64_t next_doc_values_gen() const noexcept {
+        return doc_values_gen == -1 ? 1 : doc_values_gen + 1;
+    }
+
+    /// Marks the just-written doc values generation as the current one.
+    void advance_doc_values_gen() noexcept {
+        doc_values_gen = next_doc_values_gen();
+    }
 
     /// Checks the deletion counts against the segment size.
     [[nodiscard]] VoidResult validate() const;

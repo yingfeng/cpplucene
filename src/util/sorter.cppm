@@ -88,7 +88,9 @@ public:
     [[nodiscard]] VoidResult heap_sort(size_t from, size_t to);
 
 protected:
-    [[nodiscard]] VoidResult do_rotate(size_t lo, size_t mid, size_t hi);
+    /// Performs [`rotate`]; virtual so that a subclass with temporary storage
+    /// (TimSort) can use it.
+    [[nodiscard]] virtual VoidResult do_rotate(size_t lo, size_t mid, size_t hi);
     [[nodiscard]] VoidResult heapify(size_t from, size_t to);
     [[nodiscard]] VoidResult sift_down(size_t i, size_t from, size_t to);
 

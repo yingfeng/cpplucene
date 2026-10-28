@@ -17,6 +17,7 @@
 
 export module lucene_core:fixed_bit_set;
 
+import :accountable;
 import :types;
 import :error;
 
@@ -33,7 +34,7 @@ namespace lucene {
 /// get/set/clear/flip, population count, and the set operations deletions use.
 /// The reference implementation's separate read-only `FixedBit` wrapper is not needed here because
 /// [`FixedBitSet`] already implements [`Bits`].
-export class FixedBitSet final : public Bits {
+export class FixedBitSet final : public Bits, public Accountable {
 public:
     /// Empty set of `num_bits` bits.
     explicit FixedBitSet(size_t num_bits = 0);
@@ -73,6 +74,11 @@ public:
 
     [[nodiscard]] const std::vector<uint64_t> &words() const noexcept { return words_; }
 
+    /// Retained bytes: the words plus the object's own overhead.
+    [[nodiscard]] int64_t ram_bytes_used() const override {
+        return static_cast<int64_t>(words_.capacity() * sizeof(uint64_t)) + kRamOverheadBytes;
+    }
+
     /// `true` when at least one bit is set in both sets.
     [[nodiscard]] bool intersects(const FixedBitSet &other) const;
 
@@ -87,6 +93,9 @@ public:
     [[nodiscard]] std::string to_string() const override;
 
 private:
+    /// Fixed overhead of one bit set, used by [`ram_bytes_used`].
+    static constexpr int64_t kRamOverheadBytes = 64;
+
     /// Drops bits at or past `num_bits_` so the last word stays clean.
     void trim_last_word() noexcept;
 

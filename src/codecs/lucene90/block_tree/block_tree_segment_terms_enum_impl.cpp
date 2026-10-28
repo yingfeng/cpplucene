@@ -1639,7 +1639,7 @@ Result<SeekStatus> SegmentTermsEnumFrame::scan_to_term_non_leaf(size_t frame_idx
                 }
                 const size_t prefix_len = ste.stack()[frame_idx].prefix_length +
                                           ste.stack()[frame_idx].suffix_length;
-                auto current_frame_idx = ste.push_frame(last_sub_fp, last_sub_fp.value(), prefix_len);
+                auto current_frame_idx = ste.push_frame(std::nullopt, last_sub_fp.value(), prefix_len);
                 if (!current_frame_idx) {
                     return std::unexpected(std::move(current_frame_idx.error()));
                 }
@@ -1662,7 +1662,7 @@ Result<SeekStatus> SegmentTermsEnumFrame::scan_to_term_non_leaf(size_t frame_idx
                         return err(LuceneError::illegal_state("term block has no current sub-block"));
                     }
                     const size_t next_prefix = ste.term_bytes().size();
-                    auto deeper = ste.push_frame(deeper_sub_fp, deeper_sub_fp.value(), next_prefix);
+                    auto deeper = ste.push_frame(std::nullopt, deeper_sub_fp.value(), next_prefix);
                     if (!deeper) {
                         return std::unexpected(std::move(deeper.error()));
                     }

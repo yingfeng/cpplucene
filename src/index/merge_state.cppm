@@ -176,6 +176,19 @@ public:
     /// A cheap snapshot for code that only needs the doc maps and field infos.
     [[nodiscard]] MergeStateMeta get_meta() const;
 
+    /// A shallow copy of `other` with the postings readers, the merged field
+    /// infos and the per-segment field infos replaced.
+    ///
+    /// Port of the reference implementation's `PerFieldMergeState` view: a per-field codec
+    /// hands one format a merge state that looks like it were merging a segment
+    /// containing only that format's fields.  Every other reader is shared with
+    /// `other` (the returned state must not outlive it), and the field infos are
+    /// expected to be [`FieldInfos::with_filter`] views so that the writers
+    /// iterating them only see the group's fields.
+    [[nodiscard]] static std::unique_ptr<MergeState> copy_replacing(
+            const MergeState &other, std::vector<std::shared_ptr<FieldsProducer>> fields_producers,
+            std::shared_ptr<const FieldInfos> merge_field_infos, FieldInfosList field_infos);
+
     /// Number of segments being merged.
     [[nodiscard]] size_t num_readers() const noexcept { return max_docs.size(); }
 

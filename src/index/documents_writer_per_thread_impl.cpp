@@ -80,6 +80,31 @@ struct DocumentsWriterPerThread::Impl {
                                                  index_created_version_major_, analyzer_, similarity_);
     }
 
+    /// Roughly what `document` occupies in the in-memory structures.
+    ///
+    /// The field name and every value are counted as they are, plus a fixed
+    /// overhead per field and per document for the hash entries, ordinals and
+    /// postings headers they also create.
+    [[nodiscard]] static int64_t estimate_document_bytes(const Document &document) {
+        constexpr int64_t kPerField = 24;
+        constexpr int64_t kPerDocument = 8;
+        int64_t bytes = kPerDocument;
+        for (const IndexableField *field : document.get_fields()) {
+            if (field == nullptr) {
+                continue;
+            }
+            bytes += kPerField + static_cast<int64_t>(field->name().size());
+            if (auto text = field->string_value(); text.has_value()) {
+                bytes += static_cast<int64_t>(text->size());
+            } else if (auto binary = field->binary_value(); binary.has_value()) {
+                bytes += static_cast<int64_t>(binary->size());
+            } else {
+                bytes += 8;
+            }
+        }
+        return bytes;
+    }
+
     [[nodiscard]] VoidResult add_document(const Document &document) {
         if (aborted_) {
             return err(LuceneError::illegal_state("this DocumentsWriterPerThread is aborted"));
@@ -89,6 +114,7 @@ struct DocumentsWriterPerThread::Impl {
         }
         const int32_t doc_id = num_docs_in_ram_;
         ++num_docs_in_ram_;
+        bytes_used_in_ram_ += estimate_document_bytes(document);
         auto processed = chain_->process_document(doc_id, document, field_infos_);
         if (!processed.has_value()) {
             // The id is spent: keep the hole and record it as deleted, so the
@@ -114,8 +140,16 @@ struct DocumentsWriterPerThread::Impl {
             return flush_sorted();
         }
 
-        const IOContext &context = io_context_default();
-        auto infos = write_segment_files(directory_);
+        // A flush writes through the flush `IOContext`, so a directory wrapper
+        // can decide whether the segment is small enough to keep in RAM (see
+        // `NRTCachingDirectory`).
+        auto flush_context = IOContext::with_flush(
+                FlushInfo(num_docs_in_ram_, bytes_used_in_ram_ > 0 ? bytes_used_in_ram_ : int64_t{1}));
+        if (!flush_context.has_value()) {
+            return std::unexpected(std::move(flush_context.error()));
+        }
+        const IOContext &context = flush_context.value();
+        auto infos = write_segment_files(directory_, context);
         if (!infos.has_value()) {
             return std::unexpected(std::move(infos.error()));
         }
@@ -158,7 +192,8 @@ struct DocumentsWriterPerThread::Impl {
 
     /// Writes every file of the segment into `target` and returns the finished
     /// field infos of the segment.
-    [[nodiscard]] Result<std::shared_ptr<const FieldInfos>> write_segment_files(Directory &target) {
+    [[nodiscard]] Result<std::shared_ptr<const FieldInfos>> write_segment_files(Directory &target,
+                                                                               const IOContext &context) {
         segment_info_.max_doc = num_docs_in_ram_;
 
         auto built = field_infos_.finish();
@@ -166,7 +201,7 @@ struct DocumentsWriterPerThread::Impl {
             return std::unexpected(std::move(built.error()));
         }
         auto infos = std::make_shared<const FieldInfos>(std::move(built.value()));
-        SegmentWriteState state(get_default_info_stream(), target, infos, io_context_default(), "");
+        SegmentWriteState state(get_default_info_stream(), target, infos, context, "");
         if (auto written = chain_->flush(state); !written.has_value()) {
             return std::unexpected(std::move(written.error()));
         }
@@ -183,7 +218,7 @@ struct DocumentsWriterPerThread::Impl {
         const IOContext &context = io_context_default();
         Directory &scratch = *scratch_directory_;
 
-        auto infos = write_segment_files(scratch);
+        auto infos = write_segment_files(scratch, context);
         if (!infos.has_value()) {
             return std::unexpected(std::move(infos.error()));
         }
@@ -254,6 +289,8 @@ struct DocumentsWriterPerThread::Impl {
     FieldInfosBuilder field_infos_;
     int32_t num_docs_in_ram_{0};
     std::vector<int32_t> deleted_doc_ids_;
+    /// See `estimate_document_bytes`.
+    int64_t bytes_used_in_ram_{0};
     bool aborted_{false};
     bool flushed_{false};
 };
@@ -277,6 +314,8 @@ Result<std::optional<SegmentCommitInfo>> DocumentsWriterPerThread::flush() { ret
 VoidResult DocumentsWriterPerThread::abort() { return impl_->abort(); }
 
 int32_t DocumentsWriterPerThread::num_docs_in_ram() const noexcept { return impl_->num_docs_in_ram_; }
+
+int64_t DocumentsWriterPerThread::bytes_used_in_ram() const noexcept { return impl_->bytes_used_in_ram_; }
 
 int32_t DocumentsWriterPerThread::num_deleted_doc_ids() const noexcept {
     return static_cast<int32_t>(impl_->deleted_doc_ids_.size());

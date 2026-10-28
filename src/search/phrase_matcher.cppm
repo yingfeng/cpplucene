@@ -46,7 +46,11 @@ export struct PostingsAndFreq {
 /// Port of the `PhraseMatcher` trait (`core/search/phrase_matcher.rs`).
 ///
 /// **Deviations** (C++ scope): the reference implementation's impacts based
-/// approximation and its `TopScores` optimization are not ported, so the
+/// approximation and its `TopScores` optimization are not ported: they need an
+/// [`ImpactsEnum`](lucene_core:impacts_enum) in [`PostingsAndFreq::postings`]
+/// (the port keeps a plain [`PostingsEnum`](lucene_core:postings_enum)) plus a
+/// [`SimScorer`](lucene_core:sim_scorer) for the frequency of the whole phrase,
+/// and without them only the exact-matcher path could prune.  Consequently the
 /// candidate iteration is a plain conjunction of the postings; the trait methods
 /// that only exist for `matches()` return the offsets the postings hold, which
 /// means the postings must have been opened with the `OFFSETS` flag for them to

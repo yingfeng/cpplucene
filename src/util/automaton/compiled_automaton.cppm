@@ -20,6 +20,7 @@ export module lucene_core:compiled_automaton;
 import :types;
 import std;
 
+import :automata;
 import :automaton;
 import :byte_run_automaton;
 import :byte_runnable;
@@ -27,9 +28,13 @@ import :bytes_ref;
 import :bytes_ref_builder;
 import :error;
 import :nfa_run_automaton;
+import :query_visitor;
+import :term;
 import :transition;
 
 namespace lucene {
+
+export class Query;
 
 /// The internal form an [`Automaton`] was compiled into.
 ///
@@ -144,6 +149,11 @@ public:
     /// `nullopt` when there is no floor term, i.e. `input` sorts before the
     /// first accepted term.
     [[nodiscard]] Result<std::optional<BytesRef>> floor(const BytesRef &input, BytesRefBuilder &output);
+
+    /// Tells `visitor` which terms this automaton accepts.
+    ///
+    /// Port of `CompiledAutomaton::visit` (`core/util/automation/compiled_automaton.rs`).
+    [[nodiscard]] VoidResult visit(QueryVisitor &visitor, const Query &query, std::string_view field) const;
 
     /// Structural equality, mirroring the reference implementation's `PartialEq`: the special cases
     /// compare by type only, [`AutomatonType::kSingle`] additionally by term and

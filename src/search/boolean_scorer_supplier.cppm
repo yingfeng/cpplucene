@@ -95,6 +95,22 @@ private:
     [[nodiscard]] Result<std::unique_ptr<BulkScorer>> disjunction_bulk_scorer(const LeafReaderContext &context,
                                                                              const IndexSearcher &searcher);
 
+    /// A conjunction bulk scorer over the `MUST` and `FILTER` clauses, or a null
+    /// pointer when the clauses do not allow it.
+    [[nodiscard]] Result<std::unique_ptr<BulkScorer>> conjunction_bulk_scorer(const LeafReaderContext &context,
+                                                                             const IndexSearcher &searcher);
+
+    /// Wraps `positive` so that the documents the `MUST_NOT` clauses match are
+    /// dropped, or answers it unchanged when there are none.
+    ///
+    /// Port of the `MUST NOT` branch of `BooleanScorerSupplier`'s bulk scorer
+    /// (`core/search/boolean_scorer_supplier.rs`): the positive side is scored
+    /// block-wise and [`ReqExclBulkScorer`](lucene_core:req_excl_bulk_scorer) asks
+    /// the excluded scorer about every hit.
+    [[nodiscard]] Result<std::unique_ptr<BulkScorer>> exclude_bulk_scorer(std::unique_ptr<BulkScorer> positive,
+                                                                          const LeafReaderContext &context,
+                                                                          const IndexSearcher &searcher);
+
     /// Wraps `scorer` so that its documents are rejected by the `MUST_NOT`
     /// clauses.
     [[nodiscard]] Result<std::unique_ptr<Scorer>> exclude(std::unique_ptr<Scorer> scorer, int64_t lead_cost,

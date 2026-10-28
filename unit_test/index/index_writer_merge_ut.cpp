@@ -198,7 +198,8 @@ TEST(IndexWriterMergeTest, ForceMergeToOneSegment) {
     ASSERT_EQ(writer.value()->segment_infos().segments.size(), 3U);
     ASSERT_TRUE(has_files_of(dir, "_0"));
 
-    ASSERT_TRUE(writer.value()->force_merge(1).has_value());
+    auto forced = writer.value()->force_merge(1);
+    ASSERT_TRUE(forced.has_value()) << (forced ? "" : forced.error().to_string());
     ASSERT_EQ(writer.value()->segment_infos().segments.size(), 1U);
     EXPECT_EQ(writer.value()->num_docs().value(), 6);
 

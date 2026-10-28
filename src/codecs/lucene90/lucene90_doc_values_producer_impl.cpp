@@ -38,6 +38,8 @@ import :lucene90_doc_values_format;
 import :lz4;
 import :numeric_doc_values;
 import :random_access_input;
+import :sorted_doc_values_terms_enum;
+import :sorted_set_doc_values_terms_enum;
 import :segment_info;
 import :segment_read_state;
 import :sorted_doc_values;
@@ -656,6 +658,12 @@ public:
         return static_cast<int32_t>(count.value());
     }
 
+    /// An enum over the dictionary; it borrows this cursor, so the caller has to
+    /// keep it alive while the enum is used.
+    [[nodiscard]] Result<std::unique_ptr<TermsEnum>> terms_enum() override {
+        return std::unique_ptr<TermsEnum>(new SortedDocValuesTermsEnum(this));
+    }
+
 private:
     std::unique_ptr<ValueIndex> index_;
     std::unique_ptr<LongValues> ords_;
@@ -708,6 +716,12 @@ public:
     }
 
     [[nodiscard]] Result<int64_t> get_value_count() const override { return values_->get_value_count(); }
+
+    /// The dictionary of the single-valued cursor, enumerated as a sorted set.
+    [[nodiscard]] Result<std::unique_ptr<TermsEnum>> terms_enum() override {
+        auto self = std::shared_ptr<SortedSetDocValues>(this, [](SortedSetDocValues *) {});
+        return std::unique_ptr<TermsEnum>(new SortedSetDocValuesTermsEnum(std::move(self)));
+    }
 
 private:
     std::unique_ptr<SortedDocValues> values_;
@@ -834,6 +848,13 @@ public:
     [[nodiscard]] Result<BytesRef> lookup_ord(int64_t ord) override { return terms_->lookup_ord(ord); }
 
     [[nodiscard]] Result<int64_t> get_value_count() const override { return terms_->get_value_count(); }
+
+    /// An enum over the dictionary; it borrows this cursor, so the caller has to
+    /// keep it alive while the enum is used.
+    [[nodiscard]] Result<std::unique_ptr<TermsEnum>> terms_enum() override {
+        auto self = std::shared_ptr<SortedSetDocValues>(this, [](SortedSetDocValues *) {});
+        return std::unique_ptr<TermsEnum>(new SortedSetDocValuesTermsEnum(std::move(self)));
+    }
 
 private:
     RunValues runs_;

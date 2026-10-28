@@ -71,12 +71,19 @@ public:
         std::vector<BooleanClause> clauses_;
     };
 
-    /// The default limit on the number of clauses, `get_max_clause_count()` in
-    /// The reference implementation (which allows it to be configured globally; the port keeps the
-    /// default).
+    /// The default limit on the number of clauses.
     static constexpr size_t DEFAULT_MAX_CLAUSE_COUNT = 1024;
 
-    [[nodiscard]] static constexpr size_t max_clause_count() noexcept { return DEFAULT_MAX_CLAUSE_COUNT; }
+    /// The current limit, i.e. `IndexSearcher.getMaxClauseCount()`.
+    ///
+    /// The limit is process-wide, like in the reference implementation, and can
+    /// be changed with [`set_max_clause_count`].
+    [[nodiscard]] static size_t max_clause_count() noexcept;
+
+    /// Changes the limit; `count` must be positive.
+    ///
+    /// Port of `IndexSearcher.setMaxClauseCount`.
+    [[nodiscard]] static VoidResult set_max_clause_count(size_t count);
 
     /// Builds a query directly; `min_should_match` must not be negative.
     [[nodiscard]] static Result<BooleanQuery> create(std::vector<BooleanClause> clauses, int32_t min_should_match = 0);

@@ -17,6 +17,7 @@
 
 export module lucene_core:byte_block_pool;
 
+import :accountable;
 import :types;
 import :error;
 
@@ -65,7 +66,7 @@ public:
 /// [`set_bytes_ref`] so an in-block value needs no copy; here the equivalent
 /// [`bytes_ref`] always returns an owned `BytesRef`, because C++ `std::span`
 /// cannot express "borrowed from a pool that may reallocate".
-export class ByteBlockPool {
+export class ByteBlockPool : public Accountable {
 public:
     ByteBlockPool();
     explicit ByteBlockPool(ByteBlockAllocator &allocator);
@@ -114,6 +115,9 @@ public:
     [[nodiscard]] std::optional<size_t> current_buffer() const noexcept { return buffer_upto_; }
     [[nodiscard]] size_t buffer_count() const noexcept { return buffers_.size(); }
     [[nodiscard]] const std::vector<uint8_t> &buffer(size_t index) const { return buffers_.at(index); }
+
+    /// Retained bytes: every block plus the block index.
+    [[nodiscard]] int64_t ram_bytes_used() const override;
 
 private:
     /// Keeps the default allocator alive when none was supplied.

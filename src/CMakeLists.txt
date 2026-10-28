@@ -54,3 +54,26 @@ target_sources(lucene_core
 
 target_include_directories(lucene_core PUBLIC "${CMAKE_SOURCE_DIR}/include")
 target_compile_options(lucene_core PRIVATE -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare)
+
+# `TaskExecutor` runs leaf slices on its own threads.
+find_package(Threads REQUIRED)
+target_link_libraries(lucene_core PUBLIC Threads::Threads)
+
+# `HIGH_COMPRESSION` (Deflate) is zlib.
+find_package(ZLIB REQUIRED)
+target_link_libraries(lucene_core PUBLIC ZLIB::ZLIB)
+
+# clang 20 (20.1.8) crashes in LLVM IR generation on these two implementation
+# units of a Release build: "Generating code for declaration
+# 'std::__uniq_ptr_data<lucene::NumericDocValues, ...>::__uniq_ptr_data'"
+# segfaults.  The crash depends on debug info, not on the optimization level:
+# -O0/-O1/-O2/-O3 all crash without `-g`, and all of them compile with `-g`
+# (`-gline-tables-only` is not enough).  The same units compile fine in a Debug
+# build, which is why this only shows up in Release.  Forcing full debug info
+# for just these two units keeps the rest of the library optimized and their own
+# code at -O3; drop the workaround once the toolchain stops reproducing.
+set_source_files_properties(
+        "${CMAKE_CURRENT_SOURCE_DIR}/search/phrase_query_impl.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/search/multi_phrase_query_impl.cpp"
+        PROPERTIES COMPILE_OPTIONS "-g"
+)

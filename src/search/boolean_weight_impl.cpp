@@ -304,7 +304,11 @@ Result<int32_t> BooleanWeight::count(const LeafReaderContext &context, const Ind
     }
     const int32_t num_docs = num_docs_result.value();
 
-    if (query_->is_pure_disjunction()) {
+    // The union count is only the answer when a single optional clause has to
+    // match.  With a higher `minimum_should_match` the count of the union says
+    // nothing about how many documents match enough clauses, so the leaf has to
+    // be collected for real (the reference implementation checks the same).
+    if (query_->is_pure_disjunction() && query_->minimum_number_should_match() <= 1) {
         return opt_count(context, Occur::Should, searcher);
     }
 

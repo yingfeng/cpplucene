@@ -22,11 +22,58 @@ import :types;
 import :error;
 import :index_types;
 import :field_type;
+import :index_or_doc_values_query;
+import :index_sort_sorted_numeric_doc_values_range_query;
+import :numeric_utils;
+import :point_fields;
+import :query;
+import :sorted_numeric_doc_values_range_query;
 import :indexable_field;
 
 import std;
 
 namespace lucene {
+
+namespace {
+
+/// The doc-values half of a numeric range: the values are stored as `int64`, so
+/// the caller passes the encoded bounds.
+Result<std::shared_ptr<Query>> doc_values_range(const std::string &field, int64_t lower, int64_t upper) {
+    auto built = SortedNumericDocValuesRangeQuery::create(field, lower, upper);
+    if (!built.has_value()) {
+        return std::unexpected(std::move(built.error()));
+    }
+    return std::shared_ptr<Query>(std::make_shared<SortedNumericDocValuesRangeQuery>(std::move(built.value())));
+}
+
+/// `index` and `doc_values` both answer the same documents; the index is usually
+/// cheaper on an index-sorted segment, the doc values on a random one.
+Result<std::shared_ptr<Query>> index_or_doc_values(std::shared_ptr<Query> index, std::shared_ptr<Query> doc_values) {
+    auto built = IndexOrDocValuesQuery::create(std::move(index), std::move(doc_values));
+    if (!built.has_value()) {
+        return std::unexpected(std::move(built.error()));
+    }
+    return std::shared_ptr<Query>(std::make_shared<IndexOrDocValuesQuery>(std::move(built.value())));
+}
+
+/// The integer range queries: the index-sort shortcut is only tried for values
+/// that are stored as they are, which is what the integer fields do.
+Result<std::shared_ptr<Query>> integer_range(std::string field, int64_t lower, int64_t upper,
+                                             std::shared_ptr<Query> index) {
+    auto doc_values = doc_values_range(field, lower, upper);
+    if (!doc_values.has_value()) {
+        return std::unexpected(std::move(doc_values.error()));
+    }
+    auto fallback = index_or_doc_values(std::move(index), std::move(doc_values.value()));
+    if (!fallback.has_value()) {
+        return std::unexpected(std::move(fallback.error()));
+    }
+    return std::shared_ptr<Query>(std::make_shared<IndexSortSortedNumericDocValuesRangeQuery>(
+            std::move(field), lower, upper, std::move(fallback.value())));
+}
+
+} // namespace
+
 
 Result<Field> TextField::create(std::string name, std::string text, bool stored) {
     FieldType type;
@@ -97,6 +144,67 @@ Result<Field> FloatField::create(std::string name, float value, bool stored) {
 
 Result<Field> DoubleField::create(std::string name, double value, bool stored) {
     return Field::from_f64(std::move(name), value, numeric_type(stored, 8));
+}
+
+Result<std::shared_ptr<Query>> IntField::new_range_query(std::string field, int32_t lower_value,
+                                                        int32_t upper_value) {
+    auto index = IntPoint::new_range_query(field, lower_value, upper_value);
+    if (!index.has_value()) {
+        return std::unexpected(std::move(index.error()));
+    }
+    return integer_range(std::move(field), lower_value, upper_value, std::move(index.value()));
+}
+
+Result<std::shared_ptr<Query>> IntField::new_exact_query(std::string field, int32_t value) {
+    return new_range_query(std::move(field), value, value);
+}
+
+Result<std::shared_ptr<Query>> LongField::new_range_query(std::string field, int64_t lower_value,
+                                                          int64_t upper_value) {
+    auto index = LongPoint::new_range_query(field, lower_value, upper_value);
+    if (!index.has_value()) {
+        return std::unexpected(std::move(index.error()));
+    }
+    return integer_range(std::move(field), lower_value, upper_value, std::move(index.value()));
+}
+
+Result<std::shared_ptr<Query>> LongField::new_exact_query(std::string field, int64_t value) {
+    return new_range_query(std::move(field), value, value);
+}
+
+Result<std::shared_ptr<Query>> FloatField::new_range_query(std::string field, float lower_value, float upper_value) {
+    auto index = FloatPoint::new_range_query(field, lower_value, upper_value);
+    if (!index.has_value()) {
+        return std::unexpected(std::move(index.error()));
+    }
+    // The doc values of a float field hold the sortable encoding of the value.
+    auto doc_values = doc_values_range(field, NumericUtils::float_to_sortable_int(lower_value),
+                                       NumericUtils::float_to_sortable_int(upper_value));
+    if (!doc_values.has_value()) {
+        return std::unexpected(std::move(doc_values.error()));
+    }
+    return index_or_doc_values(std::move(index.value()), std::move(doc_values.value()));
+}
+
+Result<std::shared_ptr<Query>> FloatField::new_exact_query(std::string field, float value) {
+    return new_range_query(std::move(field), value, value);
+}
+
+Result<std::shared_ptr<Query>> DoubleField::new_range_query(std::string field, double lower_value, double upper_value) {
+    auto index = DoublePoint::new_range_query(field, lower_value, upper_value);
+    if (!index.has_value()) {
+        return std::unexpected(std::move(index.error()));
+    }
+    auto doc_values = doc_values_range(field, NumericUtils::double_to_sortable_long(lower_value),
+                                       NumericUtils::double_to_sortable_long(upper_value));
+    if (!doc_values.has_value()) {
+        return std::unexpected(std::move(doc_values.error()));
+    }
+    return index_or_doc_values(std::move(index.value()), std::move(doc_values.value()));
+}
+
+Result<std::shared_ptr<Query>> DoubleField::new_exact_query(std::string field, double value) {
+    return new_range_query(std::move(field), value, value);
 }
 
 } // namespace lucene

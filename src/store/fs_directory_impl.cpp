@@ -18,6 +18,7 @@
 module;
 
 #include <cerrno>
+#include <cstdlib>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -38,6 +39,8 @@ import :io_context;
 import :lock;
 import :lock_factory;
 import :random_access_input;
+import :buffered_index_input;
+import :memory_segment_index_input;
 
 import std;
 
@@ -415,6 +418,10 @@ private:
 
 FSDirectory::FSDirectory(std::filesystem::path path) : path_(std::move(path)) {
     lock_factory_ = std::make_unique<NativeFSLockFactory>(path_);
+    // Escape hatch for platforms where mapping a segment file misbehaves.
+    if (const char *disable = std::getenv("LUCENE_DISABLE_MMAP"); disable != nullptr && std::string_view(disable) == "1") {
+        use_mmap_ = false;
+    }
 }
 
 Result<std::unique_ptr<FSDirectory>> FSDirectory::open(const std::filesystem::path &path) {
@@ -528,8 +535,8 @@ VoidResult FSDirectory::rename(std::string_view source, std::string_view dest) {
     return {};
 }
 
-Result<std::unique_ptr<IndexInput>> FSDirectory::open_input(std::string_view name,
-                                                            const IOContext & /*context*/) const {
+Result<std::unique_ptr<IndexInput>> FSDirectory::open_buffered_input(std::string_view name,
+                                                                    const IOContext &context) const {
     const auto path = file_path(name);
     const int fd = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
     if (fd < 0) {
@@ -541,8 +548,43 @@ Result<std::unique_ptr<IndexInput>> FSDirectory::open_input(std::string_view nam
         return std::unexpected(std::move(size.error()));
     }
     FdPtr owner = std::make_shared<FdOwner>(fd);
-    return std::unique_ptr<IndexInput>(
+    std::unique_ptr<IndexInput> raw(
         std::make_unique<FSIndexInput>(std::move(owner), 0, size.value(), std::string(name)));
+    auto buffered = open_buffered_with_context(std::move(raw), std::string(name), context);
+    if (!buffered) {
+        return std::unexpected(std::move(buffered.error()));
+    }
+    return std::unique_ptr<IndexInput>(std::move(buffered.value()));
+}
+
+Result<std::unique_ptr<IndexInput>> FSDirectory::open_input(std::string_view name, const IOContext &context) const {
+    if (!use_mmap_) {
+        return open_buffered_input(name, context);
+    }
+    const auto path = file_path(name);
+    const int fd = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
+    if (fd < 0) {
+        return err(LuceneError::not_such_file(std::format("cannot open {}: {}", path.string(), std::strerror(errno))));
+    }
+    auto size = file_size(fd);
+    if (!size) {
+        ::close(fd);
+        return std::unexpected(std::move(size.error()));
+    }
+    const size_t file_length = size.value();
+    auto mapping = std::make_shared<MemoryMapping>();
+    if (auto mapped = mapping->map(fd, file_length, DEFAULT_MAPPING_CHUNK_SIZE); !mapped) {
+        // Mapping can fail for exotic file systems; positional reads still work.
+        ::close(fd);
+        return open_buffered_input(name, context);
+    }
+    ::close(fd);
+    if (context.read_advice() == ReadAdvice::RandomPreload) {
+        mapping->prefetch(0, file_length);
+    }
+    std::unique_ptr<IndexInput> input(
+        std::make_unique<MemorySegmentIndexInput>(std::move(mapping), 0, file_length, std::string(name)));
+    return input;
 }
 
 Result<std::unique_ptr<Lock>> FSDirectory::obtain_lock(std::string_view name) {
@@ -552,6 +594,15 @@ Result<std::unique_ptr<Lock>> FSDirectory::obtain_lock(std::string_view name) {
 std::string FSDirectory::new_file_name(std::string_view prefix, std::string_view suffix) {
     const int64_t counter = counter_.fetch_add(1) + 1;
     return std::format("{}_{}{}", prefix, counter, suffix);
+}
+
+Result<std::unique_ptr<MMapDirectory>> MMapDirectory::open(const std::filesystem::path &path) {
+    std::error_code ec;
+    std::filesystem::create_directories(path, ec);
+    if (ec) {
+        return err(LuceneError::io(std::format("cannot create directory {}: {}", path.string(), ec.message())));
+    }
+    return std::unique_ptr<MMapDirectory>(new MMapDirectory(path));
 }
 
 } // namespace lucene

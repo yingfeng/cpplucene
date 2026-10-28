@@ -67,6 +67,13 @@ Result<std::shared_ptr<FieldInfo>> FieldInfosBuilder::add_with_dv_gen(FieldInfo 
     merged.soft_deletes = merged.soft_deletes || fi.soft_deletes;
     merged.parent = merged.parent || fi.parent;
 
+    // Free-form attributes are carried over; a later segment wins, like the
+    // reference implementation.  A per-field codec records the format name and
+    // suffix here, so dropping them would make a merged segment unreadable.
+    for (const auto &[key, value] : fi.attributes) {
+        merged.attributes[key] = value;
+    }
+
     if (fi.doc_values_type != DocValuesType::None) {
         if (merged.doc_values_type == DocValuesType::None) {
             merged.doc_values_type = fi.doc_values_type;

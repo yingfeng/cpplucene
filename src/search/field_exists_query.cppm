@@ -23,6 +23,7 @@ import std;
 import :error;
 import :explanation;
 import :index_searcher;
+import :leaf_reader;
 import :leaf_reader_context;
 import :query;
 import :query_visitor;
@@ -79,9 +80,9 @@ private:
 ///
 /// Port of `FieldExistsWeight` (`core/search/field_exists_query.rs`).
 ///
-/// **Deviation:** the reference implementation's `count` optimizations (norms
-/// covering every document, point or term counts) are not ported, so counting
-/// goes through the scorer.
+/// **Deviation:** the reference implementation's vector branch of `count` is not
+/// ported (the port has no vector values), so such a field falls back to the
+/// scorer, which reports that vectors are unsupported.
 export class FieldExistsWeight final : public Weight {
 public:
     /// The weight of `query`, with the given score and score mode.
@@ -94,6 +95,10 @@ public:
 
     [[nodiscard]] Result<std::unique_ptr<ScorerSupplier>> scorer_supplier(const LeafReaderContext &context,
                                                                          const IndexSearcher &searcher) override;
+
+    /// Counts the matching documents without visiting them when the leaf can
+    /// answer it directly: dense norms, the point count or the term count.
+    [[nodiscard]] Result<int32_t> count(const LeafReaderContext &context, const IndexSearcher &searcher) override;
 
     [[nodiscard]] Result<bool> is_cacheable(const LeafReaderContext & /*context*/) const override { return true; }
 

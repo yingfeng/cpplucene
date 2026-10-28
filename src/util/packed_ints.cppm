@@ -24,6 +24,42 @@ import std;
 
 namespace lucene {
 
+export class DataInput;
+export class DataOutput;
+export class PackedReaderIterator;
+
+/// Bit layout of a packed sequence.  Lucene's `PackedInts.Format`.
+export enum class PackedFormat : uint8_t {
+    /// All bits are written contiguously: `ceil(value_count * bits / 8)` bytes.
+    kPacked = 0,
+    /// Deprecated layout that pads every value group to a whole 64-bit block.
+    kPackedSingleBlock = 1,
+};
+
+/// Random access to packed values.  Lucene's `PackedInts.Reader`.
+export class PackedIntsReader {
+public:
+    virtual ~PackedIntsReader() = default;
+
+    [[nodiscard]] virtual int64_t get(size_t index) const = 0;
+    [[nodiscard]] virtual size_t size() const = 0;
+    [[nodiscard]] virtual int32_t bits_per_value() const = 0;
+
+    /// The bytes this reader holds, as reported by `ramBytesUsed`.
+    [[nodiscard]] virtual int64_t ram_bytes_used() const { return 0; }
+};
+
+/// Sequential writer of packed values.  Lucene's `PackedInts.Writer`.
+export class PackedIntsWriter {
+public:
+    virtual ~PackedIntsWriter() = default;
+
+    [[nodiscard]] virtual VoidResult add(int64_t value) = 0;
+    [[nodiscard]] virtual VoidResult finish() = 0;
+    [[nodiscard]] virtual int32_t bits_per_value() const = 0;
+    [[nodiscard]] virtual int64_t ordinal() const = 0;
+};
+
 /// Constants and helpers shared by every packed-integer codec.
 ///
 /// Port of `util/packed/packed_ints.rs` (Lucene's `PackedInts`).
@@ -64,14 +100,26 @@ export struct PackedInts {
 
     /// `ceil(size / block_size)` with an argument check.
     [[nodiscard]] static Result<size_t> num_blocks(size_t size, size_t block_size);
-};
 
-/// Bit layout of a packed sequence.  Lucene's `PackedInts.Format`.
-export enum class PackedFormat : uint8_t {
-    /// All bits are written contiguously: `ceil(value_count * bits / 8)` bytes.
-    kPacked = 0,
-    /// Deprecated layout that pads every value group to a whole 64-bit block.
-    kPackedSingleBlock = 1,
+    /// A reader over `value_count` values read from `in`.
+    ///
+    /// Port of `PackedInts::get_reader`.  Only [`PackedFormat::kPacked`] can be
+    /// read through a stream here; the single block layout is not produced by any
+    /// reader this port has, so it reports `unsupported_operation`.
+    [[nodiscard]] static Result<std::unique_ptr<PackedIntsReader>> get_reader(
+            PackedFormat format, int32_t version, int32_t bits_per_value, size_t value_count, DataInput &in);
+
+    /// A writer of `value_count` values into `out`.
+    ///
+    /// Port of `PackedInts::get_writer`; see [`get_reader`] about the layout.
+    [[nodiscard]] static Result<std::unique_ptr<PackedIntsWriter>> get_writer(
+            PackedFormat format, int32_t version, int32_t bits_per_value, size_t value_count, DataOutput &out);
+
+    /// A sequential reader over `value_count` values read from `in`.
+    ///
+    /// Port of `PackedInts::get_reader_iterator`.
+    [[nodiscard]] static Result<std::unique_ptr<PackedReaderIterator>> get_reader_iterator(
+            PackedFormat format, int32_t version, int32_t bits_per_value, size_t value_count, DataInput &in);
 };
 
 /// Number of bytes [`PackedFormat::kPacked`] needs for `value_count` values.
@@ -97,27 +145,6 @@ export struct FormatAndBits {
 /// keeps it as a `TODO` placeholder as well.
 [[nodiscard]] FormatAndBits fastest_format_and_bits(int32_t value_count, int32_t bits_per_value,
                                                     float acceptable_overhead_ratio);
-
-/// Random access to packed values.  Lucene's `PackedInts.Reader`.
-export class PackedIntsReader {
-public:
-    virtual ~PackedIntsReader() = default;
-
-    [[nodiscard]] virtual int64_t get(size_t index) const = 0;
-    [[nodiscard]] virtual size_t size() const = 0;
-    [[nodiscard]] virtual int32_t bits_per_value() const = 0;
-};
-
-/// Sequential writer of packed values.  Lucene's `PackedInts.Writer`.
-export class PackedIntsWriter {
-public:
-    virtual ~PackedIntsWriter() = default;
-
-    [[nodiscard]] virtual VoidResult add(int64_t value) = 0;
-    [[nodiscard]] virtual VoidResult finish() = 0;
-    [[nodiscard]] virtual int32_t bits_per_value() const = 0;
-    [[nodiscard]] virtual int64_t ordinal() const = 0;
-};
 
 /// A reader that always returns 0 (`PackedInts.NullReader`).
 export class NullPackedReader final : public PackedIntsReader {

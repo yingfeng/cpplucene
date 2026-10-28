@@ -20,6 +20,7 @@ export module lucene_core:top_field_docs;
 import :types;
 import std;
 
+import :error;
 import :field_comparator;
 import :score_doc;
 import :sort_field;
@@ -91,5 +92,21 @@ export struct TopFieldDocs {
         return docs;
     }
 };
+
+/// Merges sorted shard results by their sort values, skipping the first `start`
+/// hits and keeping the best `top_n`.
+///
+/// Port of `merge_top_field_docs_with_start` (`core/search/top_docs.rs`).
+///
+/// **Deviation:** the custom tie-breaker overload
+/// (`merge_top_field_docs_with_comparator`) is not ported; every merge breaks
+/// ties with `DefaultTieBreaker`, which is what a single searcher that merged its
+/// own leaf slices needs.
+[[nodiscard]] Result<TopFieldDocs> merge_top_field_docs_with_start(const Sort &sort, size_t start, size_t top_n,
+                                                                   const std::vector<TopFieldDocs> &shard_hits);
+
+/// [`merge_top_field_docs_with_start`] without skipping any hit.
+[[nodiscard]] Result<TopFieldDocs> merge_top_field_docs(const Sort &sort, size_t top_n,
+                                                        const std::vector<TopFieldDocs> &shard_hits);
 
 } // namespace lucene

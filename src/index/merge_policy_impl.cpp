@@ -121,10 +121,45 @@ Result<std::optional<MergeSpecification>> MergePolicy::find_forced_deletes_merge
     return std::optional<MergeSpecification>{};
 }
 
-bool MergePolicy::use_compound_file(const SegmentInfos & /*infos*/, const SegmentCommitInfo & /*merged_info*/,
-                                   const MergeContext & /*context*/) const {
-    // This port never writes compound files, so a merge never produces one.
-    return false;
+bool MergePolicy::use_compound_file(const SegmentInfos &infos, const SegmentCommitInfo &merged_info,
+                                   const MergeContext &context) const {
+    // Port of `MergePolicy::use_compound_file`: a merge that is a large part of
+    // the index (or larger than `max_cfs_segment_size`) stays unpacked, because
+    // packing it would only add a copy of the whole segment.
+    if (merged_info.info.files.empty()) {
+        return false;
+    }
+    Directory *directory = context.directory();
+    if (directory == nullptr || no_cfs_ratio_ <= 0.0) {
+        return false;
+    }
+    int64_t merged_size = 0;
+    for (const std::string &file : merged_info.info.files) {
+        auto length = directory->file_length(file);
+        if (!length.has_value()) {
+            return false;
+        }
+        merged_size += static_cast<int64_t>(length.value());
+    }
+    if (merged_size == 0 || merged_size > max_cfs_segment_size_) {
+        return false;
+    }
+    if (no_cfs_ratio_ >= 1.0) {
+        return true;
+    }
+    int64_t total_size = 0;
+    for (const SegmentCommitInfo &segment : infos.segments) {
+        for (const std::string &file : segment.info.files) {
+            auto length = directory->file_length(file);
+            if (length.has_value()) {
+                total_size += static_cast<int64_t>(length.value());
+            }
+        }
+    }
+    if (total_size == 0) {
+        return true;
+    }
+    return static_cast<double>(merged_size) <= static_cast<double>(total_size) * no_cfs_ratio_;
 }
 
 VoidResult MergePolicy::set_no_cfs_ratio(double ratio) {

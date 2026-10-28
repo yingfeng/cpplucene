@@ -20,10 +20,13 @@ export module lucene_core:doc_values_fields;
 import :types;
 import std;
 
+import :bytes_ref;
 import :error;
 import :field_type;
 import :index_types;
 import :indexable_field;
+import :sorted_numeric_doc_values_range_query;
+import :sorted_set_doc_values_range_query;
 
 namespace lucene {
 
@@ -83,6 +86,20 @@ export struct SortedSetDocValuesField {
     [[nodiscard]] static Result<Field> create(std::string name, std::string value,
                                               DocValuesSkipIndexType skip_index);
     [[nodiscard]] static VoidResult set_value(Field &field, std::string value);
+
+    /// A query over the values of `field` in `[lower_value, upper_value]`.
+    ///
+    /// Port of `SortedSetDocValuesField::new_slow_range_query`: it reads doc values
+    /// instead of postings, so an empty bound means "unbounded".
+    [[nodiscard]] static Result<SortedSetDocValuesRangeQuery> new_slow_range_query(
+            std::string field, std::optional<BytesRef> lower_value, std::optional<BytesRef> upper_value,
+            bool lower_inclusive, bool upper_inclusive);
+
+    /// A query for the documents that have exactly `value`.
+    ///
+    /// Port of `SortedSetDocValuesField::new_slow_exact_query`.
+    [[nodiscard]] static Result<SortedSetDocValuesRangeQuery>
+    new_slow_exact_query(std::string field, std::optional<BytesRef> value);
 };
 
 /// A multi-valued numeric doc values field; add one field per value.
@@ -94,6 +111,14 @@ export struct SortedNumericDocValuesField {
     [[nodiscard]] static Result<Field> create(std::string name, int64_t value,
                                               DocValuesSkipIndexType skip_index);
     [[nodiscard]] static VoidResult set_value(Field &field, int64_t value);
+
+    /// A query over the values of `field` in `[lower_value, upper_value]`.
+    ///
+    /// Port of `SortedNumericDocValuesField::new_slow_range_query`: it reads doc
+    /// values instead of postings.
+    [[nodiscard]] static Result<SortedNumericDocValuesRangeQuery> new_slow_range_query(std::string field,
+                                                                                      int64_t lower_value,
+                                                                                      int64_t upper_value);
 };
 
 } // namespace lucene

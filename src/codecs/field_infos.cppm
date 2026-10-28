@@ -110,7 +110,48 @@ public:
 
     [[nodiscard]] size_t size() const noexcept { return fields_.size(); }
     [[nodiscard]] bool empty() const noexcept { return fields_.empty(); }
-    [[nodiscard]] const std::vector<FieldInfo> &fields() const noexcept { return fields_; }
+
+    /// The fields, in number order.
+    ///
+    /// For a view produced by [`with_filter`] this is only the visible subset,
+    /// which is what every writer iterating the collection wants; the
+    /// segment-wide predicates (`has_norms`, `has_postings`, ...) follow the same
+    /// view.
+    [[nodiscard]] const std::vector<FieldInfo> &fields() const noexcept {
+        return visible_ ? *visible_ : fields_;
+    }
+
+    /// A copy of this collection whose iteration view only reports `names`.
+    ///
+    /// Port of the reference implementation's `FieldInfosHook::Filter`
+    /// (`codecs/perfield/per_field_merge_state.rs`): [`by_name`] and
+    /// [`by_number`] keep answering for **every** field, so code that remaps
+    /// field numbers across segments still works, but [`fields`] and the
+    /// `has_*` predicates report the subset only.  This is what lets a per-field
+    /// codec hand one format a merge state that looks like a segment containing
+    /// just its own fields.
+    [[nodiscard]] FieldInfos with_filter(const std::set<std::string> &names) const {
+        FieldInfos copy;
+        copy.fields_ = fields_;
+        copy.visible_ = std::vector<FieldInfo>{};
+        for (const auto &field : fields_) {
+            if (names.contains(field.name)) {
+                copy.visible_->push_back(field);
+            }
+        }
+        return copy;
+    }
+
+    /// Mutable access to a field, for writers that annotate fields while writing.
+    ///
+    /// The collection is logically immutable once built, but a segment writer
+    /// still records attributes during the write (the per-field formats store
+    /// their format name and suffix this way) and the `.fnm` file is written
+    /// last, so the annotation is visible to it.  The `const_cast` is safe
+    /// because nothing else can observe the object between the two points.
+    [[nodiscard]] FieldInfo *field_info_mut(std::string_view name) {
+        return const_cast<FieldInfo *>(by_name(name));
+    }
 
     /// Field with the given name, or `nullptr`.
     [[nodiscard]] const FieldInfo *by_name(std::string_view name) const;
@@ -146,6 +187,9 @@ private:
     FieldInfos() = default;
 
     std::vector<FieldInfo> fields_;
+    /// Set by [`with_filter`]; when present it replaces `fields_` as the
+    /// iteration view.
+    std::optional<std::vector<FieldInfo>> visible_;
 };
 
 /// `.fnm` encoder/decoder.

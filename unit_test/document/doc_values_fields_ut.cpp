@@ -209,6 +209,18 @@ TEST(DocValuesFieldsTest, SlowRangeQueryMatchesTheStoredRanges) {
     ASSERT_TRUE(disjoint.has_value());
     EXPECT_TRUE(search_docs(disjoint.value(), reader).empty());
 
+    // The general form is the same query for INTERSECTS ...
+    auto general = IntRangeDocValuesField::new_slow_range_query("r", std::vector<int32_t>{18}, std::vector<int32_t>{22},
+                                                                QueryType::Intersects);
+    ASSERT_TRUE(general.has_value()) << (general ? "" : general.error().to_string());
+    EXPECT_EQ(search_docs(general.value(), reader), (std::vector<int32_t>{0, 1}));
+
+    // ... and the other two types are rejected, exactly like the reference.
+    auto within = IntRangeDocValuesField::new_slow_range_query("r", std::vector<int32_t>{18}, std::vector<int32_t>{22},
+                                                               QueryType::Within);
+    ASSERT_FALSE(within.has_value());
+    EXPECT_EQ(within.error().kind(), ErrorKind::kUnsupportedOperation);
+
     // The slow path only supports INTERSECTS.
     auto encode = IntRange::encode(std::vector<int32_t>{1}, std::vector<int32_t>{2});
     ASSERT_TRUE(encode.has_value());

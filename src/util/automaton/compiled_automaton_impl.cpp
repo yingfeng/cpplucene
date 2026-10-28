@@ -19,6 +19,7 @@ module lucene_core:compiled_automaton.impl;
 
 import :compiled_automaton;
 
+import :automata;
 import :automaton;
 import :byte_run_automaton;
 import :byte_runnable;
@@ -28,9 +29,11 @@ import :error;
 import :ints_ref;
 import :nfa_run_automaton;
 import :operations;
+import :query_visitor;
 import :run_automaton;
 import :string_helper;
 import :transition;
+import :term;
 import :transition_accessor;
 import :types;
 import :utf32_to_utf8;
@@ -497,6 +500,48 @@ bool CompiledAutomaton::operator==(const CompiledAutomaton &other) const {
             return true;
     }
     return false;
+}
+
+
+VoidResult CompiledAutomaton::visit(QueryVisitor &visitor, const Query &query, std::string_view field) const {
+    if (!visitor.accept_field(field)) {
+        return {};
+    }
+    switch (type_) {
+        case AutomatonType::kNone:
+            // No term is accepted, so there is nothing to tell the visitor.
+            return {};
+        case AutomatonType::kAll:
+            return visitor.consume_terms_matching(
+                    query, field, []() -> Result<std::optional<ByteRunAutomaton>> {
+                        auto automaton = Automata::make_any_string();
+                        if (!automaton.has_value()) {
+                            return std::unexpected(std::move(automaton.error()));
+                        }
+                        auto run = ByteRunAutomaton::create(std::move(automaton.value()));
+                        if (!run.has_value()) {
+                            return std::unexpected(std::move(run.error()));
+                        }
+                        return std::optional<ByteRunAutomaton>(std::move(run.value()));
+                    });
+        case AutomatonType::kSingle: {
+            if (!term_.has_value()) {
+                return err(LuceneError::illegal_state("a singleton compiled automaton is missing its term"));
+            }
+            const std::array<Term, 1> terms{Term(std::string(field), term_.value())};
+            return visitor.consume_terms(query, terms);
+        }
+        case AutomatonType::kNormal:
+            return visitor.consume_terms_matching(
+                    query, field, [this]() -> Result<std::optional<ByteRunAutomaton>> {
+                        if (!run_automaton_.has_value()) {
+                            return err(LuceneError::illegal_state(
+                                    "a normal compiled automaton is missing its DFA"));
+                        }
+                        return std::optional<ByteRunAutomaton>(run_automaton_.value());
+                    });
+    }
+    return {};
 }
 
 } // namespace lucene

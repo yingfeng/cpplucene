@@ -20,12 +20,19 @@ export module lucene_core:query_visitor;
 import :types;
 import std;
 
+import :byte_run_automaton;
 import :error;
+import :occur;
 import :term;
 
 namespace lucene {
 
 export class Query;
+
+/// Supplies the automaton of the terms a visitor is told about, or `nullopt` when
+/// the terms are unbounded.  A supplier keeps a query from building an automaton
+/// the visitor never looks at.
+export using AutomatonSupplier = std::function<Result<std::optional<ByteRunAutomaton>>()>;
 
 /// Recursion hook of [`Query::visit`].
 ///
@@ -34,11 +41,11 @@ export class Query;
 /// **Deviations** (C++ mechanics only):
 ///  * `consume_terms` takes a `std::span<const Term>` instead of a generic
 ///    `&[T] where T: Borrow<Term>`; every call site in the reference implementation passes terms;
-///  * `consume_terms_matching` is not ported yet — it needs an automaton
-///    supplier, and no ported query uses it (the automaton queries land later);
-///  * `get_sub_visitor` / `Occur` are not ported yet: they exist for
-///    `BooleanQuery`, which is not ported.  Until then a composite query that
-///    wants to prune `MUST_NOT` children has to do it itself.
+///  * `get_sub_visitor` answers a [`DefaultQueryVisitor`] by value instead of a
+///    lifetime-bound associated type: C++ has no `GAT`, so the visitor is borrowed
+///    through a wrapper the caller keeps on the stack.
+export class DefaultQueryVisitor;
+
 export class QueryVisitor {
 public:
     virtual ~QueryVisitor() = default;
@@ -46,6 +53,17 @@ public:
     /// Called by leaf queries that match on specific terms.
     [[nodiscard]] virtual VoidResult consume_terms(const Query &query, std::span<const Term> terms) {
         return {};
+    }
+
+    /// Called by leaf queries that match on a class of terms.
+    ///
+    /// The default implementation falls back to [`visit_leaf`], which is what the
+    /// reference implementation does for backwards compatibility.
+    [[nodiscard]] virtual VoidResult consume_terms_matching(const Query &query, std::string_view field,
+                                                            const AutomatonSupplier &automaton) {
+        (void)field;
+        (void)automaton;
+        return visit_leaf(query);
     }
 
     /// Called by leaf queries that do not match on terms.
@@ -57,6 +75,40 @@ public:
         (void)field;
         return true;
     }
+
+    /// Pulls the visitor of the child clauses of `parent`: this visitor, or one
+    /// that ignores everything when `occur` is [`Occur::MustNot`].
+    ///
+    /// Port of `QueryVisitor::get_sub_visitor` (`core/search/query_visitor.rs`).
+    [[nodiscard]] virtual DefaultQueryVisitor get_sub_visitor(Occur occur, const Query &parent);
+};
+
+/// The visitor [`QueryVisitor::get_sub_visitor`] answers: it forwards to the
+/// parent visitor, or ignores every call when it wraps none (a `MUST_NOT`
+/// clause).
+///
+/// Port of `DefaultQueryVisitor` (`core/search/query_visitor.rs`).
+export class DefaultQueryVisitor final : public QueryVisitor {
+public:
+    /// Wraps `visitor`; a null visitor ignores everything.
+    explicit DefaultQueryVisitor(QueryVisitor *visitor) noexcept : visitor_(visitor) {}
+
+    [[nodiscard]] VoidResult consume_terms(const Query &query, std::span<const Term> terms) override;
+
+    [[nodiscard]] VoidResult consume_terms_matching(const Query &query, std::string_view field,
+                                                    const AutomatonSupplier &automaton) override;
+
+    [[nodiscard]] VoidResult visit_leaf(const Query &query) override;
+
+    [[nodiscard]] bool accept_field(std::string_view field) const override;
+
+    [[nodiscard]] DefaultQueryVisitor get_sub_visitor(Occur occur, const Query &parent) override;
+
+    /// Whether the visitor wraps a parent; `false` for a `MUST_NOT` clause.
+    [[nodiscard]] bool is_empty() const noexcept { return visitor_ == nullptr; }
+
+private:
+    QueryVisitor *visitor_{nullptr};
 };
 
 } // namespace lucene

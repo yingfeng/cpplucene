@@ -18,6 +18,13 @@
 module lucene_core:packed_ints.impl;
 
 import :packed_ints;
+
+import :data_input;
+import :data_output;
+import :packed64_reader;
+import :packed64_writer;
+import :packed_reader_iterator;
+import :packed_stream;
 import :types;
 import :error;
 import :core_helper;
@@ -102,6 +109,49 @@ FormatAndBits fastest_format_and_bits(int32_t value_count, int32_t bits_per_valu
         actual_bits_per_value = 64;
     }
     return FormatAndBits{PackedFormat::kPacked, actual_bits_per_value};
+}
+
+Result<std::unique_ptr<PackedIntsReader>> PackedInts::get_reader(PackedFormat format, int32_t version,
+                                                               int32_t bits_per_value, size_t value_count,
+                                                               DataInput &in) {
+    if (auto checked = check_version(version); !checked.has_value()) {
+        return std::unexpected(std::move(checked.error()));
+    }
+    if (format == PackedFormat::kPackedSingleBlock) {
+        return err(LuceneError::unsupported_operation(
+                "reading PackedInts single block values through a stream is not supported"));
+    }
+    auto values = read_packed_stream(in, value_count, bits_per_value);
+    if (!values.has_value()) {
+        return std::unexpected(std::move(values.error()));
+    }
+    return std::unique_ptr<PackedIntsReader>(new Packed64Reader(std::move(values.value()), bits_per_value));
+}
+
+Result<std::unique_ptr<PackedIntsWriter>> PackedInts::get_writer(PackedFormat format, int32_t version,
+                                                               int32_t bits_per_value, size_t value_count,
+                                                               DataOutput &out) {
+    if (auto checked = check_version(version); !checked.has_value()) {
+        return std::unexpected(std::move(checked.error()));
+    }
+    if (format == PackedFormat::kPackedSingleBlock) {
+        return err(LuceneError::unsupported_operation(
+                "writing PackedInts single block values through a stream is not supported"));
+    }
+    return std::unique_ptr<PackedIntsWriter>(new Packed64Writer(out, bits_per_value, value_count));
+}
+
+Result<std::unique_ptr<PackedReaderIterator>> PackedInts::get_reader_iterator(PackedFormat format, int32_t version,
+                                                                             int32_t bits_per_value,
+                                                                             size_t value_count, DataInput &in) {
+    if (auto checked = check_version(version); !checked.has_value()) {
+        return std::unexpected(std::move(checked.error()));
+    }
+    if (format == PackedFormat::kPackedSingleBlock) {
+        return err(LuceneError::unsupported_operation(
+                "iterating PackedInts single block values is not supported"));
+    }
+    return PackedReaderIterator::create(in, bits_per_value, value_count);
 }
 
 } // namespace lucene

@@ -56,9 +56,11 @@ public:
 /// Specialisation hooks for [`DocIdSetIterator`].  Port of the
 /// `DocIdSetIteratorExtensions` trait.
 ///
-/// Deviation from the reference implementation: the `SparseFixedBitSet` hook is not ported yet
-/// (there is no `:sparse_fixed_bit_set` partition), so only the fixed bit set
-/// and the doc-base fixed bit set accessors exist.
+/// Deviation from the reference implementation: the `SparseFixedBitSet` hook
+/// (`get_sparse_fixed_bit_set`) is not ported.  The partition exists
+/// (`:sparse_fixed_bit_set`) but the port has no `SparseFixedBitSetIterator` that
+/// could expose it, so only the fixed bit set and the doc-base fixed bit set
+/// accessors exist.
 export class DocIdSetIteratorExtensions {
 public:
     virtual ~DocIdSetIteratorExtensions() = default;

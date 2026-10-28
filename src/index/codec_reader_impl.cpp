@@ -32,6 +32,7 @@ import :point_values;
 import :points_reader;
 import :sorted_doc_values;
 import :sorted_numeric_doc_values;
+import :singleton_sorted_set_doc_values;
 import :sorted_set_doc_values;
 import :stored_field_visitor;
 import :stored_fields;
@@ -233,14 +234,32 @@ Result<std::unique_ptr<SortedSetDocValues>> CodecReader::get_sorted_set_doc_valu
     if (!fi.has_value()) {
         return std::unexpected(std::move(fi.error()));
     }
-    if (fi.value() == nullptr) {
+    auto *reader = get_doc_values_reader();
+    if (fi.value() != nullptr) {
+        if (reader == nullptr) {
+            return std::unexpected(LuceneError::illegal_state("doc values reader is null"));
+        }
+        return reader->get_sorted_set(*fi.value());
+    }
+
+    // A single-valued field is exposed as a sorted set that holds exactly one value
+    // per document: the reference implementation wraps the sorted cursor in
+    // `SingletonSortedSetDocValues` the same way.
+    auto single = doc_values_field(field, DocValuesType::Sorted);
+    if (!single.has_value()) {
+        return std::unexpected(std::move(single.error()));
+    }
+    if (single.value() == nullptr) {
         return std::unique_ptr<SortedSetDocValues>{};
     }
-    auto *reader = get_doc_values_reader();
     if (reader == nullptr) {
         return std::unexpected(LuceneError::illegal_state("doc values reader is null"));
     }
-    return reader->get_sorted_set(*fi.value());
+    auto values = reader->get_sorted(*single.value());
+    if (!values.has_value()) {
+        return std::unexpected(std::move(values.error()));
+    }
+    return std::unique_ptr<SortedSetDocValues>(std::make_unique<SingletonSortedSetDocValues>(std::move(values.value())));
 }
 
 Result<std::unique_ptr<DocValuesSkipper>> CodecReader::get_doc_values_skipper(std::string_view field) {

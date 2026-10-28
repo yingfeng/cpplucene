@@ -39,11 +39,12 @@ namespace lucene {
 /// cannot be plain enumerators.
 ///
 /// **Deviations:**
-///  * `DocValuesRewriteMethod` is not ported yet;
 ///  * `kConstantScore` and `kConstantScoreBlended` share one implementation: the
 ///    reference implementation's blended variant only differs in how it splits
 ///    the work between a boolean query and a bit set, and both assign every
-///    matching document the query's boost.
+///    matching document the query's boost;
+///  * [`kDocValues`](Kind::kDocValues) goes through
+///    [`MultiTermQueryDocValuesWrapper`](lucene_core:doc_values_rewrite_method).
 export class MultiTermRewriteMethod {
 public:
     /// The rewrite the value stands for.
@@ -110,8 +111,13 @@ private:
 ///
 /// **Deviations** (C++ mechanics and scope):
 ///  * the reference implementation's `RewriteMethod` trait objects become the
-///    [`MultiTermRewriteMethod`] enum, and the blended/top-terms rewrites are not
-///    ported;
+///    [`MultiTermRewriteMethod`] enum;
+///  * the `TopTermsBlendedFreqScoringRewrite` is not ported, and
+///    [`kConstantScoreBlended`] uses the constant-score wrapper: the reference
+///    implementation's blended wrapper only splits its expansion when the query
+///    carries pre-collected term states (its top-term queue is sized by that list),
+///    and every query of the port rewrites from scratch, so there it would build
+///    the same per-leaf union this wrapper builds;
 ///  * the reference implementation's generic `TermsEnum` associated type becomes a
 ///    plain [`TermsEnum`] returned as `unique_ptr`;
 ///  * [`create_weight`] rewrites the query first instead of failing with the

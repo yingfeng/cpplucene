@@ -54,8 +54,14 @@ public:
 
     /// Creates the format, with Lucene's default parameters.
     [[nodiscard]] static Result<Lucene90TermVectorsFormat> create() {
+        // `BEST_SPEED` is what Lucene 9 writes for `Lucene90TermVectorsData`, so
+        // reading a Lucene written index needs the preset dictionary mode.
+        //
+        // **Deviation:** segments written by an earlier version of this port put
+        // plain LZ4 blocks under the same format name, so their term vectors are
+        // no longer readable.
         auto base = Lucene90CompressingTermVectorsFormat::create(std::string(DATA_FORMAT_NAME), "",
-                                                                 CompressionMode::fast(), DEFAULT_CHUNK_SIZE,
+                                                                 CompressionMode::best_speed(), DEFAULT_CHUNK_SIZE,
                                                                  DEFAULT_MAX_DOCS_PER_CHUNK, DEFAULT_BLOCK_SIZE);
         if (!base.has_value()) {
             return std::unexpected(std::move(base.error()));

@@ -66,6 +66,13 @@ public:
     /// Runs the merges `source` hands out, until it has no more.
     [[nodiscard]] virtual VoidResult merge(MergeSource &source, MergeTrigger trigger) = 0;
 
+    /// Waits for the merges this scheduler started in the background.
+    ///
+    /// A scheduler that runs its merges on the calling thread returns at once;
+    /// a background scheduler blocks until its workers are idle, and reports the
+    /// first error a worker hit.
+    [[nodiscard]] virtual VoidResult wait_for_merges() { return {}; }
+
     /// Releases the scheduler; merges still running are waited for.
     [[nodiscard]] virtual VoidResult close() { return {}; }
 

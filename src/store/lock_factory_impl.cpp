@@ -40,6 +40,10 @@ public:
     SingleInstanceLock(SingleInstanceLockFactory *factory, std::string lock_name)
         : factory_(factory), lock_name_(std::move(lock_name)) {}
 
+    /// Releasing on destruction is part of the [`Lock`](:lock) contract; without
+    /// it a writer that is dropped without `close()` would keep the lock forever.
+    ~SingleInstanceLock() override { std::ignore = close(); }
+
     [[nodiscard]] VoidResult ensure_valid() const override {
         if (closed_) {
             return err(LuceneError::lock_obtain_failed(std::format("lock {} was already released", lock_name_)));
@@ -56,6 +60,37 @@ private:
     std::string lock_name_;
     bool closed_{false};
 };
+
+/// The lock files this process holds.
+///
+/// POSIX `fcntl` locks belong to the *process*, not to the descriptor: acquiring
+/// the same lock twice from one process succeeds, and closing any descriptor on
+/// the file drops the lock for every holder.  The registry is what turns that
+/// into "one writer per index" inside a process, exactly like the reference
+/// implementation's in-process lock table.
+std::mutex &held_locks_mutex() {
+    static std::mutex mutex;
+    return mutex;
+}
+
+std::set<std::string, std::less<>> &held_locks() {
+    static std::set<std::string, std::less<>> files;
+    return files;
+}
+
+/// Registers `file` as held; reports the error when this process already holds it.
+VoidResult register_held_lock(const std::string &file) {
+    std::lock_guard<std::mutex> guard(held_locks_mutex());
+    if (!held_locks().insert(file).second) {
+        return err(LuceneError::lock_obtain_failed("Lock instance already obtained: " + file));
+    }
+    return {};
+}
+
+void unregister_held_lock(const std::string &file) {
+    std::lock_guard<std::mutex> guard(held_locks_mutex());
+    held_locks().erase(file);
+}
 
 /// An advisory lock held on an open file descriptor.
 class NativeFSLock : public Lock {
@@ -108,6 +143,7 @@ VoidResult NativeFSLock::close() {
     }
     ::close(fd_);
     fd_ = -1;
+    unregister_held_lock(file_.string());
     return {};
 }
 
@@ -149,8 +185,14 @@ std::filesystem::path NativeFSLockFactory::lock_file(std::string_view lock_name)
 
 Result<std::unique_ptr<Lock>> NativeFSLockFactory::obtain_lock(std::string_view lock_name) {
     const auto path = lock_file(lock_name);
+    // The in-process table comes first: `fcntl` would happily grant the lock
+    // twice inside one process.
+    if (auto registered = register_held_lock(path.string()); !registered.has_value()) {
+        return std::unexpected(std::move(registered.error()));
+    }
     const int fd = ::open(path.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0666);
     if (fd < 0) {
+        unregister_held_lock(path.string());
         return err(LuceneError::io(std::format("cannot open lock file {}: {}", path.string(), std::strerror(errno))));
     }
     struct flock lock {};
@@ -161,6 +203,7 @@ Result<std::unique_ptr<Lock>> NativeFSLockFactory::obtain_lock(std::string_view 
     if (::fcntl(fd, F_SETLK, &lock) != 0) {
         const int saved = errno;
         ::close(fd);
+        unregister_held_lock(path.string());
         return err(LuceneError::lock_obtain_failed(
             std::format("cannot obtain lock {}: {}", path.string(), std::strerror(saved))));
     }
@@ -170,6 +213,7 @@ Result<std::unique_ptr<Lock>> NativeFSLockFactory::obtain_lock(std::string_view 
 }
 
 VoidResult NativeFSLockFactory::clear_lock(std::string_view lock_name) {
+    unregister_held_lock(lock_file(lock_name).string());
     std::error_code ec;
     std::filesystem::remove(lock_file(lock_name), ec);
     if (ec) {

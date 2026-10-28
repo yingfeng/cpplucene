@@ -17,6 +17,7 @@
 
 export module lucene_core:leaf_collector;
 
+import :doc_id_stream;
 import :types;
 import std;
 
@@ -30,10 +31,11 @@ namespace lucene {
 ///
 /// Port of `LeafCollector` (`core/search/leaf_collector.rs`).
 ///
-/// **Deviation:** the reference implementation's `collect_stream` / `DocIdStream` bulk API is not
-/// ported — no collector in the ported code overrides it, so
-/// [`collect`] carries every hit.  The `CompetitiveIterator` associated type
-/// became a plain `DocIdSetIterator`.
+/// **Deviation:** the reference implementation's windowed boolean scorer (which
+/// produces the streams this API batches) is not ported, so
+/// [`collect_stream`] exists and is honoured (the hit-count collector overrides
+/// it), but the ported bulk scorers still hand every hit to [`collect`].  The
+/// `CompetitiveIterator` associated type became a plain `DocIdSetIterator`.
 export class LeafCollector {
 public:
     virtual ~LeafCollector() = default;
@@ -44,6 +46,13 @@ public:
 
     /// Called once per matching document, in increasing order of `doc`.
     [[nodiscard]] virtual VoidResult collect(int32_t doc, Scorable &scorer) = 0;
+
+    /// Bulk-collects the documents of `stream`.
+    ///
+    /// The default implementation hands every document to
+    /// [`collect`](Self::collect); collectors that can count or group documents
+    /// without per-hit work override it.
+    [[nodiscard]] virtual VoidResult collect_stream(DocIdStream &stream, Scorable &scorer);
 
     /// An iterator over the documents that may still be competitive, or
     /// `nullptr` when the collector cannot skip anything.
