@@ -19,6 +19,22 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS ON)
 set(CMAKE_CXX_MODULE_STD ON)
 
+# `CXX_MODULE_STD` needs the standard library to ship a module manifest: CMake
+# generates the `__CMAKE::CXX23` imported target from `libstdc++.modules.json`
+# / `libc++.modules.json`.  Without it the configure step fails deep inside
+# `src/CMakeLists.txt` with a message about the imported target, which says
+# nothing about the actual fix, so fail here instead.
+if (CMAKE_CXX_MODULE_STD AND NOT TARGET __CMAKE::CXX23)
+    message(FATAL_ERROR
+            "`import std;` is not available: the C++ standard library in use does not ship a module manifest.\n"
+            "CMake looked for `libstdc++.modules.json` (or `libc++.modules.json`) and found none.\n"
+            "Fix it in one of these ways:\n"
+            "  * libstdc++ (default): install GCC 15 headers, e.g. `apt-get install libstdc++-15-dev`;\n"
+            "  * libc++: build with `-stdlib=libc++` and install libc++ 20 (`libc++-20-dev`);\n"
+            "  * point CMake at the manifest explicitly:\n"
+            "    `-DCMAKE_CXX_STDLIB_MODULES_JSON=/path/to/libstdc++.modules.json`.")
+endif ()
+
 if (NOT CMAKE_GENERATOR STREQUAL "Ninja")
     message(FATAL_ERROR "This project requires the Ninja generator. "
             "Refers to https://cmake.org/cmake/help/latest/manual/cmake-cxxmodules.7.html#generator-support")

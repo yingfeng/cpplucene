@@ -38,16 +38,25 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            wget gnupg lsb-release ca-certificates \
+            wget gnupg lsb-release ca-certificates software-properties-common \
             ninja-build mold zlib1g-dev libgtest-dev
           wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s -- "${CLANG_VERSION}"
           sudo apt-get install -y --no-install-recommends "clang-${CLANG_VERSION}"
+          # `import std;` needs a `libstdc++.modules.json` manifest next to the
+          # libstdc++ headers; the runner's GCC 13/14 has none, GCC 15 ships it.
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          sudo apt-get install -y --no-install-recommends g++-15 libstdc++-15-dev
           # CMake from the official tarball: the distro package is too old and
           # pip is blocked by PEP 668 on the runner image.
           wget -q "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz" -O cmake.tar.gz
           tar -xzf cmake.tar.gz -C "${RUNNER_TEMP}"
           echo "${RUNNER_TEMP}/cmake-${CMAKE_VERSION}-linux-x86_64/bin" >> "${GITHUB_PATH}"
           command -v mold ninja "clang++-${CLANG_VERSION}"
+          # clang picks the newest libstdc++ it can find; the module manifest must
+          # live next to the headers it actually selects.
+          gcc_dir=$("clang++-${CLANG_VERSION}" -v -E -x c++ /dev/null 2>&1 | sed -n 's/^Selected GCC installation: //p')
+          echo "clang selected GCC installation: ${gcc_dir}"
+          test -f "${gcc_dir}/libstdc++.modules.json"
 
       - name: Configure
         run: |
@@ -84,13 +93,23 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            wget gnupg lsb-release ca-certificates \
+            wget gnupg lsb-release ca-certificates software-properties-common \
             ninja-build mold zlib1g-dev libgtest-dev
           wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s -- "${CLANG_VERSION}"
           sudo apt-get install -y --no-install-recommends "clang-${CLANG_VERSION}"
+          # `import std;` needs a `libstdc++.modules.json` manifest next to the
+          # libstdc++ headers; the runner's GCC 13/14 has none, GCC 15 ships it.
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          sudo apt-get install -y --no-install-recommends g++-15 libstdc++-15-dev
           wget -q "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz" -O cmake.tar.gz
           tar -xzf cmake.tar.gz -C "${RUNNER_TEMP}"
           echo "${RUNNER_TEMP}/cmake-${CMAKE_VERSION}-linux-x86_64/bin" >> "${GITHUB_PATH}"
+          command -v mold ninja "clang++-${CLANG_VERSION}"
+          # clang picks the newest libstdc++ it can find; the module manifest must
+          # live next to the headers it actually selects.
+          gcc_dir=$("clang++-${CLANG_VERSION}" -v -E -x c++ /dev/null 2>&1 | sed -n 's/^Selected GCC installation: //p')
+          echo "clang selected GCC installation: ${gcc_dir}"
+          test -f "${gcc_dir}/libstdc++.modules.json"
 
       - name: Configure
         run: |
@@ -124,13 +143,23 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            wget gnupg lsb-release ca-certificates \
+            wget gnupg lsb-release ca-certificates software-properties-common \
             ninja-build mold zlib1g-dev pkg-config
           wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s -- "${CLANG_VERSION}"
           sudo apt-get install -y --no-install-recommends "clang-${CLANG_VERSION}"
+          # `import std;` needs a `libstdc++.modules.json` manifest next to the
+          # libstdc++ headers; the runner's GCC 13/14 has none, GCC 15 ships it.
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          sudo apt-get install -y --no-install-recommends g++-15 libstdc++-15-dev
           wget -q "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz" -O cmake.tar.gz
           tar -xzf cmake.tar.gz -C "${RUNNER_TEMP}"
           echo "${RUNNER_TEMP}/cmake-${CMAKE_VERSION}-linux-x86_64/bin" >> "${GITHUB_PATH}"
+          command -v mold ninja "clang++-${CLANG_VERSION}"
+          # clang picks the newest libstdc++ it can find; the module manifest must
+          # live next to the headers it actually selects.
+          gcc_dir=$("clang++-${CLANG_VERSION}" -v -E -x c++ /dev/null 2>&1 | sed -n 's/^Selected GCC installation: //p')
+          echo "clang selected GCC installation: ${gcc_dir}"
+          test -f "${gcc_dir}/libstdc++.modules.json"
 
       # Tests are not needed here and they are the bulk of the build time.
       - name: Build library
