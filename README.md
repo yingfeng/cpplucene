@@ -125,26 +125,43 @@ include/lucene_core/             small public headers (macros.h)
 Subsystems mirror the reference implementation tree:
 
 ```
-util  store  document  analysis  codecs  index  search  geo
+util  store  document  analysis  codecs  index  search  geo  queryparser  sandbox
 ```
 
 ## Status
 
-Implemented end to end: `util`, `store`, `document`, `analysis` (standard, English and CJK
-chains, Porter stemming, n-grams, shingles, ASCII folding, synonyms, char filters and the usual
-length/count/elision/keyword filters), `codecs` (Lucene90 postings, norms, doc values, stored
-fields, term vectors, points/BKD, compression), `index` (writer, codec/segment readers,
-merges), `search` (term/boolean/multi-term queries, similarity, impacts and competitive
-skipping, collectors, ranking and sorting), `queryparser` (the classic syntax, hand written),
-`geo`, and the whole span family (`SpanTermQuery`, `SpanNearQuery` ordered and unordered,
-`SpanOrQuery`, `SpanNotQuery`, `SpanFirstQuery`, `SpanPositionRangeQuery`,
-`SpanContainingQuery`, `SpanWithinQuery`, `FieldMaskingSpanQuery`,
-`SpanMultiTermQueryWrapper`).
+Every subsystem is implemented end to end: `util` (including the automaton/Levenshtein/FST
+stack, packed ints, radix sorters), `store` (byte-buffer, buffered and memory-mapped
+directories, compound files, `FSLockFactory`), `document`, `analysis` (standard, English and
+CJK chains, Porter stemming, n-grams, shingles, ASCII folding, synonyms and synonym *graphs*,
+word delimiter graphs, char filters including HTML strip, URL/email tokenizer, the usual
+length/count/elision/keyword filters), `codecs` (Lucene90/101 postings, norms, doc values,
+stored fields, term vectors, points/BKD, compression, per-field formats,
+`CheckIndex`), `index` (writer, concurrent merges, readers, index sorting, doc values updates,
+soft deletes, snapshots, `SearcherManager`), `search` (term/boolean/phrase/multi-term/spans/
+disjunction-max/join queries, BM25 plus the TF-IDF/classic similarities, impacts and
+competitive skipping, collectors, ranking and sorting), `queryparser` (the classic syntax, hand
+written), `geo`, and `sandbox`.
 
-Not ported: the sandbox package, the language-specific analyzers and stemmers (Snowball,
-Hunspell, hyphenation), the graph filters (`SynonymGraphFilter` / `FlattenGraphFilter`), the
-URL/email tokenizer, and (by design, see [Scope](#scope)) the vector / KNN codecs and any index
-format version older than the current one.
+Known gaps, all outside the supported scope or performance-only:
+
+* **By design** (see [Scope](#scope)): vector / KNN codecs and every index format version
+  older than the current one. There is also no compound-file *writer* for merge output (the
+  reference implementation has no such writer either).
+* **Debug/test codecs**: `DirectPostingsFormat` and the `SimpleText` codec are not ported.
+* **Performance-only**: the hand-written SIMD kernels (`internal/vectorization`) and the
+  `PackedInts` bulk-operation classes are absent; the port uses the generic
+  direct-writer/direct-reader paths instead. `-march=native` code generation is used, but there
+  is no runtime feature dispatch.
+* **Smaller deviations**: index sorting is applied by reordering documents before the segment
+  is written rather than through sorting stored-fields/term-vectors consumers, which means a
+  `StringIndexSorter` cannot take part in a merge (numeric sorters can); merge temporary files
+  are written under their final names instead of through a tracking wrapper.
+
+Index-format compatibility with Java Lucene is implemented per the format specification but
+has **not** been cross-verified against an index written by the JVM implementation; treat
+freshly built indexes as the tested configuration. There is no CI configuration and no
+benchmark harness in this repository.
 
 ## License
 

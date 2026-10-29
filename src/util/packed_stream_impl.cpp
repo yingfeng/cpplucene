@@ -49,7 +49,14 @@ VoidResult write_packed_stream(DataOutput &out, std::span<const int64_t> values,
     std::vector<uint8_t> bytes(byte_count, 0);
     if (bits_per_value > 0) {
         std::vector<int64_t> copy(values.begin(), values.end());
-        bulk_operation(bits_per_value).encode(std::span<int64_t>(copy), 0, std::span<uint8_t>(bytes));
+        auto codec = bulk_operation(bits_per_value);
+        if (!codec.has_value()) {
+            return std::unexpected(std::move(codec.error()));
+        }
+        auto encoded = codec.value().encode(std::span<const int64_t>(copy), 0, std::span<uint8_t>(bytes));
+        if (!encoded.has_value()) {
+            return encoded;
+        }
     }
     return out.write_bytes(std::span<const uint8_t>(bytes));
 }
@@ -69,8 +76,14 @@ Result<std::vector<int64_t>> read_packed_stream(DataInput &in, size_t value_coun
         return std::unexpected(std::move(bytes.error()));
     }
     if (bits_per_value > 0) {
-        bulk_operation(bits_per_value)
-                .decode(std::span<const uint8_t>(bytes.value()), 0, std::span<int64_t>(values));
+        auto codec = bulk_operation(bits_per_value);
+        if (!codec.has_value()) {
+            return std::unexpected(std::move(codec.error()));
+        }
+        auto decoded = codec.value().decode(std::span<const uint8_t>(bytes.value()), 0, std::span<int64_t>(values));
+        if (!decoded.has_value()) {
+            return std::unexpected(std::move(decoded.error()));
+        }
     }
     return values;
 }

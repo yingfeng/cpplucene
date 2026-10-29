@@ -76,7 +76,12 @@ public:
     [[nodiscard]] Result<std::vector<uint8_t>> get_bytes(size_t len);
 
     [[nodiscard]] VoidResult read_longs(std::span<int64_t> dst, size_t offset, size_t len);
-    [[nodiscard]] VoidResult read_ints(std::span<int32_t> dst, size_t offset, size_t len);
+    /// Fills `dst[offset, offset + len)` with `len` little-endian ints.
+    ///
+    /// The default implementation issues one virtual [`read_int`] per value.
+    /// Inputs whose `read_bytes` copies a run in one go override this with
+    /// [`read_ints_bulk`], which is what the postings decoders see.
+    [[nodiscard]] virtual VoidResult read_ints(std::span<int32_t> dst, size_t offset, size_t len);
     [[nodiscard]] VoidResult read_floats(std::span<float> dst, size_t offset, size_t len);
 
     /// Reads a string written by `DataOutput::write_string`.
@@ -89,6 +94,22 @@ public:
     /// Human readable description, used in error messages.
     [[nodiscard]] virtual std::string to_string() const { return "DataInput"; }
 };
+
+/// Fills `dst[offset, offset + len)` with `len` little-endian ints, read through a
+/// single [`DataInput::read_bytes`] call.
+///
+/// [`DataInput::read_ints`] is a per-value virtual `read_int()` loop, which costs a
+/// virtual call plus a range check per int.  For inputs whose `read_bytes` copies a
+/// run in one go (`ByteArrayDataInput`, `BufferedIndexInput`, `SlicedIndexInput`,
+/// `MemorySegmentIndexInput`) one bulk fill followed by a byte-order fixup is far
+/// cheaper, and the postings decoders call `read_ints` on every block.
+///
+/// The caller must not use this on an input whose `read_bytes` is itself a
+/// byte-at-a-time loop; those are no faster (and no slower) than the default.
+export [[nodiscard]] VoidResult read_ints_bulk(DataInput &input,
+                                               std::span<int32_t> dst,
+                                               size_t offset,
+                                               size_t len);
 
 /// [`DataInput`] backed by a byte array.  Port of `ByteArrayDataInput`.
 ///
@@ -118,6 +139,7 @@ public:
     [[nodiscard]] Result<int32_t> read_int() override;
     [[nodiscard]] Result<int64_t> read_long() override;
     [[nodiscard]] VoidResult read_group_vint(std::span<int32_t> dst) override;
+    [[nodiscard]] VoidResult read_ints(std::span<int32_t> dst, size_t offset, size_t len) override;
 
     [[nodiscard]] std::string to_string() const override;
 

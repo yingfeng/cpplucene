@@ -1,0 +1,165 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# The project requires clang >= 20 (C++23 modules + `import std`) and
+# CMake 4.0.3 .. 4.3.x; the runners ship neither, so both are installed below.
+env:
+  CLANG_VERSION: 20
+  CMAKE_VERSION: 4.0.3
+  # The module build is memory hungry: keep the parallelism low on the 4-core
+  # runners so the compiler does not get OOM-killed.
+  BUILD_JOBS: 4
+
+jobs:
+  build-and-test:
+    name: build & test (${{ matrix.build_type }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - build_type: Release
+          - build_type: Debug
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            wget gnupg lsb-release ca-certificates \
+            ninja-build mold zlib1g-dev libgtest-dev
+          wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s -- "${CLANG_VERSION}"
+          sudo apt-get install -y --no-install-recommends "clang-${CLANG_VERSION}"
+          # CMake from the official tarball: the distro package is too old and
+          # pip is blocked by PEP 668 on the runner image.
+          wget -q "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz" -O cmake.tar.gz
+          tar -xzf cmake.tar.gz -C "${RUNNER_TEMP}"
+          echo "${RUNNER_TEMP}/cmake-${CMAKE_VERSION}-linux-x86_64/bin" >> "${GITHUB_PATH}"
+          command -v mold ninja "clang++-${CLANG_VERSION}"
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_CXX_COMPILER="clang++-${CLANG_VERSION}" \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_PREFIX_PATH=/usr/lib/x86_64-linux-gnu/cmake
+
+      - name: Build
+        run: cmake --build build -j "${BUILD_JOBS}"
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -j "${BUILD_JOBS}"
+
+  sanitizers:
+    name: sanitizer (${{ matrix.sanitizer }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - sanitizer: address
+            option: -DENABLE_SANITIZER_ADDRESS=ON
+          - sanitizer: thread
+            option: -DENABLE_SANITIZER_THREAD=ON
+          - sanitizer: undefined
+            option: -DENABLE_SANITIZER_UNDEFINED=ON
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            wget gnupg lsb-release ca-certificates \
+            ninja-build mold zlib1g-dev libgtest-dev
+          wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s -- "${CLANG_VERSION}"
+          sudo apt-get install -y --no-install-recommends "clang-${CLANG_VERSION}"
+          wget -q "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz" -O cmake.tar.gz
+          tar -xzf cmake.tar.gz -C "${RUNNER_TEMP}"
+          echo "${RUNNER_TEMP}/cmake-${CMAKE_VERSION}-linux-x86_64/bin" >> "${GITHUB_PATH}"
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_CXX_COMPILER="clang++-${CLANG_VERSION}" \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_PREFIX_PATH=/usr/lib/x86_64-linux-gnu/cmake \
+            ${{ matrix.option }}
+
+      - name: Build
+        run: cmake --build build -j "${BUILD_JOBS}"
+
+      - name: Test
+        env:
+          # `-fsanitize-recover=all` lets one run report every finding; make the
+          # step fail on any of them.
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+          ASAN_OPTIONS: detect_leaks=1:detect_stack_use_after_return=1:strict_string_checks=1
+          TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
+        run: ctest --test-dir build --output-on-failure -j "${BUILD_JOBS}"
+
+  install-and-consume:
+    name: install & consume from another project
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            wget gnupg lsb-release ca-certificates \
+            ninja-build mold zlib1g-dev pkg-config
+          wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s -- "${CLANG_VERSION}"
+          sudo apt-get install -y --no-install-recommends "clang-${CLANG_VERSION}"
+          wget -q "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz" -O cmake.tar.gz
+          tar -xzf cmake.tar.gz -C "${RUNNER_TEMP}"
+          echo "${RUNNER_TEMP}/cmake-${CMAKE_VERSION}-linux-x86_64/bin" >> "${GITHUB_PATH}"
+
+      # Tests are not needed here and they are the bulk of the build time.
+      - name: Build library
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_CXX_COMPILER="clang++-${CLANG_VERSION}" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLUCENE_CORE_BUILD_TESTS=OFF
+          cmake --build build -j "${BUILD_JOBS}" --target lucene_core
+
+      - name: Install into a staging prefix
+        run: cmake --install build --prefix "${RUNNER_TEMP}/prefix" --strip
+
+      - name: Check pkg-config metadata
+        env:
+          PKG_CONFIG_PATH: ${{ runner.temp }}/prefix/lib/pkgconfig
+        run: |
+          pkg-config --modversion lucene_core
+          pkg-config --cflags --libs lucene_core
+          # The .pc file is relocatable: its prefix must resolve to the staging tree.
+          test "$(cd "$(dirname "$(pkg-config --variable=libdir lucene_core)")" && pwd)" = "${RUNNER_TEMP}/prefix"
+
+      # `ci/consumer` is an independent CMake project that only sees the install
+      # tree: it must build and run without the source tree on its path.
+      - name: Consume from a standalone project
+        run: |
+          cmake -S ci/consumer -B consumer-build -G Ninja \
+            -DCMAKE_CXX_COMPILER="clang++-${CLANG_VERSION}" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="${RUNNER_TEMP}/prefix"
+          cmake --build consumer-build -j "${BUILD_JOBS}"
+          ./consumer-build/lc_smoke

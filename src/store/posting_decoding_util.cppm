@@ -28,13 +28,23 @@ namespace lucene {
 /// Utility struct to decode postings.  Port of `PostingDecodingUtil`
 /// (`core/internal/vectorization/posting_decoding_util.rs`).
 ///
-/// The reference implementation has `wide`-based SIMD fast paths in both methods.  The port keeps
-/// the scalar reference semantics only: the specialised branches decode the
-/// same bits into the same planes, they are just structured for automatic
-/// vectorisation.  clang vectorises the loops below on the hot sizes
-/// (`count` is always a multiple of 4 in the postings code).
+/// The reference implementation has `wide`-based SIMD fast paths in both
+/// methods: fixed-shape specialisations (4 inputs over 7 planes, 8 inputs over 3
+/// planes), a single-plane pass, and a vector-at-a-time loop over the remaining
+/// plane layouts.  This port implements the same branches with clang's native
+/// vector types (`ext_vector_type`), which map onto SSE2/AVX2 on x86-64 and NEON
+/// on aarch64.  Both ISAs have 128-bit vectors in their base set, so the fast
+/// paths need no runtime dispatch.  On any other architecture the scalar kernel
+/// is used; see [`has_vector_kernels`](#has_vector_kernels).
 export class PostingDecodingUtil {
 public:
+    /// Whether the vectorised kernels are compiled in for this target.
+#if defined(__x86_64__) || defined(__aarch64__)
+    static constexpr bool has_vector_kernels = true;
+#else
+    static constexpr bool has_vector_kernels = false;
+#endif
+
     explicit PostingDecodingUtil(DataInput &input) : input_(input) {}
 
     [[nodiscard]] DataInput &input() noexcept { return input_; }

@@ -100,6 +100,7 @@ public:
     [[nodiscard]] Result<int16_t> read_short() override;
     [[nodiscard]] Result<int32_t> read_int() override;
     [[nodiscard]] Result<int64_t> read_long() override;
+    [[nodiscard]] VoidResult read_ints(std::span<int32_t> dst, size_t offset, size_t len) override;
 
     [[nodiscard]] Result<std::unique_ptr<IndexInput>> slice(std::string_view slice_description,
                                                             size_t offset,

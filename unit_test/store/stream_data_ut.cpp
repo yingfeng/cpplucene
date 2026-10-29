@@ -19,6 +19,7 @@ module;
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <cstdint>
 #include <expected>
 #include <sstream>
@@ -68,6 +69,45 @@ TEST(StreamDataTest, SkipsAndRejectsBadArguments) {
 
     EXPECT_EQ(output.to_string(), "OutputStreamDataOutput");
     EXPECT_EQ(input.to_string(), "InputStreamDataInput");
+}
+
+TEST(StreamDataTest, ReadIntsMatchesScalarReads) {
+    const std::array<int32_t, 5> expected{-1, 0, 0x01020304, 0x7FFFFFFF, -2147483647 - 1};
+    std::vector<uint8_t> bytes;
+    for (const int32_t value : expected) {
+        const auto raw = static_cast<uint32_t>(value);
+        for (uint32_t shift = 0; shift < 32; shift += 8) {
+            bytes.push_back(static_cast<uint8_t>(raw >> shift));
+        }
+    }
+
+    // The bulk fill leaves the values before `offset` untouched and consumes
+    // exactly `len * 4` bytes.
+    ByteArrayDataInput bulk{std::span<const uint8_t>(bytes)};
+    std::array<int32_t, 8> dst{};
+    dst.fill(0x7E7E7E7E);
+    ASSERT_TRUE(bulk.read_ints(dst, 2, expected.size()).has_value());
+    EXPECT_EQ(dst[0], 0x7E7E7E7E);
+    EXPECT_EQ(dst[1], 0x7E7E7E7E);
+    for (size_t i = 0; i < expected.size(); ++i) {
+        EXPECT_EQ(dst[2 + i], expected[i]);
+    }
+    EXPECT_FALSE(bulk.read_int().has_value());
+
+    // Same bytes through the default per-value implementation.
+    std::stringstream stream(std::string(bytes.begin(), bytes.end()));
+    InputStreamDataInput per_value(stream);
+    std::array<int32_t, 5> via_default{};
+    ASSERT_TRUE(per_value.read_ints(via_default, 0, via_default.size()).has_value());
+    EXPECT_EQ(via_default, expected);
+
+    // Out of range destination and truncated input are both rejected.
+    ByteArrayDataInput bounded{std::span<const uint8_t>(bytes)};
+    std::array<int32_t, 4> small{};
+    EXPECT_FALSE(bounded.read_ints(small, 2, 3).has_value());
+    std::array<int32_t, 8> roomy{};
+    EXPECT_FALSE(bounded.read_ints(roomy, 0, 6).has_value());
+    EXPECT_TRUE(bounded.read_ints(roomy, 0, 5).has_value());
 }
 
 TEST(StreamDataTest, RejectsOutOfRangeSlices) {

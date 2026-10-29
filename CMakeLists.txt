@@ -54,8 +54,10 @@ endif ()
 message(STATUS "Build type = ${CMAKE_BUILD_TYPE}")
 
 option(LUCENE_CORE_BUILD_TESTS "Build the lucene_core unit tests" ON)
+option(LUCENE_CORE_BUILD_BENCHMARKS "Build the micro-benchmarks" OFF)
 option(ENABLE_SANITIZER_ADDRESS "Enable address sanitizer" OFF)
 option(ENABLE_SANITIZER_THREAD "Enable thread sanitizer" OFF)
+option(ENABLE_SANITIZER_UNDEFINED "Enable undefined-behaviour sanitizer" OFF)
 
 if (ENABLE_SANITIZER_ADDRESS)
     add_compile_options(-fsanitize=address -fsanitize=leak -fno-omit-frame-pointer)
@@ -64,6 +66,13 @@ endif ()
 if (ENABLE_SANITIZER_THREAD)
     add_compile_options(-fsanitize=thread -fno-omit-frame-pointer)
     add_link_options(-fsanitize=thread -fno-omit-frame-pointer)
+endif ()
+if (ENABLE_SANITIZER_UNDEFINED)
+    # `-fsanitize-recover=all` keeps the run going after the first report so one
+    # CI run lists every finding instead of only the first one.
+    add_compile_options(-fsanitize=undefined -fsanitize-recover=all -fno-sanitize-recover=null
+            -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=undefined)
 endif ()
 
 # `-march=native` must be attached to the library target as a *PUBLIC* option, not
@@ -84,4 +93,8 @@ add_subdirectory(src)
 
 if (LUCENE_CORE_BUILD_TESTS)
     add_subdirectory(unit_test)
+endif ()
+
+if (LUCENE_CORE_BUILD_BENCHMARKS)
+    add_subdirectory(benchmark)
 endif ()

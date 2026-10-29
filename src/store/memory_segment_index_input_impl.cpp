@@ -225,6 +225,10 @@ Result<int64_t> MemorySegmentIndexInput::read_long() {
     return BitUtil::get_i64_le(bytes, 0);
 }
 
+VoidResult MemorySegmentIndexInput::read_ints(std::span<int32_t> dst, size_t offset, size_t len) {
+    return read_ints_bulk(*this, dst, offset, len);
+}
+
 Result<std::unique_ptr<IndexInput>> MemorySegmentIndexInput::slice(std::string_view slice_description,
                                                                   size_t offset,
                                                                   size_t length) const {

@@ -228,6 +228,35 @@ VoidResult DataInput::read_ints(std::span<int32_t> dst, size_t offset, size_t le
     return {};
 }
 
+VoidResult read_ints_bulk(DataInput &input, std::span<int32_t> dst, size_t offset, size_t len) {
+    if (auto check = CoreHelper::check_from_index_size(offset, len, dst.size()); !check) {
+        return std::unexpected(std::move(check.error()));
+    }
+    if (len == 0) {
+        return {};
+    }
+    // The destination is `int32_t` storage, so filling it byte-wise is legal and
+    // avoids a scratch buffer; the byte order fixup below is a no-op on the
+    // little-endian targets this port builds for.
+    const size_t num_bytes = len * sizeof(int32_t);
+    auto bytes = std::span<uint8_t>(reinterpret_cast<uint8_t *>(dst.data() + offset), num_bytes);
+    if (auto read = input.read_bytes(bytes); !read) {
+        return std::unexpected(std::move(read.error()));
+    }
+    if constexpr (std::endian::native == std::endian::big) {
+        for (size_t i = 0; i < len; ++i) {
+            const uint32_t v = static_cast<uint32_t>(dst[offset + i]);
+            dst[offset + i] = static_cast<int32_t>(((v & 0x000000FFU) << 24) | ((v & 0x0000FF00U) << 8) |
+                                                  ((v & 0x00FF0000U) >> 8) | ((v & 0xFF000000U) >> 24));
+        }
+    }
+    return {};
+}
+
+VoidResult ByteArrayDataInput::read_ints(std::span<int32_t> dst, size_t offset, size_t len) {
+    return read_ints_bulk(*this, dst, offset, len);
+}
+
 VoidResult DataInput::read_floats(std::span<float> dst, size_t offset, size_t len) {
     if (auto check = CoreHelper::check_from_index_size(offset, len, dst.size()); !check) {
         return std::unexpected(std::move(check.error()));

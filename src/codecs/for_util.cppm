@@ -40,8 +40,10 @@ namespace lucene {
 /// [`decode`] dispatches to the same hand-unrolled `decode1` .. `decode16`
 /// kernels as the reference implementation and falls back to the scalar
 /// [`decode_slow`] for `bits_per_value` in `[17, 32]`, which is exactly what the
-/// reference does as well.  The kernels are scalar (`split_ints_same` /
-/// `split_ints_diff` plus `expand8`/`expand16`); no SIMD variants are provided.
+/// reference does as well.  The heavy lifting happens in
+/// [`PostingDecodingUtil`](:posting_decoding_util), whose `split_ints_same` /
+/// `split_ints_diff` kernels are vectorised; `expand8`/`expand16` stay scalar as
+/// in the reference implementation (clang vectorises those short loops itself).
 export class ForUtil {
 public:
     static constexpr size_t BLOCK_SIZE = 128;
