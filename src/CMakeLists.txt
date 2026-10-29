@@ -7,6 +7,8 @@
 # Implementation partitions are attached to the CXX_MODULES file set: CMake needs
 # every unit that belongs to the module to be part of that file set.
 
+include(GNUInstallDirs)
+
 set(LUCENE_CORE_SUBSYSTEMS
         util
         store
@@ -52,8 +54,25 @@ target_sources(lucene_core
         ${lucene_core_impl_cpp}
 )
 
-target_include_directories(lucene_core PUBLIC "${CMAKE_SOURCE_DIR}/include")
+# `include/` holds the small C API header; the module itself is the library.  The
+# install interface mirrors where `install()` below puts those headers.
+target_include_directories(lucene_core PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 target_compile_options(lucene_core PRIVATE -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare)
+
+# PUBLIC on purpose: the module interface units are recompiled in the consumer's
+# build, so these features have to be used by the consumer's own translation units
+# as well, otherwise clang refuses the BMIs (target-feature mismatch).
+if (LUCENE_CORE_NATIVE_ARCH AND NOT CMAKE_CROSSCOMPILING)
+    target_compile_options(lucene_core PUBLIC -march=native)
+endif ()
+
+# The module interface units are shipped as sources and compiled on the consumer
+# side, so the C++ standard they need has to travel with the exported target:
+# without this the synthesized module target of a consumer has no C++ standard at
+# all and generation fails with "does not include cxx_std_20 (or newer)".
+target_compile_features(lucene_core PUBLIC cxx_std_23)
 
 # `TaskExecutor` runs leaf slices on its own threads.
 find_package(Threads REQUIRED)
@@ -75,5 +94,55 @@ target_link_libraries(lucene_core PUBLIC ZLIB::ZLIB)
 set_source_files_properties(
         "${CMAKE_CURRENT_SOURCE_DIR}/search/phrase_query_impl.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/search/multi_phrase_query_impl.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/search/span_weight_impl.cpp"
         PROPERTIES COMPILE_OPTIONS "-g"
 )
+
+# ---------------------------------------------------------------------------
+# Install / packaging
+#
+# The library is a C++23 module, so a consumer has to build the module interface
+# units itself: the `cxx_modules` file set is installed as sources under
+# `<includedir>/lucene_core`, and the exported target carries it, which is what
+# CMake's module support needs to compile the BMIs on the consumer side.
+# ---------------------------------------------------------------------------
+
+include(CMakePackageConfigHelpers)
+
+install(TARGETS lucene_core
+        EXPORT lucene_coreTargets
+        ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+        LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+        FILE_SET cxx_modules DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/lucene_core"
+)
+
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/include/lucene_core"
+        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+
+install(EXPORT lucene_coreTargets
+        FILE lucene_coreTargets.cmake
+        NAMESPACE lucene_core::
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/lucene_core")
+
+configure_package_config_file(
+        "${CMAKE_SOURCE_DIR}/cmake/lucene_coreConfig.cmake.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/lucene_coreConfig.cmake"
+        INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/lucene_core")
+
+write_basic_package_version_file(
+        "${CMAKE_CURRENT_BINARY_DIR}/lucene_coreConfigVersion.cmake"
+        VERSION "${PROJECT_VERSION}"
+        COMPATIBILITY SameMajorVersion
+        ARCH_INDEPENDENT)
+
+install(FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/lucene_coreConfig.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/lucene_coreConfigVersion.cmake"
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/lucene_core")
+
+configure_file("${CMAKE_SOURCE_DIR}/cmake/lucene_core.pc.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/lucene_core.pc" @ONLY)
+
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/lucene_core.pc"
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig")

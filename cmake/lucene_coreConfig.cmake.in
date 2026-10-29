@@ -1,0 +1,30 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# The library links these publicly, so consumers need them too.
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_dependency(Threads)
+find_dependency(ZLIB)
+
+include("${CMAKE_CURRENT_LIST_DIR}/lucene_coreTargets.cmake")
+
+# `lucene_core` is a C++23 module library: consuming it means compiling the module
+# interface units from the installed sources, which needs the same experimental
+# support the library itself is built with.  That support has to be requested
+# *before* the consumer's `project()` call enables the CXX language, so this file
+# (which runs afterwards) can only report the omission instead of repairing it.
+if (NOT CMAKE_CXX_MODULE_STD)
+    message(WARNING
+            "lucene_core: 'import std;' support is off.  Call\n"
+            "    set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD <uuid>)\n"
+            "    set(CMAKE_CXX_MODULE_STD ON)\n"
+            "before project() to consume this package.")
+endif ()
+if (NOT CMAKE_EXPERIMENTAL_CXX_IMPORT_STD)
+    message(WARNING
+            "lucene_core: CMAKE_EXPERIMENTAL_CXX_IMPORT_STD is unset, so the module "
+            "interface units that 'import std;' will fail to compile.")
+endif ()
+
+check_required_components(lucene_core)

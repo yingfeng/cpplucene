@@ -49,7 +49,9 @@ Result<int64_t> LongHeap::push(int64_t element) {
         }
     }
     heap_[size_] = element;
-    up_heap(size_);
+    if (VoidResult up = up_heap(size_); !up.has_value()) {
+        return std::unexpected(std::move(up.error()));
+    }
     return heap_[1];
 }
 
@@ -98,7 +100,12 @@ VoidResult LongHeap::push_all(const LongHeap &other) {
     return {};
 }
 
-void LongHeap::up_heap(size_t i) {
+VoidResult LongHeap::up_heap(size_t i) {
+    if (i == 0 || i >= heap_.size()) {
+        // The slot must exist: a missing one means the heap bookkeeping broke,
+        // and indexing past the end would be undefined behaviour.
+        return err(LuceneError::illegal_state("the heap slot is out of bounds"));
+    }
     const int64_t value = heap_[i]; // save the bottom value
     while (i > 1) {
         const size_t parent_index = i >> 1;
@@ -109,6 +116,7 @@ void LongHeap::up_heap(size_t i) {
         i = parent_index;
     }
     heap_[i] = value;
+    return {};
 }
 
 void LongHeap::down_heap(size_t i) noexcept {

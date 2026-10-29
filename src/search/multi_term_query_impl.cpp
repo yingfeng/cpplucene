@@ -492,6 +492,10 @@ Result<std::unique_ptr<Weight>> MultiTermQuery::create_weight(const IndexSearche
     return final_query->create_weight(searcher, score_mode, boost);
 }
 
+Result<std::vector<Term>> MultiTermQuery::expanded_terms(const IndexSearcher &searcher) const {
+    return expand_terms(searcher, *this);
+}
+
 Result<std::shared_ptr<Query>> MultiTermQuery::rewrite(const IndexSearcher &searcher) const {
     switch (rewrite_method_.kind()) {
         case MultiTermRewriteMethod::Kind::kConstantScore:

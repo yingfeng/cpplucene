@@ -187,3 +187,14 @@ TEST(LowercaseAsciiCompressionTest, RefusesIncompressibleContent) {
     ASSERT_TRUE(too_short.has_value());
     EXPECT_FALSE(too_short.value());
 }
+
+TEST(Lz4Test, RoundTripsAMatchLongerThanSixtyFourKilobytes) {
+    // A run of identical bytes compresses into one very long match.  Rounding its
+    // length to a multiple of eight must keep the whole length: masking with
+    // `0xFFF8` would drop the high bits and copy just a few kilobytes.
+    std::vector<uint8_t> original(200000, static_cast<uint8_t>('a'));
+    FastCompressionHashTable table;
+    const std::vector<uint8_t> compressed = lz4_compress(original, table);
+    EXPECT_LT(compressed.size(), original.size() / 10);
+    EXPECT_EQ(lz4_decompress(compressed, original.size()), original);
+}

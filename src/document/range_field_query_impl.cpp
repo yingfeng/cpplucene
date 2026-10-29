@@ -493,6 +493,17 @@ bool RangeFieldQuery::equals(const Query &other) const {
     if (query == nullptr) {
         return false;
     }
+    // The format decides whether the packed bytes are ints, longs, floats or
+    // doubles, and two of those share a width: a range over `int` must never
+    // compare equal to one over `float` with the same bytes.
+    if (format_ == nullptr || query->format_ == nullptr) {
+        return false;
+    }
+    const RangeFieldFormat &self_format = *format_;
+    const RangeFieldFormat &other_format = *query->format_;
+    if (typeid(self_format) != typeid(other_format)) {
+        return false;
+    }
     return field_ == query->field_ && num_dims_ == query->num_dims_ && query_type_ == query->query_type_ &&
            ranges_ == query->ranges_;
 }
@@ -501,6 +512,13 @@ size_t RangeFieldQuery::hash() const {
     size_t result = std::hash<std::string>{}(field_);
     result = result * 31 + num_dims_;
     result = result * 31 + static_cast<size_t>(query_type_);
+    // Same reason as in `equals`: the format type is part of the identity.
+    size_t format_hash = 0;
+    if (format_ != nullptr) {
+        const RangeFieldFormat &self_format = *format_;
+        format_hash = typeid(self_format).hash_code();
+    }
+    result = result * 31 + format_hash;
     for (const uint8_t byte : ranges_) {
         result = result * 31 + byte;
     }

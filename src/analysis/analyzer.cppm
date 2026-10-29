@@ -71,7 +71,11 @@ public:
     Analyzer &operator=(const Analyzer &) = delete;
 
     /// Prepares `text` for `field_name` and returns the sink of the chain.
-    [[nodiscard]] Result<TokenStream *> token_stream(std::string_view field_name, std::string_view text);
+    ///
+    /// **Deviation:** virtual, so that an analyzer that wraps another one (a
+    /// char-filter wrapper, for instance) can transform the text first and then
+    /// hand it to the wrapped analyzer's own reuse machinery.
+    [[nodiscard]] virtual Result<TokenStream *> token_stream(std::string_view field_name, std::string_view text);
 
     [[nodiscard]] ReuseStrategy reuse_strategy() const noexcept { return strategy_; }
 

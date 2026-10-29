@@ -235,4 +235,50 @@ std::unique_ptr<Attribute> FlagsAttribute::clone() const {
 
 void FlagsAttribute::clear() { flags_ = 0; }
 
+
+// ---------------- state restore ----------------
+//
+// `copy_from` assigns the concrete instance instead of replacing it, so the
+// pointers filters cache in their constructors stay valid.
+
+void CharTermAttribute::copy_from(const Attribute &other) {
+    *this = static_cast<const CharTermAttribute &>(other);
+}
+
+void BytesTermAttribute::copy_from(const Attribute &other) {
+    *this = static_cast<const BytesTermAttribute &>(other);
+}
+
+void OffsetAttribute::copy_from(const Attribute &other) {
+    *this = static_cast<const OffsetAttribute &>(other);
+}
+
+void PositionIncrementAttribute::copy_from(const Attribute &other) {
+    *this = static_cast<const PositionIncrementAttribute &>(other);
+}
+
+void PositionLengthAttribute::copy_from(const Attribute &other) {
+    *this = static_cast<const PositionLengthAttribute &>(other);
+}
+
+void TypeAttribute::copy_from(const Attribute &other) {
+    *this = static_cast<const TypeAttribute &>(other);
+}
+
+void KeywordAttribute::copy_from(const Attribute &other) {
+    *this = static_cast<const KeywordAttribute &>(other);
+}
+
+void PayloadAttribute::copy_from(const Attribute &other) {
+    *this = static_cast<const PayloadAttribute &>(other);
+}
+
+void TermFrequencyAttribute::copy_from(const Attribute &other) {
+    *this = static_cast<const TermFrequencyAttribute &>(other);
+}
+
+void FlagsAttribute::copy_from(const Attribute &other) {
+    *this = static_cast<const FlagsAttribute &>(other);
+}
+
 } // namespace lucene

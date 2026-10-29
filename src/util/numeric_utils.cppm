@@ -31,9 +31,19 @@ namespace lucene {
 /// interchangeable.
 ///
 /// **Deviation:** the `BigInteger` conversions (`big_int_to_sortable_bytes` /
-/// `sortable_bytes_to_big_int`) are not ported: C++ has no arbitrary precision
-/// integer, and no codec in Lucene 9.x stores big integers in a sortable byte
-/// form (only `BigIntegerPoint`, which is out of scope so far).
+/// `sortable_bytes_to_big_int`) are ported for [`Int128`] instead of an arbitrary
+/// precision integer: no codec in Lucene 9.x stores big integers in a sortable
+/// byte form, and the only consumer, `BigIntegerPoint`, is 128-bit wide.
+///
+/// [`Int128`]: lucene_core:numeric_utils.Int128
+
+/// The 128-bit signed integer the sandbox `BigIntegerPoint` field stores.
+///
+/// **Deviation:** Java and the reference implementation use an arbitrary
+/// precision integer; every value the point field can hold fits in 128 bits, so
+/// the port narrows the type (and reports an overflow when a literal does not
+/// fit).
+export using Int128 = __int128;
 export struct NumericUtils {
     // ---- floating point <-> sortable integers ----
 
@@ -80,6 +90,12 @@ export struct NumericUtils {
 
     /// Reads a value written by [`long_to_sortable_bytes`].
     [[nodiscard]] static int64_t sortable_bytes_to_long(std::span<const uint8_t> encoded, size_t offset);
+
+    /// Writes `value` as 16 big-endian bytes with the sign bit flipped.
+    static void int128_to_sortable_bytes(Int128 value, std::span<uint8_t> result, size_t offset);
+
+    /// Reads a value written by [`int128_to_sortable_bytes`].
+    [[nodiscard]] static Int128 sortable_bytes_to_int128(std::span<const uint8_t> encoded, size_t offset);
 };
 
 } // namespace lucene

@@ -72,8 +72,45 @@ Every `unit_test/**/*_ut.cpp` is a module interface unit and is picked up automa
 import lucene_core;   // one import gives the whole public API
 ```
 
-Link against `liblucene_core.a`, compile with C++23 and matching module flags, and make sure
-the compiler used by your project is the one that built the library.
+Compile with C++23, link against `liblucene_core.a`, and use the same compiler that built the
+library.
+
+### Installing
+
+```sh
+cmake --install build --prefix /opt/lucene_core
+```
+
+The install tree holds the static library, `include/lucene_core/**` with every module unit
+(interface *and* implementation partitions, because a consumer has to build the BMIs itself),
+a CMake package in `lib/cmake/lucene_core` and `lib/pkgconfig/lucene_core.pc` (relocatable via
+`${pcfiledir}`).
+
+### Consuming it from CMake
+
+```cmake
+cmake_minimum_required(VERSION 4.0.3...4.3.4)
+
+# Both switches have to be set *before* project() enables the CXX language.
+set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "d0edc3af-4c50-42ea-a356-e2862fe7a444")  # CMake 4.0.3–4.2.x
+set(CMAKE_CXX_MODULE_STD ON)
+
+project(app LANGUAGES CXX)      # Ninja generator only
+find_package(lucene_core 0.1 REQUIRED)
+
+add_executable(app main.cpp)
+target_link_libraries(app PRIVATE lucene_core::lucene_core)
+```
+
+`lucene_core::lucene_core` carries `cxx_std_23`, the module file set, `Threads::Threads` and
+`ZLIB::ZLIB`, so nothing else has to be spelled out. Two things are worth knowing:
+
+* The module units are compiled again inside the consumer build, so the first build of a
+  consuming project costs about as much as building the library.
+* The library is built with `-march=native` (`-DLUCENE_CORE_NATIVE_ARCH=OFF` to disable). That
+  option is `PUBLIC` on purpose: the static objects and the module BMIs are both compiled with
+  it, and clang rejects a BMI imported by a translation unit that does not use the same target
+  features.
 
 ## Layout
 
@@ -93,13 +130,21 @@ util  store  document  analysis  codecs  index  search  geo
 
 ## Status
 
-Implemented end to end: `util`, `store`, `document`, `analysis`, `codecs` (Lucene90 postings,
-norms, doc values, stored fields, term vectors, points/BKD, compression), `index` (writer,
-codec/segment readers, merges), `search` (term/boolean/multi-term queries, similarity, impacts
-and competitive skipping, collectors, ranking and sorting) and `geo`.
+Implemented end to end: `util`, `store`, `document`, `analysis` (standard, English and CJK
+chains, Porter stemming, n-grams, shingles, ASCII folding, synonyms, char filters and the usual
+length/count/elision/keyword filters), `codecs` (Lucene90 postings, norms, doc values, stored
+fields, term vectors, points/BKD, compression), `index` (writer, codec/segment readers,
+merges), `search` (term/boolean/multi-term queries, similarity, impacts and competitive
+skipping, collectors, ranking and sorting), `queryparser` (the classic syntax, hand written),
+`geo`, and the whole span family (`SpanTermQuery`, `SpanNearQuery` ordered and unordered,
+`SpanOrQuery`, `SpanNotQuery`, `SpanFirstQuery`, `SpanPositionRangeQuery`,
+`SpanContainingQuery`, `SpanWithinQuery`, `FieldMaskingSpanQuery`,
+`SpanMultiTermQueryWrapper`).
 
-Not ported: the query parser, the sandbox package, and (by design, see [Scope](#scope)) the
-vector / KNN codecs and any index format version older than the current one.
+Not ported: the sandbox package, the language-specific analyzers and stemmers (Snowball,
+Hunspell, hyphenation), the graph filters (`SynonymGraphFilter` / `FlattenGraphFilter`), the
+URL/email tokenizer, and (by design, see [Scope](#scope)) the vector / KNN codecs and any index
+format version older than the current one.
 
 ## License
 

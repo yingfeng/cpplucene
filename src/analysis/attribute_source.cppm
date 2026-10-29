@@ -93,6 +93,21 @@ public:
 
     [[nodiscard]] std::string to_string() const;
 
+    /// A snapshot of every attribute value (`AttributeSource.State`).
+    ///
+    /// Used by the filters that buffer tokens and replay them later
+    /// (`SynonymGraphFilter`, `FlattenGraphFilter`, `WordDelimiterGraphFilter`).
+    using State = std::vector<std::unique_ptr<Attribute>>;
+
+    /// Copies the current value of every attribute into a fresh snapshot.
+    [[nodiscard]] State capture_state() const;
+
+    /// Writes the snapshot back into the (still existing) attribute instances.
+    ///
+    /// The instances are reused rather than replaced, so a filter may keep the
+    /// attribute pointers it grabbed in its constructor.
+    void restore_state(const State &state);
+
 private:
     std::vector<std::unique_ptr<Attribute>> attributes_{};
 };

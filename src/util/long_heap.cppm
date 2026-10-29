@@ -87,7 +87,7 @@ public:
 private:
     LongHeap(size_t max_size, std::vector<int64_t> heap) : max_size_(max_size), heap_(std::move(heap)) {}
 
-    void up_heap(size_t i);
+    [[nodiscard]] VoidResult up_heap(size_t i);
     void down_heap(size_t i) noexcept;
 
     size_t max_size_;

@@ -49,6 +49,7 @@ export import :bytes_ref_builder;
 export import :string_helper;
 export import :crc32;
 export import :number;
+export import :rolling_buffer;
 export import :lz4;
 export import :lowercase_ascii_compression;
 export import :numeric_utils;
@@ -444,8 +445,35 @@ export import :index_searcher;
 export import :term_scorer;
 export import :constant_score_scorer;
 export import :term_query;
+export import :spans;
+export import :span_query;
+export import :span_scorer;
+export import :span_weight;
+export import :term_spans;
+export import :span_term_query;
+export import :conjunction_spans;
+export import :near_spans_ordered;
+export import :near_spans_unordered;
+export import :span_near_query;
+export import :span_or_query;
+export import :filter_spans;
+export import :span_not_query;
+export import :span_position_check_query;
+export import :span_position_range_query;
+export import :span_first_query;
+export import :span_contain_query;
+export import :span_containing_query;
+export import :span_within_query;
+export import :field_masking_span_query;
+export import :span_multi_term_query_wrapper;
+
+
 export import :wand_scorer;
+export import :query_builder;
 export import :query_parser_constants;
+export import :query_parser_token;
+export import :query_parser_base;
+export import :query_parser;
 export import :phrase_matcher;
 export import :phrase_positions;
 export import :exact_phrase_matcher;
@@ -586,9 +614,45 @@ export import :char_array_map;
 export import :char_array_set;
 export import :lower_case_filter;
 export import :stop_filter;
+export import :porter_stemmer;
+export import :porter_stem_filter;
+export import :english_possessive_filter;
+export import :english_analyzer;
+export import :char_filter;
+export import :mapping_char_filter;
+export import :pattern_replace_char_filter;
+export import :html_strip_char_filter;
+export import :misc_filters;
+export import :cjk_width_filter;
+export import :cjk_bigram_filter;
+export import :cjk_analyzer;
+export import :ngram_tokenizer;
+export import :ngram_token_filter;
+export import :shingle_filter;
+export import :ascii_folding_filter;
+export import :synonym_map;
+export import :synonym_filter;
+export import :synonym_graph_filter;
+export import :flatten_graph_filter;
+export import :word_delimiter;
+export import :word_delimiter_graph_filter;
+
+
+
+
+
 export import :simple_analyzers;
 export import :standard_tokenizer;
+export import :url_email_tokenizer;
 export import :standard_analyzer;
+
+// ---- geo ----
+// ---- sandbox ----
+export import :large_num_hits_top_docs_collector;
+export import :half_float_point;
+export import :big_integer_point;
+export import :lat_lon_bounding_box;
+export import :merge_on_flush_merge_policy;
 
 // ---- geo ----
 export import :geo_component2d;

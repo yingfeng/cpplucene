@@ -132,6 +132,13 @@ public:
     [[nodiscard]] const std::string &pattern() const noexcept { return pattern_; }
 
     [[nodiscard]] MultiTermRewriteMethod rewrite_method() const noexcept { return rewrite_method_; }
+
+    /// Every term this query expands to, in reader order.
+    ///
+    /// Exposed so that a wrapper that turns the expansion into something other
+    /// than a boolean query (a `SpanOrQuery`, for instance) can reuse it instead
+    /// of walking the postings again.
+    [[nodiscard]] Result<std::vector<Term>> expanded_terms(const IndexSearcher &searcher) const;
     void set_rewrite_method(MultiTermRewriteMethod rewrite_method) noexcept { rewrite_method_ = rewrite_method; }
 
     /// Number of unique terms this query expands to, or `-1` when unknown.

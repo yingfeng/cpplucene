@@ -375,10 +375,9 @@ Result<std::optional<std::any>> FstUtil::get_from_bytes(const FST &fst, const By
 
 Result<bool> FstUtil::read_ceil_arc(int32_t label, const FST &fst, const Arc &follow, Arc &arc) {
     if (label == END_LABEL) {
-        // Mirrors Lucene/rust: the END_LABEL arc is always reported as found;
-        // `read_end_arc` only rewrites `arc` when `follow` is final.
-        read_end_arc(follow, arc);
-        return true;
+        // `read_end_arc` reports whether `follow` is final, which is exactly
+        // whether the END_LABEL arc exists.
+        return read_end_arc(follow, arc);
     }
 
     if (!target_has_arcs(follow)) {
@@ -449,18 +448,27 @@ Result<bool> FstUtil::read_ceil_arc(int32_t label, const FST &fst, const Arc &fo
                 if (!found.has_value()) {
                     return err(found.error());
                 }
-                int32_t idx = found.value();
+                const int32_t idx = found.value();
                 if (idx >= 0) {
+                    // Exact hit.
                     reader.set_position(arc.pos_arcs_start());
                     if (auto read = fst.read_arc_by_index(arc, reader, idx); !read.has_value()) {
                         return err(read.error());
                     }
+                    return true;
                 }
-                idx = -1 - idx;
-                if (idx == arc.num_arcs()) {
+                // Miss: the insertion point is the arc with the smallest label
+                // greater than the wanted one, which is the ceiling arc.
+                const int32_t ceiling = -1 - idx;
+                if (ceiling == arc.num_arcs()) {
                     // DEAD END: the wanted label is beyond the highest arc.
                     return false;
                 }
+                reader.set_position(arc.pos_arcs_start());
+                if (auto read = fst.read_arc_by_index(arc, reader, ceiling); !read.has_value()) {
+                    return err(read.error());
+                }
+                debug_check(arc.label() > label, "the ceiling arc must carry a higher label");
                 return true;
             }
         }

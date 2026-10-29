@@ -41,6 +41,14 @@ public:
     /// Resets every field to its default.
     virtual void clear() = 0;
 
+    /// Copies the state of `other` (which must have this attribute's concrete
+    /// type) into this instance, keeping the object identity intact.
+    ///
+    /// This is what [`AttributeSource::restore_state`] uses; a `clone()`-based
+    /// restore would replace the instances and invalidate every pointer a
+    /// filter cached in its constructor.
+    virtual void copy_from(const Attribute &other) { (void)other; }
+
     /// The attribute name used in debug output.
     [[nodiscard]] virtual std::string_view name() const = 0;
 };
@@ -49,6 +57,7 @@ public:
 export class CharTermAttribute : public Attribute {
 public:
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
+    void copy_from(const Attribute &other) override;
     void clear() override;
     [[nodiscard]] std::string_view name() const override { return "CharTermAttribute"; }
 
@@ -80,6 +89,7 @@ private:
 export class BytesTermAttribute : public Attribute {
 public:
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
+    void copy_from(const Attribute &other) override;
     void clear() override;
     [[nodiscard]] std::string_view name() const override { return "BytesTermAttribute"; }
 
@@ -94,6 +104,7 @@ private:
 export class OffsetAttribute : public Attribute {
 public:
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
+    void copy_from(const Attribute &other) override;
     void clear() override;
     [[nodiscard]] std::string_view name() const override { return "OffsetAttribute"; }
 
@@ -113,6 +124,7 @@ private:
 export class PositionIncrementAttribute : public Attribute {
 public:
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
+    void copy_from(const Attribute &other) override;
     void clear() override;
     [[nodiscard]] std::string_view name() const override { return "PositionIncrementAttribute"; }
 
@@ -127,6 +139,7 @@ private:
 export class PositionLengthAttribute : public Attribute {
 public:
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
+    void copy_from(const Attribute &other) override;
     void clear() override;
     [[nodiscard]] std::string_view name() const override { return "PositionLengthAttribute"; }
 
@@ -141,6 +154,7 @@ private:
 export class TypeAttribute : public Attribute {
 public:
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
+    void copy_from(const Attribute &other) override;
     void clear() override;
     [[nodiscard]] std::string_view name() const override { return "TypeAttribute"; }
 
@@ -155,6 +169,7 @@ private:
 export class KeywordAttribute : public Attribute {
 public:
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
+    void copy_from(const Attribute &other) override;
     void clear() override;
     [[nodiscard]] std::string_view name() const override { return "KeywordAttribute"; }
 
@@ -169,6 +184,7 @@ private:
 export class PayloadAttribute : public Attribute {
 public:
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
+    void copy_from(const Attribute &other) override;
     void clear() override;
     [[nodiscard]] std::string_view name() const override { return "PayloadAttribute"; }
 
@@ -183,6 +199,7 @@ private:
 export class TermFrequencyAttribute : public Attribute {
 public:
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
+    void copy_from(const Attribute &other) override;
     void clear() override;
     [[nodiscard]] std::string_view name() const override { return "TermFrequencyAttribute"; }
 
@@ -197,6 +214,7 @@ private:
 export class FlagsAttribute : public Attribute {
 public:
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
+    void copy_from(const Attribute &other) override;
     void clear() override;
     [[nodiscard]] std::string_view name() const override { return "FlagsAttribute"; }
 

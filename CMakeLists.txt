@@ -11,7 +11,8 @@ else (CMAKE_VERSION GREATER 4.2.5 AND CMAKE_VERSION LESS_EQUAL 4.3.4)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-reserved-module-identifier")
 endif ()
 
-project(lucene_core VERSION 0.1.0 LANGUAGES CXX)
+project(lucene_core VERSION 0.1.0 LANGUAGES CXX
+        DESCRIPTION "A C++23 port of Lucene: index-format compatible codecs, index and search")
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -65,9 +66,19 @@ if (ENABLE_SANITIZER_THREAD)
     add_link_options(-fsanitize=thread -fno-omit-frame-pointer)
 endif ()
 
-if (NOT CMAKE_CROSSCOMPILING)
-    add_compile_options(-march=native)
-endif ()
+# `-march=native` must be attached to the library target as a *PUBLIC* option, not
+# as a directory-wide `add_compile_options()`.  Reasons:
+#   * CMake records a target's own compile options in `IMPORTED_CXX_MODULES_COMPILE_OPTIONS`
+#     of the exported package, because the consumer has to rebuild the module
+#     interface units.  Directory-wide options leak there too, but the consumer's
+#     own translation units do not see them -- and clang then rejects the BMI with
+#     "AST file ... was compiled with the target feature '+avx2' but the current
+#     translation unit is not".
+#   * The static library objects are already built with these features, so a
+#     consumer must use the same ones anyway.
+# Being PUBLIC it also reaches the in-tree unit tests through the link dependency,
+# which is equally required (they import the same BMIs).
+option(LUCENE_CORE_NATIVE_ARCH "Compile with -march=native" ON)
 
 add_subdirectory(src)
 

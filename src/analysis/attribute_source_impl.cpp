@@ -66,6 +66,22 @@ void AttributeSource::clear_attributes() {
     }
 }
 
+AttributeSource::State AttributeSource::capture_state() const {
+    State state;
+    state.reserve(attributes_.size());
+    for (const auto &attribute : attributes_) {
+        state.push_back(attribute->clone());
+    }
+    return state;
+}
+
+void AttributeSource::restore_state(const State &state) {
+    const size_t count = std::min(attributes_.size(), state.size());
+    for (size_t i = 0; i < count; ++i) {
+        attributes_[i]->copy_from(*state[i]);
+    }
+}
+
 std::string AttributeSource::to_string() const {
     std::string result = "AttributeSource(";
     for (size_t i = 0; i < attributes_.size(); ++i) {

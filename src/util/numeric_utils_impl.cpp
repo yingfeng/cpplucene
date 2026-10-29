@@ -126,4 +126,22 @@ int64_t NumericUtils::sortable_bytes_to_long(std::span<const uint8_t> encoded, s
     return BitUtil::get_i64_be(encoded, offset) ^ std::numeric_limits<int64_t>::min();
 }
 
+void NumericUtils::int128_to_sortable_bytes(Int128 value, std::span<uint8_t> result, size_t offset) {
+    debug_check(offset + 16 <= result.size(), "offset out of bounds");
+    const unsigned __int128 bits =
+        static_cast<unsigned __int128>(value) ^ (static_cast<unsigned __int128>(1) << 127);
+    for (size_t i = 0; i < 16; ++i) {
+        result[offset + i] = static_cast<uint8_t>(bits >> (8 * (15 - i)));
+    }
+}
+
+Int128 NumericUtils::sortable_bytes_to_int128(std::span<const uint8_t> encoded, size_t offset) {
+    debug_check(offset + 16 <= encoded.size(), "offset out of bounds");
+    unsigned __int128 bits = 0;
+    for (size_t i = 0; i < 16; ++i) {
+        bits = (bits << 8) | static_cast<unsigned __int128>(encoded[offset + i]);
+    }
+    return static_cast<Int128>(bits ^ (static_cast<unsigned __int128>(1) << 127));
+}
+
 } // namespace lucene

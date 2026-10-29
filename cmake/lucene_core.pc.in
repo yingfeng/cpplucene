@@ -1,0 +1,16 @@
+# Relocatable: the file is installed to <prefix>/<libdir>/pkgconfig, so two levels
+# up is the install prefix.  Hard-coding @CMAKE_INSTALL_PREFIX@ instead would make
+# `cmake --install --prefix <other>` produce a .pc file pointing at the wrong tree.
+prefix=${pcfiledir}/../..
+exec_prefix=${prefix}
+libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+moduledir=${includedir}/lucene_core
+
+Name: lucene_core
+Description: @PROJECT_DESCRIPTION@
+Version: @PROJECT_VERSION@
+Requires.private: zlib
+Libs: -L${libdir} -llucene_core
+Libs.private: -pthread
+Cflags: -I${includedir} -std=c++23

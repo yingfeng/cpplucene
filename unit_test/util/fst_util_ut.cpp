@@ -205,6 +205,30 @@ TEST(FstUtilTest, ReadCeilArcReturnsTheNextHigherLabel) {
     EXPECT_FALSE(beyond.value());
 }
 
+TEST(FstUtilTest, ReadCeilArcReadsTheArcOnAMiss) {
+    // A gap between two root labels: the miss must leave the ceiling arc loaded,
+    // not the stale arc it was called with.
+    const auto &outputs = FstByteSequenceOutputs::singleton();
+    FstBuilder builder(outputs, InputType::kByte1);
+    const std::vector<std::pair<std::string, std::string>> entries{{"", "root"}, {"a", "1"}, {"c", "3"}};
+    for (const auto &[key, output] : entries) {
+        ASSERT_TRUE(builder.add(key_of(key), std::any{BytesRef::from_string(output)}).has_value());
+    }
+    auto result = builder.finish();
+    ASSERT_TRUE(result.has_value());
+    std::vector<uint8_t> data = std::move(result->data);
+    FST fst(result->metadata, std::make_unique<BufferReader>(data));
+
+    Arc follow;
+    fst.get_first_arc(follow);
+
+    Arc arc;
+    auto found = FstUtil::read_ceil_arc(static_cast<int32_t>('b'), fst, follow, arc);
+    ASSERT_TRUE(found.has_value()) << (found.has_value() ? "" : found.error().to_string());
+    ASSERT_TRUE(found.value());
+    EXPECT_EQ(arc.label(), static_cast<int32_t>('c'));
+}
+
 TEST(FstUtilTest, ShortestPathsReturnsCheapestInputs) {
     auto built = build_int_fst();
     FST &fst = *built.fst;

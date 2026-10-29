@@ -331,7 +331,9 @@ Result<int32_t> LZ4::decompress(DataInput &compressed, int32_t decompressed_len,
         match_len += MIN_MATCH;
 
         // Copying a multiple of 8 bytes makes decompression 5% to 10% faster.
-        const int32_t fast_len = (match_len + 7) & 0xFFF8;
+        // The mask must cover the whole width: `0xFFF8` would drop the high
+        // sixteen bits of a long match and copy too few bytes.
+        const int32_t fast_len = (match_len + 7) & ~7;
         const int32_t room = static_cast<int32_t>(dest.size()) - d_off;
 
         if (match_dec < match_len || d_off + fast_len > dest_end) {
