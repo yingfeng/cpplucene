@@ -30,11 +30,11 @@ namespace lucene {
 
 /// A [`FstBytesReader`] over a heap buffer it **shares ownership** of.
 ///
-/// Port of `ReverseBytesReader` usage in `read_write_data_output.rs`, except
-/// that the direction is forward: this project's [`FstBuilder`] appends nodes
-/// as it serializes them (children first, so a parent's address is always
-/// greater than its children's), which means the FST data is read front to
-/// back.  The reference implementation writes nodes backwards and therefore needs a reverse reader.
+/// Port of `ReverseBytesReader`: the FST stores every node byte reversed and
+/// addresses it at its **last** byte, so all reads walk backwards (a `position`
+/// is a physical offset that decreases on every `read_byte`).  This is what the
+/// on-disk format requires — a forward reader silently mis-decodes nodes, and
+/// other implementations reject the index.
 export class OwnedBytesReader final : public FstBytesReader {
 public:
     OwnedBytesReader(std::shared_ptr<const std::vector<uint8_t>> bytes, size_t offset, size_t length);
@@ -55,7 +55,7 @@ private:
     int64_t pos_{0};
 };
 
-/// A [`FstBytesReader`] over a **borrowed** buffer.
+/// A [`FstBytesReader`] over a **borrowed** buffer, read backwards.
 ///
 /// The caller guarantees the buffer outlives the reader; this is the C++
 /// counterpart of `OffHeapFSTStore`'s `ReverseRandomAccessReader`, which reads
@@ -87,8 +87,9 @@ export class FstStore {
 public:
     virtual ~FstStore() = default;
 
-    /// A new reader positioned at the first byte; the store must outlive it
-    /// unless it shares ownership (as [`OnHeapFstStore`] does).
+    /// A new reader over the whole store, read backwards from `num_bytes() - 1`
+    /// downwards; the store must outlive it unless it shares ownership (as
+    /// [`OnHeapFstStore`] does).
     [[nodiscard]] virtual std::unique_ptr<FstBytesReader> make_reader() const = 0;
 
     /// Copies the FST bytes into `out`.

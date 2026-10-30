@@ -280,7 +280,10 @@ VoidResult Lucene94FieldInfosFormat::write_field_infos(DataOutput &out, const Fi
         if (auto written = out.write_byte(static_cast<uint8_t>(field.doc_values_skip_index)); !written.has_value()) {
             return written;
         }
-        if (auto written = CodecUtil::write_be_long(out, field.doc_values_gen); !written.has_value()) {
+        // The doc values generation uses the plain (little-endian) `writeLong`,
+        // like the reference implementation; `write_be_long` is only for the
+        // codec and footer magic numbers.
+        if (auto written = out.write_long(field.doc_values_gen); !written.has_value()) {
             return written;
         }
         if (auto written = out.write_map_of_strings(field.attributes); !written.has_value()) {
@@ -372,7 +375,7 @@ Result<FieldInfos> Lucene94FieldInfosFormat::parse_field_infos(DataInput &input)
         }
         field.doc_values_skip_index = static_cast<DocValuesSkipIndexType>(skip_index.value());
 
-        auto doc_values_gen = CodecUtil::read_be_long(input);
+        auto doc_values_gen = input.read_long();
         if (!doc_values_gen.has_value()) {
             return err(doc_values_gen.error());
         }

@@ -27,6 +27,7 @@ import :data_input;
 import :data_output;
 import :directory;
 import :error;
+import :index_file_names;
 import :index_input;
 import :index_output;
 import :io_context;
@@ -45,15 +46,6 @@ struct SizedFile {
     std::string name;
     size_t length{0};
 };
-
-/// The reference implementation's one-argument `IndexFileNames::strip_segment_name`.
-std::string strip_segment_name(std::string_view name) {
-    const auto pos = name.find('_');
-    if (pos == std::string_view::npos) {
-        return std::string(name);
-    }
-    return std::string(name.substr(pos + 1));
-}
 
 } // namespace
 
@@ -206,7 +198,7 @@ VoidResult Lucene90CompoundFormat::write_compound_file(IndexOutput &entries, Ind
         }
         const size_t length = end_offset.value() - start_offset;
 
-        if (auto id = entries.write_string(strip_segment_name(file)); !id) {
+        if (auto id = entries.write_string(IndexFileNames::strip_segment_name(file)); !id) {
             return id;
         }
         if (auto offset = entries.write_long(static_cast<int64_t>(start_offset)); !offset) {

@@ -653,6 +653,9 @@ export import :half_float_point;
 export import :big_integer_point;
 export import :lat_lon_bounding_box;
 export import :merge_on_flush_merge_policy;
+export import :term_automaton_scorer;
+export import :term_automaton_query;
+export import :token_stream_to_term_automaton_query;
 
 // ---- geo ----
 export import :geo_component2d;

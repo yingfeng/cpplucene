@@ -37,6 +37,9 @@ namespace lucene {
 ///  * keys must be added in **strictly increasing lexicographic order**;
 ///  * nodes are serialized bottom-up (children first), so a parent's address is
 ///    always greater than its children's;
+///  * each node's bytes are emitted **reversed** and the node is addressed at its
+///    last byte, because readers walk addresses downwards (see
+///    [`OwnedBytesReader`](lucene_core:fst_store));
 ///  * a single padding byte is emitted first so that no node ever gets address
 ///    0, which is reserved for `NON_FINAL_END_NODE`.
 ///

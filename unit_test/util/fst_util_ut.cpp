@@ -33,7 +33,7 @@ using namespace lucene;
 
 namespace {
 
-/// A [`FstBytesReader`] over a buffer; the FST only walks forward here.
+/// A [`FstBytesReader`] over a buffer; FST readers walk addresses downwards.
 class BufferReader final : public FstBytesReader {
 public:
     explicit BufferReader(std::span<const uint8_t> bytes) : bytes_(bytes) {}
@@ -42,7 +42,7 @@ public:
         if (pos_ < 0 || static_cast<size_t>(pos_) >= bytes_.size()) {
             return err(LuceneError::eof("read past the end"));
         }
-        return bytes_[static_cast<size_t>(pos_++)];
+        return bytes_[static_cast<size_t>(pos_--)];
     }
 
     [[nodiscard]] VoidResult read_bytes(std::span<uint8_t> b) override {
@@ -57,7 +57,7 @@ public:
     }
 
     [[nodiscard]] VoidResult skip_bytes(int64_t num_bytes) override {
-        pos_ += num_bytes;
+        pos_ -= num_bytes;
         return {};
     }
 

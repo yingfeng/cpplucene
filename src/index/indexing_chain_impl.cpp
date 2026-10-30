@@ -51,6 +51,7 @@ import :int_block_pool;
 import :norm_values_writer;
 import :norms_consumer;
 import :norms_format;
+import :segment_read_state;
 import :norms_producer;
 import :number;
 import :numeric_doc_values_writer;
@@ -87,32 +88,6 @@ constexpr size_t INITIAL_HASH_BUCKETS = 16;
 [[nodiscard]] size_t bucket_of(std::string_view name, size_t mask) {
     return std::hash<std::string_view>{}(name) & mask;
 }
-
-/// Dispatches the normas of a segment by field name.
-///
-/// The postings writer reads the norms of each document back while flushing
-/// (they feed its skip data), so the chain hands the buffered norms of every
-/// field to it.  The reference implementation passes the same values through its own
-/// `NormsProducer` implementations.
-class ChainNormsProducer final : public NormsProducer {
-public:
-    explicit ChainNormsProducer(std::vector<std::pair<std::string, std::unique_ptr<NormsProducer>>> producers)
-        : producers_(std::move(producers)) {}
-
-    [[nodiscard]] Result<std::unique_ptr<NumericDocValues>> get_norms(const FieldInfo &field) const override {
-        for (const auto &[name, producer] : producers_) {
-            if (name == field.name) {
-                return producer->get_norms(field);
-            }
-        }
-        return err(LuceneError::illegal_state("no buffered norms for field \"" + field.name + "\""));
-    }
-
-    [[nodiscard]] VoidResult check_integrity() const override { return {}; }
-
-private:
-    std::vector<std::pair<std::string, std::unique_ptr<NormsProducer>>> producers_;
-};
 
 /// The first `limit` bytes of `text`, for the immense-term message.
 [[nodiscard]] std::string prefix_of(std::string_view text, size_t limit = 30) {
@@ -1048,29 +1023,38 @@ struct IndexingChain::Impl {
             return std::unexpected(std::move(consumer.error()));
         }
         // The postings writer needs the norms of the documents it is writing.
-        std::vector<std::pair<std::string, std::unique_ptr<NormsProducer>>> norms;
-        norms.reserve(per_fields_.size());
-        for (auto &per_field : per_fields_) {
-            if (per_field->norms == nullptr || per_field->field_info == nullptr) {
-                continue;
-            }
-            auto producer = per_field->norms->get_norms_producer();
-            if (!producer.has_value()) {
+        //
+        // They are read back from the `.nvd`/`.nvm` files written just above,
+        // which is what the reference implementation does.  The buffered norms
+        // that are still in memory cannot serve this: they only support
+        // sequential access, while a posting list walks its documents with
+        // `advance_exact`, skipping the documents it does not contain.
+        std::unique_ptr<NormsProducer> norms_producer;
+        if (state.field_infos->has_norms()) {
+            const NormsFormat *norms_format = codec_.norms_format();
+            if (norms_format == nullptr) {
                 (void)consumer.value()->close();
-                return std::unexpected(std::move(producer.error()));
+                return err(LuceneError::illegal_state("the codec does not provide a norms format"));
             }
-            norms.emplace_back(per_field->field_info->name, std::move(producer.value()));
+            SegmentReadState read_state(state.directory, state.field_infos, state.context, state.segment_suffix);
+            auto produced = norms_format->norms_producer(read_state, segment_info_);
+            if (!produced.has_value()) {
+                (void)consumer.value()->close();
+                return std::unexpected(std::move(produced.error()));
+            }
+            norms_producer = std::move(produced.value());
         }
-        ChainNormsProducer norms_producer(std::move(norms));
 
         // `FreqProxFields` shares the pools rather than owning them; the chain
         // outlives the flush, so the aliasing pointers are safe.
         std::shared_ptr<IntBlockPool> int_pool(&context_.freq_prox_term_int_pool, [](IntBlockPool *) {});
         std::shared_ptr<ByteBlockPool> byte_pool(&context_.byte_pool, [](ByteBlockPool *) {});
         FreqProxFields fields(std::move(prepared.value()), std::move(int_pool), std::move(byte_pool));
-        // On flush the postings do not read norms back (only a merge does).
-        if (auto written = consumer.value()->write(state, segment_info_, fields, &norms_producer);
-            !written.has_value()) {
+        auto written = consumer.value()->write(state, segment_info_, fields, norms_producer.get());
+        if (norms_producer != nullptr) {
+            (void)norms_producer->close();
+        }
+        if (!written.has_value()) {
             (void)consumer.value()->close();
             return written;
         }

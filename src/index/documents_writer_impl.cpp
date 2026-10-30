@@ -24,6 +24,7 @@ import :directory;
 import :documents_writer_per_thread;
 import :document;
 import :error;
+import :index_file_names;
 import :index_writer_config;
 import :segment_commit_info;
 import :segment_info;
@@ -39,23 +40,19 @@ namespace lucene {
 
 namespace {
 
-/// The files of a segment, so an aborted writer can remove what it wrote.
-/// The number a segment name carries (`_12` -> 12); `-1` when it carries none.
+/// The number a segment name carries (`_12` -> 12, `_a` -> 10); `-1` when it
+/// carries none.
 ///
-/// Segments are published in this order, so a commit keeps the document ids in
-/// indexing order; comparing the names as strings would put `_10` before `_2`.
+/// Names are base 36, so they have to be decoded rather than compared as
+/// strings (which would put `_10` before `_2`) and are not decimal either
+/// (`_a` follows `_9`).  Segments are published in this order, so a commit
+/// keeps the document ids in indexing order.
 int64_t segment_number(std::string_view name) {
     if (name.size() < 2 || name.front() != '_') {
         return -1;
     }
-    int64_t number = 0;
-    for (const char digit : name.substr(1)) {
-        if (digit < '0' || digit > '9') {
-            return -1;
-        }
-        number = number * 10 + (digit - '0');
-    }
-    return number;
+    auto decoded = IndexFileNames::base36_decode(name.substr(1));
+    return decoded.has_value() ? decoded.value() : -1;
 }
 
 std::set<std::string> files_of(const std::vector<SegmentCommitInfo> &segments) {
@@ -146,7 +143,11 @@ struct DocumentsWriter::Impl {
 
     [[nodiscard]] SegmentInfo new_segment_info() {
         SegmentInfo info;
-        info.name = "_" + std::to_string(next_segment_counter_.fetch_add(1));
+        // Segment names are base 36, like the reference implementation's
+        // `Long.toString(counter, Character.MAX_RADIX)`: `_9` is followed by `_a`
+        // and `_10`.  Anything else makes readers that decode the name (and
+        // `CheckIndex`, which validates `counter` against it) disagree.
+        info.name = "_" + IndexFileNames::base36_encode(next_segment_counter_.fetch_add(1));
         const auto random = StringHelper::random_id();
         info.id.assign(random.begin(), random.end());
         info.version = LUCENE_CURRENT_VERSION;

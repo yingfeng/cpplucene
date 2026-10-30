@@ -197,8 +197,13 @@ int64_t FstBuilder::serialize(Node &node) {
         return node.address;
     }
 
-    node.address = static_cast<int64_t>(data_.size());
-    data_.insert(data_.end(), written.begin(), written.end());
+    // The FST format stores every node **byte reversed** and addresses it at its
+    // last byte: readers walk addresses downwards, so the node's first logical
+    // byte must sit at the highest address.  Writing the arcs forward and
+    // addressing the first byte produces a file that only reads correctly with a
+    // forward reader — other implementations reject it.
+    data_.insert(data_.end(), written.rbegin(), written.rend());
+    node.address = static_cast<int64_t>(data_.size()) - 1;
     node_hash_.emplace(std::move(signature), node.address);
     return node.address;
 }

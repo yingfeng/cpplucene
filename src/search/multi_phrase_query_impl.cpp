@@ -191,8 +191,11 @@ Result<std::unique_ptr<PhraseScorer>> build_scorer(LeafReader &reader, std::stri
         opened.emplace_back(slot_freq, std::move(slot));
     }
 
-    // The rarest position leads the exact matcher.
-    std::ranges::sort(opened, [](const auto &left, const auto &right) { return left.first < right.first; });
+    // Keep phrase order; see the note in `phrase_query_impl.cpp` about why the
+    // lead must be the first position.
+    std::ranges::stable_sort(opened, [](const auto &left, const auto &right) {
+        return left.second.position < right.second.position;
+    });
     std::vector<PostingsAndFreq> postings;
     postings.reserve(opened.size());
     for (auto &[doc_freq, entry] : opened) {

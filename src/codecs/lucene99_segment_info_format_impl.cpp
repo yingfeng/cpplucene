@@ -44,26 +44,31 @@ constexpr uint8_t YES = 1;
 constexpr uint8_t NO = 0;
 
 /// Writes one version component triplet.
+///
+/// The version components are written with the plain (little-endian)
+/// `DataOutput::write_int`, like the reference implementation, which uses
+/// `writeInt` here.  `CodecUtil::write_be_int` is reserved for the codec and
+/// footer magic numbers only.
 VoidResult write_version(DataOutput &out, const Version &version) {
-    if (auto written = CodecUtil::write_be_int(out, version.major); !written.has_value()) {
+    if (auto written = out.write_int(version.major); !written.has_value()) {
         return written;
     }
-    if (auto written = CodecUtil::write_be_int(out, version.minor); !written.has_value()) {
+    if (auto written = out.write_int(version.minor); !written.has_value()) {
         return written;
     }
-    return CodecUtil::write_be_int(out, version.bug_fix);
+    return out.write_int(version.bug_fix);
 }
 
 Result<Version> read_version(DataInput &input) {
-    auto major = CodecUtil::read_be_int(input);
+    auto major = input.read_int();
     if (!major.has_value()) {
         return err(major.error());
     }
-    auto minor = CodecUtil::read_be_int(input);
+    auto minor = input.read_int();
     if (!minor.has_value()) {
         return err(minor.error());
     }
-    auto bug_fix = CodecUtil::read_be_int(input);
+    auto bug_fix = input.read_int();
     if (!bug_fix.has_value()) {
         return err(bug_fix.error());
     }
@@ -95,7 +100,7 @@ VoidResult Lucene99SegmentInfoFormat::write_segment_info(DataOutput &out, const 
         return written;
     }
 
-    if (auto written = CodecUtil::write_be_int(out, info.max_doc); !written.has_value()) {
+    if (auto written = out.write_int(info.max_doc); !written.has_value()) {
         return written;
     }
     if (auto written = out.write_byte(info.use_compound_file ? YES : NO); !written.has_value()) {
@@ -180,7 +185,7 @@ Result<SegmentInfo> Lucene99SegmentInfoFormat::parse_segment_info(DataInput &inp
                                               " (resource=" + std::string(input.to_string()) + ")"));
     }
 
-    auto max_doc = CodecUtil::read_be_int(input);
+    auto max_doc = input.read_int();
     if (!max_doc.has_value()) {
         return err(max_doc.error());
     }

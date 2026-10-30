@@ -96,6 +96,12 @@ TEST(Lucene90CompoundFormatTest, RoundTripsSubFiles) {
     auto concrete = Lucene90CompoundReader::create(directory, si);
     ASSERT_TRUE(concrete.has_value());
     ASSERT_EQ(concrete.value()->entries().size(), 3u);
+    // Entry ids are the file name without its segment name (the part from the
+    // second `_` on), the spelling the reference implementation writes, so the
+    // `.cfs` stays interchangeable.
+    EXPECT_TRUE(concrete.value()->entries().contains("_Lucene90_0.tim"));
+    EXPECT_TRUE(concrete.value()->entries().contains("_Lucene90_0.doc"));
+    EXPECT_TRUE(concrete.value()->entries().contains("_Lucene90_0.nvd"));
 
     auto reader = format.get_compound_reader(directory, si);
     ASSERT_TRUE(reader.has_value());
@@ -132,6 +138,37 @@ TEST(Lucene90CompoundFormatTest, ListsSubFilesWithTheirSegmentPrefix) {
     auto listed = reader.value()->list_all();
     ASSERT_TRUE(listed.has_value());
     EXPECT_EQ(listed.value(), (std::vector<std::string>{"_0_a.foo", "_0_b.bar"}));
+}
+
+TEST(Lucene90CompoundFormatTest, EntryIdsDropOnlyTheSegmentName) {
+    // A per-segment file has a single `_` (the segment name is the whole prefix
+    // before the first `.`), a codec-suffixed one has two.  Both lose only the
+    // segment name, so the suffix survives in the entry id.
+    ByteBuffersDirectory directory;
+    SegmentInfo si = segment_for();
+    si.files = {"_0.fnm", "_0_Lucene90_0.dvd"};
+    write_sub_file(directory, si, "_0.fnm", "field-infos");
+    write_sub_file(directory, si, "_0_Lucene90_0.dvd", "doc-values");
+
+    Lucene90CompoundFormat format;
+    ASSERT_TRUE(format.write(directory, si, io_context_default()).has_value());
+
+    auto concrete = Lucene90CompoundReader::create(directory, si);
+    ASSERT_TRUE(concrete.has_value());
+    ASSERT_EQ(concrete.value()->entries().size(), 2u);
+    EXPECT_TRUE(concrete.value()->entries().contains(".fnm"));
+    EXPECT_TRUE(concrete.value()->entries().contains("_Lucene90_0.dvd"));
+
+    auto reader = format.get_compound_reader(directory, si);
+    ASSERT_TRUE(reader.has_value());
+    // Opening by the full name resolves through the same stripping rule.
+    EXPECT_EQ(read_sub_file(*reader.value(), si, "_0.fnm"), "field-infos");
+    EXPECT_EQ(read_sub_file(*reader.value(), si, "_0_Lucene90_0.dvd"), "doc-values");
+
+    // Listing re-attaches the segment name, so the names match the directory.
+    auto listed = reader.value()->list_all();
+    ASSERT_TRUE(listed.has_value());
+    EXPECT_EQ(listed.value(), (std::vector<std::string>{"_0.fnm", "_0_Lucene90_0.dvd"}));
 }
 
 TEST(Lucene90CompoundFormatTest, IsReadOnly) {

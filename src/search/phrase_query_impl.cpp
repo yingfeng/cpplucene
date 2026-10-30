@@ -160,9 +160,16 @@ Result<std::unique_ptr<PhraseScorer>> build_phrase_scorer(LeafReader &reader, st
                                             .terms = {terms[i]}});
     }
 
-    // The rarest term leads the exact matcher, which keeps the number of
-    // position lookups low.
-    std::ranges::sort(opened, [](const auto &left, const auto &right) { return left.first < right.first; });
+    // The postings have to stay in phrase order.  The exact matcher takes the
+    // first entry as the lead and derives every other expected position from
+    // `lead.position - lead.offset`, so a lead whose offset is not the smallest
+    // would ask for a negative position — where an unpositioned posting (whose
+    // sentinel position is `-1`) would look like a match.  The reference
+    // implementation's `PostingsAndFreq.compare_to` compares the position first,
+    // despite the "sort by increasing docFreq" comment at its call site.
+    std::ranges::stable_sort(opened, [](const auto &left, const auto &right) {
+        return left.second.position < right.second.position;
+    });
     std::vector<PostingsAndFreq> postings;
     postings.reserve(opened.size());
     for (auto &[doc_freq, entry] : opened) {

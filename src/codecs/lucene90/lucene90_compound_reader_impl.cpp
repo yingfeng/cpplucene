@@ -26,6 +26,7 @@ import :compound_directory;
 import :data_input;
 import :directory;
 import :error;
+import :index_file_names;
 import :index_input;
 import :index_output;
 import :io_context;
@@ -51,17 +52,6 @@ constexpr std::string_view kEntryCodec = "Lucene90CompoundEntries";
 /// Mirrors `Lucene90CompoundFormat::VERSION_START` / `VERSION_CURRENT`.
 constexpr int32_t kVERSION_START = 0;
 constexpr int32_t kVERSION_CURRENT = kVERSION_START;
-
-/// The reference implementation's one-argument `IndexFileNames::strip_segment_name`: everything from
-/// the first `_` on, without the `_` itself.  The two-argument overload in
-/// `:index_file_names` does something else (it removes a known base).
-std::string strip_segment_name(std::string_view name) {
-    const auto pos = name.find('_');
-    if (pos == std::string_view::npos) {
-        return std::string(name);
-    }
-    return std::string(name.substr(pos + 1));
-}
 
 } // namespace
 
@@ -192,11 +182,10 @@ Result<std::vector<std::string>> Lucene90CompoundReader::list_all() const {
     names.reserve(entries_.size());
     for (const auto &[id, entry] : entries_) {
         static_cast<void>(entry);
-        // **Deviation:** the reference implementation concatenates `segment_name + id`, which loses
-        // the separator (the id already starts with the segment's digits); this
-        // port restores it so the names match the files in the parent
-        // directory.
-        names.push_back("_" + id);
+        // Entry ids keep only the part after the segment name (`.fnm`,
+        // `_Lucene90_0.tim`, ...), so prefixing the segment name rebuilds the
+        // name the file had in the parent directory.
+        names.push_back(segment_name_ + id);
     }
     std::ranges::sort(names);
     return names;
@@ -207,7 +196,7 @@ VoidResult Lucene90CompoundReader::delete_file(std::string_view /*name*/) {
 }
 
 Result<size_t> Lucene90CompoundReader::file_length(std::string_view name) const {
-    const std::string stripped_name = strip_segment_name(name);
+    const std::string stripped_name = IndexFileNames::strip_segment_name(name);
     const auto entry = entries_.find(stripped_name);
     if (entry == entries_.end()) {
         return err(LuceneError::not_such_file(std::string(name) + " not found"));
@@ -236,7 +225,7 @@ VoidResult Lucene90CompoundReader::rename(std::string_view /*source*/, std::stri
 
 Result<std::unique_ptr<IndexInput>> Lucene90CompoundReader::open_input(std::string_view name,
                                                                       const IOContext &context) const {
-    const std::string id = strip_segment_name(name);
+    const std::string id = IndexFileNames::strip_segment_name(name);
     const auto entry = entries_.find(id);
     if (entry == entries_.end()) {
         const std::string data_file_name =

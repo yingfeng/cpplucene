@@ -108,3 +108,24 @@ TEST(CompetitiveImpactAccumulatorTest, ToStringMatchesReferenceFormat) {
     acc.add(3, 4);
     EXPECT_EQ(acc.to_string(), "[{freq=1,norm=2}, {freq=3,norm=4}]");
 }
+
+TEST(CompetitiveImpactAccumulatorTest, KeepsOnePairPerNormByte) {
+    // Regression: the same (freq, norm) inputs the postings writer sees for one
+    // real 128-document block.  The pairs drive the skip data in `.doc`, so a
+    // mismatch changes competitive skipping (and therefore the reported
+    // lower-bound hit counts) without changing any actual hit.
+    CompetitiveImpactAccumulator acc;
+    acc.add(10, 60);
+    acc.add(9, 60);
+    acc.add(14, 61);
+    acc.add(13, 61);
+    acc.add(16, 62);
+    acc.add(15, 62);
+    acc.add(16, 63);
+    acc.add(12, 63);
+    acc.add(20, 64);
+    acc.add(19, 64);
+
+    EXPECT_EQ(acc.get_competitive_freq_norm_pairs(),
+              std::vector<Impact>({Impact{10, 60}, Impact{14, 61}, Impact{16, 62}, Impact{20, 64}}));
+}

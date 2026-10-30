@@ -93,6 +93,17 @@ std::string IndexFileNames::strip_segment_name(std::string_view name, std::strin
     return without_extension;
 }
 
+std::string IndexFileNames::strip_segment_name(std::string_view name) {
+    size_t idx = name.find('_', 1);
+    if (idx == std::string_view::npos) {
+        idx = name.find('.');
+    }
+    if (idx == std::string_view::npos) {
+        return std::string(name);
+    }
+    return std::string(name.substr(idx));
+}
+
 std::string IndexFileNames::base36_encode(int64_t value) {
     if (value == 0) {
         return "0";

@@ -57,6 +57,16 @@ export struct IndexFileNames {
     /// `name` without the `_<generation>` suffix of `base` files.
     [[nodiscard]] static std::string strip_segment_name(std::string_view name, std::string_view base);
 
+    /// `name` without its segment name.
+    ///
+    /// Port of the reference implementation's one-argument
+    /// `IndexFileNames::strip_segment_name`: everything before the **second**
+    /// `_` (a `.del` file puts its generation there), or before the first `.`
+    /// when there is no second `_`.  Compound file entries are named with this
+    /// spelling, so it has to match exactly to read another implementation's
+    /// `.cfs`.
+    [[nodiscard]] static std::string strip_segment_name(std::string_view name);
+
     /// Base 36 encoding, as used for generations in file names.
     [[nodiscard]] static std::string base36_encode(int64_t value);
 

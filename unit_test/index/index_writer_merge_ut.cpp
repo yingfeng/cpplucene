@@ -144,6 +144,38 @@ TEST(IndexWriterMergeTest, MergesOnCommit) {
     }
 }
 
+TEST(IndexWriterMergeTest, NamesSegmentsInBase36AndKeepsTheCounterAhead) {
+    // Segment names are base 36 (`_9` is followed by `_a`), and `segments_N`
+    // must record a counter greater than every name it published: readers
+    // decode the names when they validate the index (`CheckIndex` refuses an
+    // index whose counter is not ahead of the highest segment name).
+    ByteBuffersDirectory dir;
+    WhitespaceAnalyzer analyzer;
+    IndexWriterConfig config(analyzer);
+    config.set_max_buffered_docs(1);
+    config.set_merge_policy(log_doc_policy(3));
+
+    auto writer = IndexWriter::open(dir, config);
+    ASSERT_TRUE(writer.has_value()) << (writer ? "" : writer.error().to_string());
+    for (int32_t i = 0; i < 20; ++i) {
+        ASSERT_TRUE(writer.value()->add_document(make_doc("d" + std::to_string(i))).has_value());
+    }
+    ASSERT_TRUE(writer.value()->commit().has_value());
+
+    auto infos = SegmentInfos::read_latest(dir);
+    ASSERT_TRUE(infos.has_value());
+    int64_t highest = -1;
+    for (const SegmentCommitInfo &segment : infos.value().segments) {
+        EXPECT_EQ(segment.info.name.front(), '_');
+        auto decoded = IndexFileNames::base36_decode(std::string_view(segment.info.name).substr(1));
+        ASSERT_TRUE(decoded.has_value()) << segment.info.name;
+        highest = std::max(highest, decoded.value());
+    }
+    EXPECT_GE(highest, 9) << "twenty documents need more than ten segment names";
+    EXPECT_LT(highest, infos.value().counter) << "counter " << infos.value().counter << " is not ahead of name "
+                                             << highest;
+}
+
 TEST(IndexWriterMergeTest, NoMergeSchedulerPreventsMerges) {
     ByteBuffersDirectory dir;
     WhitespaceAnalyzer analyzer;

@@ -61,18 +61,26 @@ Result<int32_t> BufferedNorms::next_doc() {
 }
 
 Result<int32_t> BufferedNorms::advance(int32_t target) {
-    auto doc = docs_with_field_->advance(target);
-    if (!doc.has_value()) {
-        return std::unexpected(std::move(doc.error()));
-    }
-    if (doc.value() != NO_MORE_DOCS) {
+    // Values are kept in lock step with the docs-with-field iterator, so every
+    // *skipped* document has to consume its value too: jumping straight to
+    // `target` would shift all later values by the number of skipped docs.
+    auto doc = docs_with_field_->doc_id();
+    while (doc < target) {
+        auto next = docs_with_field_->next_doc();
+        if (!next.has_value()) {
+            return std::unexpected(std::move(next.error()));
+        }
+        if (next.value() == NO_MORE_DOCS) {
+            return NO_MORE_DOCS;
+        }
         auto value = values_iterator_->next();
         if (!value.has_value()) {
             return std::unexpected(std::move(value.error()));
         }
         value_ = value.value();
+        doc = next.value();
     }
-    return doc.value();
+    return doc;
 }
 
 Result<int64_t> BufferedNorms::cost() const { return docs_with_field_->cost(); }

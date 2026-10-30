@@ -204,6 +204,33 @@ TEST(NormValuesWriterTest, RejectsRepeatedDocs) {
     EXPECT_FALSE(writer.add_value(0, 2).has_value());
 }
 
+TEST(NormValuesWriterTest, KeepsValuesInSyncWhenDocumentsAreSkipped) {
+    // The postings writer asks for norms with `advance_exact(doc)`, and a
+    // posting list skips documents.  Each skipped document still has to consume
+    // its buffered value, otherwise every later norm is shifted (which silently
+    // corrupts the block impact data written to `.doc`).
+    auto field = numeric_field("norm");
+    NormValuesWriter writer(field);
+    for (int32_t doc = 0; doc < 8; ++doc) {
+        ASSERT_TRUE(writer.add_value(doc, 60 + doc).has_value());
+    }
+
+    auto producer = writer.get_norms_producer();
+    ASSERT_TRUE(producer.has_value());
+    auto norms = producer.value()->get_norms(*field);
+    ASSERT_TRUE(norms.has_value());
+
+    ASSERT_TRUE(norms.value()->advance_exact(0).value());
+    EXPECT_EQ(norms.value()->long_value().value(), 60);
+
+    // Jump over documents 1..4, like a posting list that misses them.
+    ASSERT_TRUE(norms.value()->advance_exact(5).value());
+    EXPECT_EQ(norms.value()->long_value().value(), 65);
+
+    ASSERT_TRUE(norms.value()->advance_exact(7).value());
+    EXPECT_EQ(norms.value()->long_value().value(), 67);
+}
+
 TEST(FieldInfosBuilderTest, AssignsNumbersInInsertionOrder) {
     FieldInfosBuilder builder;
     FieldInfo title;

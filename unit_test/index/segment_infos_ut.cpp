@@ -247,4 +247,16 @@ TEST(IndexFileNamesTest, BuildsAndParsesGenerations) {
     EXPECT_EQ(IndexFileNames::strip_extension("_0.fnm"), "_0");
     EXPECT_EQ(IndexFileNames::strip_extension("segments_1"), "segments_1");
     EXPECT_EQ(IndexFileNames::strip_segment_name("segments_1", IndexFileNames::SEGMENTS), "1");
+
+    // The one-argument overload cuts at the second `_` (that is where a `.del`
+    // file keeps its generation), otherwise at the first `.`.
+    EXPECT_EQ(IndexFileNames::strip_segment_name("_0.fnm"), ".fnm");
+    EXPECT_EQ(IndexFileNames::strip_segment_name("_0_Lucene90_0.tim"), "_Lucene90_0.tim");
+    EXPECT_EQ(IndexFileNames::strip_segment_name("_0_1.del"), "_1.del");
+    EXPECT_EQ(IndexFileNames::strip_segment_name("_12.si"), ".si");
+    EXPECT_EQ(IndexFileNames::strip_segment_name("segments_1"), "_1");
+    EXPECT_EQ(IndexFileNames::strip_segment_name("noextension"), "noextension");
+    // Re-prefixing the segment name rebuilds the original name, which is what the
+    // compound file reader does when it lists its entries.
+    EXPECT_EQ(std::string("_0") + IndexFileNames::strip_segment_name("_0.fnm"), "_0.fnm");
 }

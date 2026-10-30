@@ -98,21 +98,26 @@ TEST(FstStoreTest, ReadersKeepTheBufferAlive) {
         reader = store.make_reader();
         // `store` dies here; the reader shares ownership of the bytes.
     }
+    reader->set_position(static_cast<int64_t>(built.data.size()) - 1);
     auto byte = reader->read_byte();
     ASSERT_TRUE(byte.has_value());
-    EXPECT_EQ(byte.value(), built.data[0]);
+    EXPECT_EQ(byte.value(), built.data.back());
     reader->set_position(0);
     EXPECT_EQ(reader->get_position(), 0);
 }
 
 TEST(FstStoreTest, ReaderReportsEofPastTheEnd) {
     OwnedBytesReader reader(std::make_shared<const std::vector<uint8_t>>(std::vector<uint8_t>{1, 2, 3}), 0, 3);
-    EXPECT_TRUE(reader.read_byte().has_value());
+    // Reads walk backwards: from the highest address down to 0.
+    reader.set_position(2);
+    auto first = reader.read_byte();
+    ASSERT_TRUE(first.has_value());
+    EXPECT_EQ(first.value(), 3);
     EXPECT_TRUE(reader.read_byte().has_value());
     EXPECT_TRUE(reader.read_byte().has_value());
     EXPECT_FALSE(reader.read_byte().has_value());
 
-    reader.set_position(2);
+    reader.set_position(0);
     std::vector<uint8_t> too_much(2);
     EXPECT_FALSE(reader.read_bytes(too_much).has_value());
 }

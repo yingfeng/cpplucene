@@ -1157,9 +1157,10 @@ struct IndexWriter::Impl : MergeSource {
         plan.index_snapshot = std::make_shared<const SegmentInfos>(infos_);
 
         SegmentInfo merged_info;
-        merged_info.name = "_" + std::to_string(documents_writer_->next_segment_counter());
-        documents_writer_->set_next_segment_counter(documents_writer_->next_segment_counter() + 1);
-        infos_.counter = documents_writer_->next_segment_counter();
+        // Take the name from the shared counter atomically: a flush running on
+        // another thread allocates from the same counter.
+        merged_info.name = "_" + IndexFileNames::base36_encode(documents_writer_->allocate_segment_counter());
+        infos_.counter = std::max(infos_.counter, documents_writer_->next_segment_counter());
         const auto random = StringHelper::random_id();
         merged_info.id.assign(random.begin(), random.end());
         merged_info.version = LUCENE_CURRENT_VERSION;
@@ -1687,9 +1688,10 @@ struct IndexWriter::Impl : MergeSource {
         }
 
         SegmentInfo merged_info;
-        merged_info.name = "_" + std::to_string(documents_writer_->next_segment_counter());
-        documents_writer_->set_next_segment_counter(documents_writer_->next_segment_counter() + 1);
-        infos_.counter = documents_writer_->next_segment_counter();
+        // Take the name from the shared counter atomically: a flush running on
+        // another thread allocates from the same counter.
+        merged_info.name = "_" + IndexFileNames::base36_encode(documents_writer_->allocate_segment_counter());
+        infos_.counter = std::max(infos_.counter, documents_writer_->next_segment_counter());
         const auto random = StringHelper::random_id();
         merged_info.id.assign(random.begin(), random.end());
         merged_info.version = LUCENE_CURRENT_VERSION;
@@ -1720,8 +1722,11 @@ struct IndexWriter::Impl : MergeSource {
     /// named after `_N` (and dropping the compound itself) is what
     /// [`add_indexes_from_directory`] needs; the caller repacks the segment
     /// afterwards.
-    [[nodiscard]] VoidResult unpack_compound_segment(SegmentCommitInfo &segment, const std::string &old_name,
-                                                     const IOContext &context) {
+    ///
+    /// `segment.info.name` is already the new name here, so the reader is opened
+    /// under it and lists the entries as `_N.fnm`, `_N_Lucene90_0.tim`, ...  Those
+    /// are exactly the names the unpacked files must have.
+    [[nodiscard]] VoidResult unpack_compound_segment(SegmentCommitInfo &segment, const IOContext &context) {
         const Codec *codec = config_.codec().name() == segment.info.codec_name
                                      ? &config_.codec()
                                      : CodecFormats::for_name(segment.info.codec_name);
@@ -1749,9 +1754,7 @@ struct IndexWriter::Impl : MergeSource {
         files.insert(segment_file_name(segment.info.name, "", "si"));
         std::vector<char> buffer(64 * 1024);
         for (const std::string &entry : entries.value()) {
-            const std::string renamed = entry.starts_with(old_name)
-                                                ? segment.info.name + entry.substr(old_name.size())
-                                                : segment.info.name + "." + entry;
+            const std::string &renamed = entry;
             auto input = compound.value()->open_input(entry, context);
             if (!input.has_value()) {
                 return std::unexpected(std::move(input.error()));
@@ -1815,7 +1818,7 @@ struct IndexWriter::Impl : MergeSource {
             // A fresh, unused name; `_<counter>` is what the writer would hand out.
             std::string name;
             do {
-                name = "_" + std::to_string(counter++);
+                name = "_" + IndexFileNames::base36_encode(counter++);
             } while (taken.contains(name));
             taken.insert(name);
 
@@ -1879,7 +1882,7 @@ struct IndexWriter::Impl : MergeSource {
                 // it was packed, so the copy holds `_old.fnm` and the reader of the
                 // renamed segment would look for `_new.fnm` inside it.  Unpacking
                 // and repacking under the new name is what keeps both correct.
-                if (auto unpacked = unpack_compound_segment(target, old_name, context); !unpacked.has_value()) {
+                if (auto unpacked = unpack_compound_segment(target, context); !unpacked.has_value()) {
                     return unpacked;
                 }
             }
