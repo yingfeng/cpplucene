@@ -145,8 +145,10 @@ private:
     }
 
     /// 64 bytes: the largest output types are `BytesRef` and `IntsRef` (a vector
-    /// the size of three words plus two `size_t`s).
-    alignas(std::max_align_t) std::byte storage_[64]{};
+    /// the size of three words plus two `size_t`s).  Deliberately not
+    /// zero-initialised: it is only read through `table_`, which is null until a
+    /// value is constructed, and every arc of every seek copies these.
+    alignas(std::max_align_t) std::byte storage_[64];
     const VTable *table_{nullptr};
 };
 

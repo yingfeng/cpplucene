@@ -91,7 +91,37 @@ export enum class InputType : uint8_t {
 /// Reads one BYTE1/BYTE2/BYTE4 label.
 ///
 /// BYTE2 fields written before [`VERSION_LITTLE_ENDIAN`] are big endian.
-export [[nodiscard]] Result<int32_t> read_label(DataInput &input, InputType input_type, int32_t version);
+///
+/// Defined here rather than out of line: walking the FST of a term dictionary
+/// reads one label per arc, so the seek path pays this for every arc it visits.
+export [[gnu::always_inline]] [[nodiscard]] inline Result<int32_t> read_label(DataInput &input,
+                                                                            InputType input_type,
+                                                                            int32_t version) {
+    switch (input_type) {
+        case InputType::kByte1: {
+            auto byte = input.read_byte();
+            if (!byte.has_value()) {
+                return err(byte.error());
+            }
+            return static_cast<int32_t>(byte.value());
+        }
+        case InputType::kByte2: {
+            auto value = input.read_short();
+            if (!value.has_value()) {
+                return err(value.error());
+            }
+            if (version < VERSION_LITTLE_ENDIAN) {
+                // Big-endian files: swap the two bytes back.
+                const auto raw = static_cast<uint16_t>(value.value());
+                return static_cast<int32_t>((raw >> 8) | ((raw & 0xFF) << 8));
+            }
+            return static_cast<int32_t>(static_cast<uint16_t>(value.value()));
+        }
+        case InputType::kByte4:
+            return input.read_vint();
+    }
+    return err(LuceneError::corrupt_index("invalid input type"));
+}
 
 /// Writes one BYTE1/BYTE2/BYTE4 label; the inverse of [`read_label`].
 export [[nodiscard]] VoidResult write_label(DataOutput &out, InputType input_type, int32_t label);

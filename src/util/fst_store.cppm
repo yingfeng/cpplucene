@@ -61,6 +61,42 @@ public:
         return {};
     }
 
+    /// Decoded from the slice directly, in reverse.  The default walks one virtual
+    /// `read_byte` per byte, and walking the FST of a term dictionary pays that for
+    /// every label, output and skip length on the seek path.
+    [[gnu::always_inline]] [[nodiscard]] Result<int32_t> read_vint() override {
+        int32_t value = 0;
+        int32_t shift = 0;
+        int64_t position = pos_;
+        while (position >= 0 && shift < 35) {
+            const int32_t byte = data_[static_cast<size_t>(position--)];
+            value |= static_cast<int32_t>(static_cast<uint32_t>(byte & 0x7F) << shift);
+            if ((byte & 0x80) == 0) {
+                pos_ = position;
+                return value;
+            }
+            shift += 7;
+        }
+        // Malformed or truncated: let the generic decoder report it.
+        return DataInput::read_vint();
+    }
+
+    [[gnu::always_inline]] [[nodiscard]] Result<int64_t> read_vlong() override {
+        int64_t value = 0;
+        int64_t shift = 0;
+        int64_t position = pos_;
+        while (position >= 0 && shift < 70) {
+            const int64_t byte = data_[static_cast<size_t>(position--)];
+            value |= (byte & 0x7F) << shift;
+            if ((byte & 0x80) == 0) {
+                pos_ = position;
+                return value;
+            }
+            shift += 7;
+        }
+        return DataInput::read_vlong();
+    }
+
     [[nodiscard]] VoidResult skip_bytes(int64_t num_bytes) override;
 
     [[nodiscard]] int64_t get_position() const override { return pos_; }
@@ -101,6 +137,39 @@ public:
             slot = bytes_[static_cast<size_t>(pos_--)];
         }
         return {};
+    }
+
+    /// See [`OwnedBytesReader::read_vint`]: the same reverse decode over the slice.
+    [[gnu::always_inline]] [[nodiscard]] Result<int32_t> read_vint() override {
+        int32_t value = 0;
+        int32_t shift = 0;
+        int64_t position = pos_;
+        while (position >= 0 && shift < 35) {
+            const int32_t byte = bytes_[static_cast<size_t>(position--)];
+            value |= static_cast<int32_t>(static_cast<uint32_t>(byte & 0x7F) << shift);
+            if ((byte & 0x80) == 0) {
+                pos_ = position;
+                return value;
+            }
+            shift += 7;
+        }
+        return DataInput::read_vint();
+    }
+
+    [[gnu::always_inline]] [[nodiscard]] Result<int64_t> read_vlong() override {
+        int64_t value = 0;
+        int64_t shift = 0;
+        int64_t position = pos_;
+        while (position >= 0 && shift < 70) {
+            const int64_t byte = bytes_[static_cast<size_t>(position--)];
+            value |= (byte & 0x7F) << shift;
+            if ((byte & 0x80) == 0) {
+                pos_ = position;
+                return value;
+            }
+            shift += 7;
+        }
+        return DataInput::read_vlong();
     }
 
     [[nodiscard]] VoidResult skip_bytes(int64_t num_bytes) override;
