@@ -28,6 +28,16 @@ import :term_statistics;
 
 namespace lucene {
 
+/// The BM25 term-frequency factor, `weight - weight / (1 + freq * norm_inverse)`.
+///
+/// `freq / (freq + norm)` is rewritten as `1 - 1 / (1 + freq * 1/norm)` so the
+/// computation stays monotonic without promoting to doubles, and
+/// `weight * (...)` becomes `weight - weight / (...)`.  The scorers that inline
+/// this call it here as well, so both produce the same bits.
+[[nodiscard]] inline float bm25_tf_score(float weight, float norm_inverse, float freq) noexcept {
+    return weight - weight / (1.0F + freq * norm_inverse);
+}
+
 /// Okapi BM25.
 ///
 /// Port of `BM25Similarity`
@@ -96,6 +106,9 @@ public:
     [[nodiscard]] float weight() const noexcept { return weight_; }
     [[nodiscard]] float avgdl() const noexcept { return avgdl_; }
     [[nodiscard]] const Explanation &idf() const noexcept { return idf_; }
+
+    /// `1 / (k1 * (1 - b + b * dl / avgdl))`, indexed by the norm byte.
+    [[nodiscard]] const float *norm_inverse_cache() const noexcept { return cache_.data(); }
 
     /// The decoded `byte4` lengths, `LENGTH_TABLE[i] = byte4_to_int(i)`.
     [[nodiscard]] static const std::array<float, 256> &length_table() noexcept;

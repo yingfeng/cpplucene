@@ -107,6 +107,11 @@ public:
     [[nodiscard]] Result<size_t> length() const override { return length_; }
 
     [[nodiscard]] Result<uint8_t> read_byte() override;
+    /// Decoded straight out of the mapping: the default walks one virtual
+    /// `read_byte` per byte, and the skip lists of the postings decoders are
+    /// read one varint at a time.
+    [[nodiscard]] Result<int32_t> read_vint() override;
+    [[nodiscard]] Result<int64_t> read_vlong() override;
     [[nodiscard]] VoidResult read_bytes(std::span<uint8_t> b) override;
     [[nodiscard]] VoidResult skip_bytes(int64_t num_bytes) override;
 

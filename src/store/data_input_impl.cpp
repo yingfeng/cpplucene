@@ -253,6 +253,39 @@ VoidResult read_ints_bulk(DataInput &input, std::span<int32_t> dst, size_t offse
     return {};
 }
 
+Result<int32_t> ByteArrayDataInput::read_vint() {
+    int32_t value = 0;
+    int32_t shift = 0;
+    size_t position = pos_;
+    while (position < limit_ && shift < 35) {
+        const int32_t byte = bytes_[position++];
+        value |= static_cast<int32_t>(static_cast<uint32_t>(byte & 0x7F) << shift);
+        if ((byte & 0x80) == 0) {
+            pos_ = position;
+            return value;
+        }
+        shift += 7;
+    }
+    // Malformed or truncated: let the generic decoder report it.
+    return DataInput::read_vint();
+}
+
+Result<int64_t> ByteArrayDataInput::read_vlong() {
+    int64_t value = 0;
+    int64_t shift = 0;
+    size_t position = pos_;
+    while (position < limit_ && shift < 70) {
+        const int64_t byte = bytes_[position++];
+        value |= (byte & 0x7F) << shift;
+        if ((byte & 0x80) == 0) {
+            pos_ = position;
+            return value;
+        }
+        shift += 7;
+    }
+    return DataInput::read_vlong();
+}
+
 VoidResult ByteArrayDataInput::read_ints(std::span<int32_t> dst, size_t offset, size_t len) {
     return read_ints_bulk(*this, dst, offset, len);
 }

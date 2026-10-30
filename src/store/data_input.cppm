@@ -132,6 +132,11 @@ public:
     [[nodiscard]] std::span<const uint8_t> bytes() const noexcept { return bytes_; }
 
     [[nodiscard]] Result<uint8_t> read_byte() override;
+    /// Decoded from the buffer directly: the default walks one virtual
+    /// `read_byte` per byte, which the postings decoders pay for on every skip
+    /// list entry.
+    [[nodiscard]] Result<int32_t> read_vint() override;
+    [[nodiscard]] Result<int64_t> read_vlong() override;
     [[nodiscard]] VoidResult read_bytes(std::span<uint8_t> b) override;
     [[nodiscard]] VoidResult skip_bytes(int64_t num_bytes) override;
 

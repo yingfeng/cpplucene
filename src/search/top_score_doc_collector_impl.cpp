@@ -71,8 +71,24 @@ public:
         if (!score_result.has_value()) {
             return std::unexpected(std::move(score_result.error()));
         }
-        const float score = score_result.value();
+        return collect_scored(doc, scorer, score_result.value());
+    }
 
+    [[nodiscard]] bool supports_precomputed_score() const override { return true; }
+
+    [[nodiscard]] Result<bool> collect_with_score(int32_t doc, Scorable &scorer, float score) override {
+        auto collected = collect_scored(doc, scorer, score);
+        if (!collected.has_value()) {
+            return std::unexpected(std::move(collected.error()));
+        }
+        return true;
+    }
+
+    [[nodiscard]] std::string to_string() const override { return "TopScoreDocLeafCollector"; }
+
+private:
+    /// The body of both [`collect`] and [`collect_with_score`].
+    [[nodiscard]] VoidResult collect_scored(int32_t doc, Scorable &scorer, float score) {
         TopDocsCollectorBase &base = base_.base();
         ++base.total_hits;
         const size_t hit_count_so_far = base.total_hits;
@@ -111,9 +127,6 @@ public:
         return collect_competitive_hit(scorer, doc, score);
     }
 
-    [[nodiscard]] std::string to_string() const override { return "TopScoreDocLeafCollector"; }
-
-private:
     [[nodiscard]] VoidResult collect_competitive_hit(Scorable &scorer, int32_t doc, float score) {
         TopDocsCollectorBase &base = base_.base();
         ScoreDoc *pq_top = base.pq.top_mut();

@@ -47,6 +47,23 @@ public:
     /// Called once per matching document, in increasing order of `doc`.
     [[nodiscard]] virtual VoidResult collect(int32_t doc, Scorable &scorer) = 0;
 
+    /// Whether [`collect_with_score`] is implemented, i.e. whether the caller may
+    /// compute the score itself and hand it in.
+    ///
+    /// **Deviation:** the reference implementation monomorphises the bulk scorer
+    /// over the collector, so the score is computed in the loop by construction.
+    /// This port keeps the collector abstract, so a bulk scorer asks first and
+    /// then calls [`collect_with_score`] on the hot path — which is what lets the
+    /// score be computed by a *statically dispatched* scorer instead of through
+    /// [`Scorable::score`].
+    [[nodiscard]] virtual bool supports_precomputed_score() const { return false; }
+
+    /// The same as [`collect`], for a caller that already computed `score`.
+    /// Only called when [`supports_precomputed_score`] is true.
+    [[nodiscard]] virtual Result<bool> collect_with_score(int32_t /*doc*/, Scorable & /*scorable*/, float /*score*/) {
+        return err(LuceneError::need_implemented("collect_with_score"));
+    }
+
     /// Bulk-collects the documents of `stream`.
     ///
     /// The default implementation hands every document to

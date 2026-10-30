@@ -19,6 +19,7 @@ module lucene_core:term_query.impl;
 
 import :term_query;
 
+import :bulk_scorer;
 import :collection_statistics;
 import :constant_score_scorer;
 import :doc_id_set_iterator;
@@ -489,6 +490,27 @@ Result<int64_t> TermScorerSupplier::cost(const LeafReaderContext &context, const
         return std::unexpected(std::move(doc_freq.error()));
     }
     return static_cast<int64_t>(doc_freq.value());
+}
+
+Result<std::unique_ptr<BulkScorer>> TermScorerSupplier::bulk_scorer(const LeafReaderContext &context,
+                                                                   const IndexSearcher &searcher) {
+    auto scorer = get(std::numeric_limits<int64_t>::max(), context, searcher);
+    if (!scorer.has_value()) {
+        return std::unexpected(std::move(scorer.error()));
+    }
+    if (scorer.value() == nullptr) {
+        return std::unique_ptr<BulkScorer>{};
+    }
+    // The loop of `BasicBulkScorer<TermScorer>` calls `next_doc` and `score` on
+    // the concrete type, which the compiler binds statically and inlines; the
+    // type erased loop would make both of them virtual calls per document.
+    if (auto *const term = dynamic_cast<TermScorer *>(scorer.value().get()); term != nullptr) {
+        scorer.value().release();
+        std::unique_ptr<BulkScorer> bulk(new BasicBulkScorer<TermScorer>(std::unique_ptr<TermScorer>(term)));
+        return bulk;
+    }
+    std::unique_ptr<BulkScorer> bulk(new DefaultBulkScorer(std::move(scorer.value())));
+    return bulk;
 }
 
 VoidResult TermScorerSupplier::set_top_level_scoring_clause() {

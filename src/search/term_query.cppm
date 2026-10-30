@@ -155,6 +155,11 @@ public:
 
     [[nodiscard]] Result<int64_t> cost(const LeafReaderContext &context, const IndexSearcher &searcher) override;
 
+    /// Scores through [`BasicBulkScorer`] instantiated for [`TermScorer`], so the
+    /// per-document scoring of this query is not a virtual call.
+    [[nodiscard]] Result<std::unique_ptr<BulkScorer>> bulk_scorer(const LeafReaderContext &context,
+                                                                  const IndexSearcher &searcher) override;
+
     [[nodiscard]] VoidResult set_top_level_scoring_clause() override;
 
 private:

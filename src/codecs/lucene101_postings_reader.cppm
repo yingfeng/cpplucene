@@ -125,8 +125,12 @@ private:
     std::optional<std::span<const uint8_t>> level1_serialized_impacts_;
     size_t max_num_impacts_at_level0_{0};
     size_t max_num_impacts_at_level1_{0};
-    /// Reused decode buffers, one per level.
+    /// Reused decode buffers, one per level; together with the stamps they make
+    /// the second read of a level within one block free.
     mutable std::array<MutableImpactList, 2> decoded_;
+    mutable std::array<uint64_t, 2> decoded_stamp_{0, 0};
+    /// Bumped by every [`update`], so the decoded values of a block are used once.
+    uint64_t generation_{0};
 };
 
 /// Reader for [`Lucene101PostingsFormat`].
@@ -213,7 +217,10 @@ private:
 /// reader's docs input; the reference implementation's `BytesRef` for the serialized impacts /
 /// payload becomes a `std::vector<uint8_t>` whose `size()` is the valid
 /// length (`resize` is only called with the decoded length).
-export class BlockPostingsEnum : public ImpactsEnum {
+/// **Deviation:** marked `final` so that the search layer can hand out a
+/// concrete pointer and get statically dispatched (inlinable) calls; the
+/// reference implementation gets the same effect by monomorphising.
+export class BlockPostingsEnum final : public ImpactsEnum {
 public:
     [[nodiscard]] static Result<std::unique_ptr<BlockPostingsEnum>>
     create(const FieldInfo &field_info, int32_t flags, bool needs_impacts, Lucene101PostingsReader &reader);

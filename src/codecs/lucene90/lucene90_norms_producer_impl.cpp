@@ -82,6 +82,18 @@ public:
         return reader;
     }
 
+    /// [`value_at`] as a plain view, when the values are dense or constant.
+    [[nodiscard]] std::optional<DirectNumericValues> direct_values(int32_t max_doc) const {
+        if (bytes_per_norm_ == 0) {
+            return DirectNumericValues{.bytes = {}, .singleton = singleton_, .width = 0, .max_doc = max_doc};
+        }
+        if (bytes_.empty()) {
+            return std::nullopt;
+        }
+        return DirectNumericValues{
+                .bytes = bytes_, .singleton = 0, .width = bytes_per_norm_, .max_doc = max_doc};
+    }
+
     [[nodiscard]] Result<int64_t> value_at(size_t ordinal) const {
         if (bytes_per_norm_ == 0) {
             return singleton_;
@@ -211,6 +223,25 @@ public:
         return reader_.value_at(static_cast<size_t>(doc_));
     }
 
+    [[nodiscard]] std::optional<DirectNumericValues> direct_values() const override {
+        return reader_.direct_values(max_doc_);
+    }
+
+    [[nodiscard]] Result<bool> exact_value(int32_t doc, int64_t &out) override {
+        const bool has_value = doc >= 0 && doc < max_doc_;
+        if (!has_value) {
+            doc_ = NO_MORE_DOCS;
+            return false;
+        }
+        doc_ = doc;
+        auto value = reader_.value_at(static_cast<size_t>(doc));
+        if (!value.has_value()) {
+            return std::unexpected(std::move(value.error()));
+        }
+        out = value.value();
+        return true;
+    }
+
 private:
     NormsValueReader reader_;
     int32_t max_doc_{0};
@@ -244,6 +275,22 @@ public:
             return err(LuceneError::illegal_state("there is no norm for the current document"));
         }
         return reader_.value_at(static_cast<size_t>(ordinal));
+    }
+
+    [[nodiscard]] Result<bool> exact_value(int32_t doc, int64_t &out) override {
+        auto exact = docs_with_field_->advance_exact(doc);
+        if (!exact.has_value()) {
+            return std::unexpected(std::move(exact.error()));
+        }
+        if (!exact.value()) {
+            return false;
+        }
+        auto value = reader_.value_at(static_cast<size_t>(docs_with_field_->index()));
+        if (!value.has_value()) {
+            return std::unexpected(std::move(value.error()));
+        }
+        out = value.value();
+        return true;
     }
 
 private:

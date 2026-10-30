@@ -146,11 +146,7 @@ BM25Scorer::BM25Scorer(float boost, float k1, float b, Explanation idf, float av
 const std::array<float, 256> &BM25Scorer::length_table() noexcept { return build_length_table(); }
 
 float BM25Scorer::score(float freq, int64_t norm) const {
-    // `freq / (freq + norm)` rewritten as `1 - 1 / (1 + freq * 1/norm)` to keep
-    // the computation monotonic without promoting to doubles, then
-    // `weight * (...) = weight - weight / (...)`.
-    const float norm_inverse = cache_[static_cast<uint8_t>(norm)];
-    return weight_ - weight_ / (1.0F + freq * norm_inverse);
+    return bm25_tf_score(weight_, cache_[static_cast<uint8_t>(norm)], freq);
 }
 
 std::vector<Explanation> BM25Scorer::explain_constant_factors() const {

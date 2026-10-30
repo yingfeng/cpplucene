@@ -96,12 +96,24 @@ public:
         if (impacts_disi_ != nullptr || impacts_enum_ != nullptr) {
             return nullptr;
         }
+        // The caller drives the postings from now on, so the cached document of
+        // [`score`] would be stale.
+        handed_out_postings_ = true;
         return postings_.get();
     }
 
     // ---- Scorable ----
 
     [[nodiscard]] Result<float> score() override;
+
+    /// Whether [`fast_score`] can be used: BM25 similarity, a direct norms view
+    /// and a single postings source, i.e. the shape of every plain term query.
+    [[nodiscard]] bool has_fast_score() const noexcept { return fast_score_ok_; }
+
+    /// [`score`] without the state tests: no branches on which similarity or
+    /// norms encoding is in use, just one postings call, one norm load and the
+    /// BM25 factor.  Only valid when [`has_fast_score`].
+    [[nodiscard]] Result<float> fast_score();
 
     /// The score of `doc_id` as if the term did not occur in it.
     [[nodiscard]] Result<float> smoothing_score(int32_t doc_id) override;
@@ -114,6 +126,16 @@ public:
     [[nodiscard]] Result<std::pair<int32_t, int64_t>> freq_and_norm();
 
 private:
+    /// Resolves the direct value views that let [`score`] skip the virtual calls
+    /// of the norms and similarity interfaces.  Called once per scorer.
+    void prepare_fast_path();
+
+    /// The document the scorer is positioned on: the cached one, unless the
+    /// postings were handed out and the caller keeps them in step.
+    [[nodiscard]] int32_t current_doc() const noexcept {
+        return handed_out_postings_ ? cursor().doc_id() : doc_;
+    }
+
     /// The iterator whose documents are visited: the impacts iterator when
     /// pruning is possible, the impacts enum when only the impacts are used, the
     /// postings otherwise.
@@ -145,6 +167,40 @@ private:
     std::unique_ptr<MaxScoreCache> max_score_cache_;
     /// Set only for the top-level scoring clause.
     std::unique_ptr<ImpactsDISI> impacts_disi_;
+
+    /// The document the scorer is positioned on, kept here instead of asking the
+    /// cursor, like the `doc` field of the reference implementation.
+    int32_t doc_{-1};
+    /// Set once [`matching_iterator`] hands the postings out: the caller then
+    /// advances them itself, so `doc_` no longer follows.
+    bool handed_out_postings_{false};
+
+    // ---- the direct scoring path (see `prepare_fast_path`) ----
+
+    /// The norms as raw bytes; `value_at` answers `false` for a document without
+    /// one, which the scoring path reads as the neutral norm.  Set when the
+    /// encoding is dense or constant, *and* when the field has no norms at all.
+    DirectNumericValues norms_view_{};
+    /// Whether [`norms_view`] is usable; the sparse encoding has no direct view
+    /// and asks [`NumericDocValues::exact_value`] instead.
+    bool norms_direct_{false};
+    /// `weight` and `1 / (k1 * (1 - b + b * dl / avgdl))` of a BM25 scorer, or
+    /// null when the similarity is not BM25.
+    float bm25_weight_{0.0F};
+    const float *bm25_norm_inverse_{nullptr};
+    /// The postings enum [`freq`] reads from: the impacts enum when there is one,
+    /// the postings otherwise.  Resolved once so [`fast_score`] has no choice to
+    /// make.
+    PostingsEnum *freq_source_{nullptr};
+    /// [`has_fast_score`], resolved once at construction.
+    bool fast_score_ok_{false};
+    /// [`freq_source`] as the concrete block postings type, when it is one.
+    ///
+    /// Typed as `void *` so this interface does not have to depend on the codec
+    /// modules; `prepare_fast_path` stores the pointer and the implementation
+    /// knows what it is.  Calling `freq()` on the concrete type is a static call,
+    /// which is what makes [`fast_score`] smaller than a virtual dispatch.
+    void *freq_source_concrete_{nullptr};
 };
 
 } // namespace lucene

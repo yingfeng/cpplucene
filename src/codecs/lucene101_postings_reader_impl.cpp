@@ -174,6 +174,8 @@ void ImpactsImpl::update(bool index_has_freq, int32_t level0_last_doc_id, int32_
     level1_serialized_impacts_ = level1_serialized_impacts;
     max_num_impacts_at_level0_ = max_num_impacts_at_level0;
     max_num_impacts_at_level1_ = max_num_impacts_at_level1;
+    // The serialized impacts of the previous block are gone, so are the decodes.
+    ++generation_;
 }
 
 VoidResult ImpactsImpl::decode_into(std::span<const uint8_t> serialized, size_t level_impacts_len,
@@ -214,7 +216,13 @@ int32_t ImpactsImpl::get_doc_id_upto(size_t level) const {
 
 Result<std::span<const Impact>> ImpactsImpl::get_impacts(size_t level) const {
     constexpr size_t kMaxLevel = 1;
-    MutableImpactList &slot = decoded_[std::min(level, kMaxLevel)];
+    const size_t index = std::min(level, kMaxLevel);
+    MutableImpactList &slot = decoded_[index];
+    if (decoded_stamp_[index] == generation_) {
+        // Already decoded for this block: the block maximum and the skip
+        // decisions of `MaxScoreCache` both ask for the same level.
+        return std::span<const Impact>(slot.impacts.data(), slot.length);
+    }
     if (index_has_freq_) {
         if (level == 0 && level0_last_doc_id_ != NO_MORE_DOCS) {
             if (!level0_serialized_impacts_.has_value()) {
@@ -224,6 +232,7 @@ Result<std::span<const Impact>> ImpactsImpl::get_impacts(size_t level) const {
                 !decoded) {
                 return std::unexpected(std::move(decoded.error()));
             }
+            decoded_stamp_[index] = generation_;
             return std::span<const Impact>(slot.impacts.data(), slot.length);
         }
         if (level == 1) {
@@ -234,6 +243,7 @@ Result<std::span<const Impact>> ImpactsImpl::get_impacts(size_t level) const {
                 !decoded) {
                 return std::unexpected(std::move(decoded.error()));
             }
+            decoded_stamp_[index] = generation_;
             return std::span<const Impact>(slot.impacts.data(), slot.length);
         }
     }

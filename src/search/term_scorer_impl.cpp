@@ -19,7 +19,9 @@ module lucene_core:term_scorer.impl;
 
 import :term_scorer;
 
+import :bm25_similarity;
 import :doc_id_set_iterator;
+import :lucene101_postings_reader;
 import :error;
 import :impacts_disi;
 import :impacts_enum;
@@ -37,7 +39,35 @@ namespace lucene {
 
 TermScorer::TermScorer(std::unique_ptr<PostingsEnum> postings, std::shared_ptr<SimScorer> sim_scorer,
                        std::unique_ptr<NumericDocValues> norms)
-        : postings_(std::move(postings)), sim_scorer_(std::move(sim_scorer)), norms_(std::move(norms)) {}
+        : postings_(std::move(postings)), sim_scorer_(std::move(sim_scorer)), norms_(std::move(norms)) {
+    prepare_fast_path();
+}
+
+void TermScorer::prepare_fast_path() {
+    // The norms of a document are one load away when the encoding is dense or
+    // constant; the sparse encoding keeps the generic path.  A field without
+    // norms is the constant case: every document scores with the neutral norm.
+    if (norms_ == nullptr) {
+        norms_direct_ = true;
+    } else if (auto view = norms_->direct_values(); view.has_value()) {
+        norms_view_ = view.value();
+        norms_direct_ = true;
+    }
+    // A scorer over a similarity other than BM25 keeps calling into it.  The
+    // parameters are cached rather than the formula: the similarity owns them and
+    // outlives this scorer.
+    if (const auto *const bm25 = dynamic_cast<const BM25Scorer *>(sim_scorer_.get()); bm25 != nullptr) {
+        bm25_weight_ = bm25->weight();
+        bm25_norm_inverse_ = bm25->norm_inverse_cache();
+    }
+    if (postings_ != nullptr) {
+        freq_source_ = postings_.get();
+    }
+    if (auto *const concrete = dynamic_cast<BlockPostingsEnum *>(freq_source_); concrete != nullptr) {
+        freq_source_concrete_ = concrete;
+    }
+    fast_score_ok_ = bm25_norm_inverse_ != nullptr && norms_direct_;
+}
 
 Result<std::unique_ptr<TermScorer>> TermScorer::from_impacts(std::unique_ptr<ImpactsEnum> impacts_enum,
                                                             std::shared_ptr<SimScorer> sim_scorer,
@@ -48,6 +78,12 @@ Result<std::unique_ptr<TermScorer>> TermScorer::from_impacts(std::unique_ptr<Imp
     }
     std::unique_ptr<TermScorer> scorer(new TermScorer(nullptr, std::move(sim_scorer), std::move(norms)));
     scorer->impacts_enum_ = std::move(impacts_enum);
+    // `freq` reads the impacts enum when there is one; resolved here so the
+    // scoring path has no choice to make.
+    scorer->freq_source_ = scorer->impacts_enum_.get();
+    if (auto *const concrete = dynamic_cast<BlockPostingsEnum *>(scorer->freq_source_); concrete != nullptr) {
+        scorer->freq_source_concrete_ = concrete;
+    }
     scorer->max_score_cache_ = std::make_unique<MaxScoreCache>(scorer->impacts_enum_.get(), scorer->sim_scorer_);
     if (top_level_scoring_clause) {
         // Iterating through the impacts iterator is what lets the collector's
@@ -61,19 +97,42 @@ Result<std::unique_ptr<TermScorer>> TermScorer::from_impacts(std::unique_ptr<Imp
     return scorer;
 }
 
-int32_t TermScorer::doc_id() const { return cursor().doc_id(); }
+int32_t TermScorer::doc_id() const { return current_doc(); }
 
-Result<int32_t> TermScorer::next_doc() { return cursor().next_doc(); }
+Result<int32_t> TermScorer::next_doc() {
+    auto next = cursor().next_doc();
+    if (next.has_value()) {
+        doc_ = next.value();
+    }
+    return next;
+}
 
-Result<int32_t> TermScorer::advance(int32_t target) { return cursor().advance(target); }
+Result<int32_t> TermScorer::advance(int32_t target) {
+    auto advanced = cursor().advance(target);
+    if (advanced.has_value()) {
+        doc_ = advanced.value();
+    }
+    return advanced;
+}
 
-Result<int32_t> TermScorer::slow_advance(int32_t target) { return cursor().slow_advance(target); }
+Result<int32_t> TermScorer::slow_advance(int32_t target) {
+    auto advanced = cursor().slow_advance(target);
+    if (advanced.has_value()) {
+        doc_ = advanced.value();
+    }
+    return advanced;
+}
 
 Result<int64_t> TermScorer::cost() const { return cursor().cost(); }
 
 Result<int32_t> TermScorer::freq() {
-    if (impacts_enum_ != nullptr) {
-        return impacts_enum_->freq();
+    if (freq_source_concrete_ != nullptr) {
+        // Statically dispatched: `BlockPostingsEnum` is final, so this is a
+        // direct call that inlines into the scoring loop.
+        return static_cast<BlockPostingsEnum *>(freq_source_concrete_)->freq();
+    }
+    if (freq_source_ != nullptr) {
+        return freq_source_->freq();
     }
     return postings_->freq();
 }
@@ -122,7 +181,52 @@ Result<std::pair<int32_t, int64_t>> TermScorer::freq_and_norm() {
     return std::pair<int32_t, int64_t>{frequency.value(), norm};
 }
 
+Result<float> TermScorer::fast_score() {
+    auto frequency = freq();
+    if (!frequency.has_value()) {
+        return std::unexpected(std::move(frequency.error()));
+    }
+    int64_t norm = 1;
+    if (!norms_view_.value_at(current_doc(), norm)) {
+        // The document has no norm; the neutral value scores as an empty field.
+        norm = 1;
+    }
+    return bm25_tf_score(bm25_weight_, bm25_norm_inverse_[static_cast<uint8_t>(norm)],
+                         static_cast<float>(frequency.value()));
+}
+
 Result<float> TermScorer::score() {
+    if (fast_score_ok_) {
+        return fast_score();
+    }
+    if (bm25_norm_inverse_ != nullptr) {
+        // The direct path: one virtual call for the frequency, one load for the
+        // norm, the BM25 formula inline.  **Deviation:** the reference
+        // implementation gets the same effect from monomorphising the whole
+        // collector over the concrete scorer types.
+        auto frequency = freq();
+        if (!frequency.has_value()) {
+            return std::unexpected(std::move(frequency.error()));
+        }
+        int64_t norm = 1;
+        if (norms_direct_) {
+            if (!norms_view_.value_at(current_doc(), norm)) {
+                // The document has no norm; the neutral value scores as an empty
+                // field.
+                norm = 1;
+            }
+        } else if (norms_ != nullptr) {
+            auto exact = norms_->exact_value(current_doc(), norm);
+            if (!exact.has_value()) {
+                return std::unexpected(std::move(exact.error()));
+            }
+            if (!exact.value()) {
+                norm = 1;
+            }
+        }
+        return bm25_tf_score(bm25_weight_, bm25_norm_inverse_[static_cast<uint8_t>(norm)],
+                             static_cast<float>(frequency.value()));
+    }
     auto pair = freq_and_norm();
     if (!pair.has_value()) {
         return std::unexpected(std::move(pair.error()));
