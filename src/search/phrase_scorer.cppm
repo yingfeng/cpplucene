@@ -22,6 +22,7 @@ import std;
 
 import :doc_id_set_iterator;
 import :error;
+import :exact_phrase_matcher;
 import :impacts_disi;
 import :max_score_cache;
 import :numeric_doc_values;
@@ -77,8 +78,12 @@ public:
     [[nodiscard]] Result<float> get_max_score(int32_t upto) override;
     [[nodiscard]] TwoPhaseState has_two_phase_iterator() const override { return TwoPhaseState::No; }
 
-    /// Computes the phrase frequency of the current document; the score is that
-    /// frequency combined with the norm.
+    /// Whether the current document matches; only the *first* match is looked
+    /// for, so a query that never scores a document (a count, for instance) does
+    /// not enumerate the remaining matches of the phrase.
+    ///
+    /// The phrase frequency is accumulated by [`score`], the only caller that
+    /// needs it.
     [[nodiscard]] Result<bool> matches() override;
     [[nodiscard]] float match_cost() const override;
     [[nodiscard]] int32_t approx_doc_id() const override { return matcher_->doc_id(); }
@@ -98,7 +103,8 @@ public:
     /// the query level machinery.
     [[nodiscard]] const PhraseMatcher &matcher() const noexcept { return *matcher_; }
 
-    /// The phrase frequency of [`doc`], `0` until [`matches`] ran.
+    /// The phrase frequency of [`doc`], `0` until [`matches`] ran and complete
+    /// (all matches enumerated) once [`score`] ran.
     [[nodiscard]] float freq() const noexcept { return freq_; }
 
 private:
@@ -114,7 +120,46 @@ private:
     /// The norm of [`doc`], `1` when the field has no norms.
     [[nodiscard]] Result<int64_t> norm_of_current_doc();
 
+    // ---- the matcher, through its concrete type when it has one ----
+    //
+    // A phrase query enters these four entry points once per candidate
+    // document; through the abstract matcher that is four indirect calls per
+    // document, and the bodies stay opaque to the caller.  With the concrete
+    // matcher they inline into the per-document match, which is what the
+    // reference implementation gets from monomorphising.
+
+    [[gnu::always_inline]] [[nodiscard]] VoidResult reset_matcher() {
+        if (exact_ != nullptr) {
+            return exact_->reset();
+        }
+        return matcher_->reset();
+    }
+
+    [[gnu::always_inline]] [[nodiscard]] Result<bool> next_match_of_matcher() {
+        if (exact_ != nullptr) {
+            return exact_->next_match();
+        }
+        return matcher_->next_match();
+    }
+
+    [[gnu::always_inline]] [[nodiscard]] Result<float> max_freq_of_matcher() {
+        if (exact_ != nullptr) {
+            return exact_->max_freq();
+        }
+        return matcher_->max_freq();
+    }
+
+    [[gnu::always_inline]] [[nodiscard]] float match_weight() const {
+        if (exact_ != nullptr) {
+            return exact_->sloppy_weight();
+        }
+        return matcher_->sloppy_weight();
+    }
+
     std::unique_ptr<PhraseMatcher> matcher_;
+    /// [`matcher`] as the exact matcher, the type of every phrase without slop;
+    /// null for a sloppy or multi-term matcher, which take the abstract path.
+    ExactPhraseMatcher *exact_{nullptr};
     std::shared_ptr<const SimScorer> sim_scorer_;
     std::unique_ptr<NumericDocValues> norms_;
     ScoreMode score_mode_;
@@ -127,8 +172,13 @@ private:
 
     float min_competitive_score_{0.0F};
     int32_t doc_{-1};
-    /// The phrase frequency of [`doc`]; `0` until [`matches`] ran.
+    /// The phrase frequency of [`doc`] as far as it has been accumulated: `0`
+    /// when the document does not match, the weight of the first match after
+    /// [`matches`] confirmed it, and the complete frequency after [`score`].
     float freq_{0.0F};
+    /// Whether [`freq`] is the complete frequency of [`freq_doc`], i.e. whether
+    /// every match of the document has been enumerated.
+    bool freq_complete_{false};
     /// The document [`freq`] belongs to, so that the phrase is only computed
     /// once per candidate.
     int32_t freq_doc_{-1};

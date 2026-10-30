@@ -42,9 +42,96 @@ public:
 
     // ---- PhraseMatcher ----
 
-    [[nodiscard]] Result<float> max_freq() override;
-    [[nodiscard]] VoidResult reset() override;
-    [[nodiscard]] Result<bool> next_match() override;
+    /// The frequencies of the current document, loaded into the slots.
+    ///
+    /// Defined in the interface unit, like [`reset`] and [`next_match`], so that
+    /// a scorer holding the concrete matcher inlines the whole per-document
+    /// match into its own loop: on a phrase query this is one indirect call per
+    /// document per entry point otherwise, and the reference implementation gets
+    /// the inlining from monomorphising.
+    [[gnu::always_inline]] [[nodiscard]] Result<float> max_freq() override {
+        float lowest = std::numeric_limits<float>::max();
+        for (size_t i = 0; i < slots_.size(); ++i) {
+            auto frequency = freq_at(i);
+            if (!frequency.has_value()) {
+                return std::unexpected(std::move(frequency.error()));
+            }
+            slots_[i].freq = frequency.value();
+            lowest = std::min(lowest, static_cast<float>(frequency.value()));
+        }
+        freqs_loaded_ = true;
+        return lowest;
+    }
+
+    [[gnu::always_inline]] [[nodiscard]] VoidResult reset() override {
+        if (freqs_loaded_) {
+            // `max_freq` already read the frequencies of the current document.
+            freqs_loaded_ = false;
+            for (Slot &slot : slots_) {
+                slot.pos = -1;
+                slot.upto = 0;
+            }
+            return {};
+        }
+        for (size_t i = 0; i < slots_.size(); ++i) {
+            auto frequency = freq_at(i);
+            if (!frequency.has_value()) {
+                return std::unexpected(std::move(frequency.error()));
+            }
+            slots_[i].freq = frequency.value();
+            slots_[i].pos = -1;
+            slots_[i].upto = 0;
+        }
+        return {};
+    }
+
+    [[gnu::always_inline]] [[nodiscard]] Result<bool> next_match() override {
+        // The lead posting is the one with the fewest positions, so the caller
+        // has to hand the postings over sorted by frequency.
+        Slot &lead = slots_[0];
+        if (lead.upto >= lead.freq) {
+            return false;
+        }
+        auto position = next_position_at(0);
+        if (!position.has_value()) {
+            return std::unexpected(std::move(position.error()));
+        }
+        lead.pos = position.value();
+        ++lead.upto;
+
+        while (true) {
+            const int32_t phrase_pos = lead.pos - lead.offset;
+            bool advanced_lead = false;
+            for (size_t j = 1; j < slots_.size(); ++j) {
+                const int32_t expected = phrase_pos + slots_[j].offset;
+                auto reached = advance_position(j, expected);
+                if (!reached.has_value()) {
+                    return std::unexpected(std::move(reached.error()));
+                }
+                if (!reached.value()) {
+                    return false;
+                }
+                if (slots_[j].pos != expected) {
+                    // The posting went past the position the lead implies, so
+                    // the lead has to be moved to where this posting is.
+                    const int32_t target = slots_[j].pos - slots_[j].offset + lead.offset;
+                    auto jumped = advance_position(0, target);
+                    if (!jumped.has_value()) {
+                        return std::unexpected(std::move(jumped.error()));
+                    }
+                    if (!jumped.value()) {
+                        return false;
+                    }
+                    advanced_lead = true;
+                    break;
+                }
+            }
+            if (!advanced_lead) {
+                return true;
+            }
+        }
+    }
+
     [[nodiscard]] float sloppy_weight() const override { return 1.0F; }
     [[nodiscard]] int32_t start_position() const override;
     [[nodiscard]] int32_t end_position() const override;
@@ -67,7 +154,29 @@ private:
 
     /// Advances the position cursor of `index` to the first position at or after
     /// `target`; `false` when the document has no such position.
-    [[nodiscard]] Result<bool> advance_position(size_t index, int32_t target);
+    [[gnu::always_inline]] [[nodiscard]] Result<bool> advance_position(size_t index, int32_t target) {
+        Slot &slot = slots_[index];
+        if (slot.pos >= target) {
+            return true;
+        }
+        if (slot.upto == slot.freq) {
+            return false;
+        }
+        while (true) {
+            auto position = next_position_at(index);
+            if (!position.has_value()) {
+                return std::unexpected(std::move(position.error()));
+            }
+            slot.pos = position.value();
+            ++slot.upto;
+            if (slot.pos >= target) {
+                return true;
+            }
+            if (slot.upto == slot.freq) {
+                return false;
+            }
+        }
+    }
 
     std::vector<Slot> slots_;
     float match_cost_{0.0F};

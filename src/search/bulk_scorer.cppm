@@ -150,6 +150,26 @@ private:
         }
     }
 
+    /// The scorer's document advance, through its inlined entry point when it
+    /// has one (`TermScorer::next_doc_inline`): the concrete postings then walk
+    /// inside this loop instead of behind two virtual calls.
+    [[gnu::always_inline]] [[nodiscard]] static Result<int32_t> next_doc_of(ScorerT &scorer) {
+        if constexpr (requires { scorer.next_doc_inline(); }) {
+            return scorer.next_doc_inline();
+        } else {
+            return scorer.next_doc();
+        }
+    }
+
+    /// See [`next_doc_of`].
+    [[gnu::always_inline]] [[nodiscard]] static Result<int32_t> advance_of(ScorerT &scorer, int32_t target) {
+        if constexpr (requires { scorer.advance_inline(target); }) {
+            return scorer.advance_inline(target);
+        } else {
+            return scorer.advance(target);
+        }
+    }
+
     /// Whether `accept_docs` allows `doc`; only used by the non-specialised paths.
     [[nodiscard]] static Result<bool> is_accept_doc(const Bits *accept_docs, int32_t doc) {
         if (accept_docs == nullptr) {
@@ -189,7 +209,7 @@ private:
                 if constexpr (TwoPhase) {
                     return scorer_->approx_next_doc();
                 } else {
-                    return scorer_->next_doc();
+                    return next_doc_of(*scorer_);
                 }
             }();
             if (!doc.has_value()) {
@@ -253,13 +273,25 @@ private:
         int32_t doc = scorer_->approx_doc_id();
         if (doc < min) {
             if (doc == min - 1) {
-                auto next = scorer_->approx_next_doc();
+                auto next = [this]() -> Result<int32_t> {
+                    if constexpr (TwoPhase) {
+                        return scorer_->approx_next_doc();
+                    } else {
+                        return next_doc_of(*scorer_);
+                    }
+                }();
                 if (!next.has_value()) {
                     return std::unexpected(std::move(next.error()));
                 }
                 doc = next.value();
             } else {
-                auto advanced = scorer_->approx_advance(min);
+                auto advanced = [this, min]() -> Result<int32_t> {
+                    if constexpr (TwoPhase) {
+                        return scorer_->approx_advance(min);
+                    } else {
+                        return advance_of(*scorer_, min);
+                    }
+                }();
                 if (!advanced.has_value()) {
                     return std::unexpected(std::move(advanced.error()));
                 }
@@ -296,7 +328,7 @@ private:
                 if constexpr (TwoPhase) {
                     return scorer_->approx_next_doc();
                 } else {
-                    return scorer_->next_doc();
+                    return next_doc_of(*scorer_);
                 }
             }();
             if (!next.has_value()) {

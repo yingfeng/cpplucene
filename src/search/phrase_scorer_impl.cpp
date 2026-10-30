@@ -57,6 +57,7 @@ PhraseScorer::PhraseScorer(std::unique_ptr<PhraseMatcher> matcher, std::shared_p
                            std::unique_ptr<NumericDocValues> norms, ScoreMode score_mode)
         : matcher_(std::move(matcher)), sim_scorer_(std::move(sim_scorer)), norms_(std::move(norms)),
           score_mode_(score_mode) {
+    exact_ = dynamic_cast<ExactPhraseMatcher *>(matcher_.get());
     if (score_mode_ != ScoreMode::TopScores || sim_scorer_ == nullptr || matcher_->impacts() == nullptr) {
         // Without impacts (or without a scoring need) the matcher is walked as
         // is, which is always correct and never skips anything.
@@ -184,7 +185,7 @@ Result<bool> PhraseScorer::matches() {
     if (score_mode_ == ScoreMode::TopScores && min_competitive_score_ > 0.0F) {
         // Even the largest phrase frequency of this document may not be enough
         // to compete: bail out before decoding any position.
-        auto max_freq = matcher_->max_freq();
+        auto max_freq = max_freq_of_matcher();
         if (!max_freq.has_value()) {
             return std::unexpected(std::move(max_freq.error()));
         }
@@ -195,36 +196,26 @@ Result<bool> PhraseScorer::matches() {
         if (sim_scorer_->score(max_freq.value(), norm.value()) < min_competitive_score_) {
             freq_ = 0.0F;
             freq_doc_ = doc_;
+            freq_complete_ = true;
             return false;
         }
     }
-    auto reset = matcher_->reset();
+    auto reset = reset_matcher();
     if (!reset.has_value()) {
         return std::unexpected(std::move(reset.error()));
     }
-    auto first = matcher_->next_match();
+    // Only the first match: a count never needs the frequency, and enumerating
+    // the rest of the positions of the document would be pure waste there.
+    auto first = next_match_of_matcher();
     if (!first.has_value()) {
         return std::unexpected(std::move(first.error()));
     }
-    if (!first.value()) {
-        freq_ = 0.0F;
-        freq_doc_ = doc_;
-        return false;
-    }
-    float freq = matcher_->sloppy_weight();
-    while (true) {
-        auto next = matcher_->next_match();
-        if (!next.has_value()) {
-            return std::unexpected(std::move(next.error()));
-        }
-        if (!next.value()) {
-            break;
-        }
-        freq += matcher_->sloppy_weight();
-    }
-    freq_ = freq;
+    freq_ = first.value() ? match_weight() : 0.0F;
+    // A mismatch is a complete answer; a match only shows that the frequency is
+    // at least this much.
+    freq_complete_ = !first.value();
     freq_doc_ = doc_;
-    return true;
+    return first.value();
 }
 
 Result<float> PhraseScorer::score() {
@@ -234,6 +225,23 @@ Result<float> PhraseScorer::score() {
     }
     if (!matched.value()) {
         return 0.0F;
+    }
+    if (!freq_complete_) {
+        // Enumerate the matches the confirmation left unread, now that the
+        // frequency is really needed.
+        float freq = freq_;
+        while (true) {
+            auto next = next_match_of_matcher();
+            if (!next.has_value()) {
+                return std::unexpected(std::move(next.error()));
+            }
+            if (!next.value()) {
+                break;
+            }
+            freq += match_weight();
+        }
+        freq_ = freq;
+        freq_complete_ = true;
     }
     auto norm = norm_of_current_doc();
     if (!norm.has_value()) {

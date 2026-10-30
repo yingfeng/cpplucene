@@ -77,8 +77,8 @@ public:
     /// the concrete scorer type, inlines it: the concrete block postings read is
     /// then one array access in the scoring loop instead of a call.
     [[gnu::always_inline]] [[nodiscard]] Result<int32_t> freq() {
-        if (freq_source_concrete_ != nullptr) {
-            return freq_source_concrete_->freq();
+        if (postings_concrete_ != nullptr) {
+            return postings_concrete_->freq();
         }
         if (freq_source_ != nullptr) {
             return freq_source_->freq();
@@ -88,6 +88,36 @@ public:
 
     /// Whether this scorer can skip non-competitive blocks.
     [[nodiscard]] bool has_impacts() const noexcept { return max_score_cache_ != nullptr; }
+
+    /// [`next_doc`] without the layered virtual calls: the impacts iterator walks
+    /// the concrete postings, so the whole chain inlines into the bulk scoring
+    /// loop instead of costing three indirect calls per document.
+    [[gnu::always_inline]] [[nodiscard]] Result<int32_t> next_doc_inline() {
+        if (impacts_disi_ != nullptr) {
+            if (postings_concrete_ != nullptr) {
+                return remember_doc(impacts_disi_->next_doc_with(*postings_concrete_));
+            }
+            return remember_doc(impacts_disi_->next_doc());
+        }
+        if (postings_concrete_ != nullptr) {
+            return remember_doc(postings_concrete_->next_doc());
+        }
+        return next_doc();
+    }
+
+    /// [`advance`], inlined the same way as [`next_doc_inline`].
+    [[gnu::always_inline]] [[nodiscard]] Result<int32_t> advance_inline(int32_t target) {
+        if (impacts_disi_ != nullptr) {
+            if (postings_concrete_ != nullptr) {
+                return remember_doc(impacts_disi_->advance_with(*postings_concrete_, target));
+            }
+            return remember_doc(impacts_disi_->advance(target));
+        }
+        if (postings_concrete_ != nullptr) {
+            return remember_doc(postings_concrete_->advance(target));
+        }
+        return advance(target);
+    }
 
     // ---- Scorer ----
 
@@ -136,7 +166,7 @@ public:
             return std::unexpected(std::move(frequency.error()));
         }
         int64_t norm = 1;
-        if (!norms_view_.value_at(current_doc(), norm)) {
+        if (!norm_of(current_doc(), norm)) {
             // The document has no norm; the neutral value scores as an empty
             // field.
             norm = 1;
@@ -164,6 +194,32 @@ private:
     /// postings were handed out and the caller keeps them in step.
     [[nodiscard]] int32_t current_doc() const noexcept {
         return handed_out_postings_ ? cursor_->doc_id() : doc_;
+    }
+
+    /// The norm of `doc`, `false` when it has none.
+    ///
+    /// The one-byte encoding — what a norms producer writes for every field
+    /// whose values fit in a byte — is read with a plain load instead of the
+    /// width dispatch of [`DirectNumericValues::value_at`], which the scoring
+    /// loop pays once per document.
+    [[gnu::always_inline]] [[nodiscard]] bool norm_of(int32_t doc, int64_t &out) const noexcept {
+        if (norms_view_.width == 1) {
+            if (doc < 0 || doc >= norms_view_.max_doc) {
+                return false;
+            }
+            out = static_cast<int8_t>(norms_view_.bytes[static_cast<size_t>(doc)]);
+            return true;
+        }
+        return norms_view_.value_at(doc, out);
+    }
+
+    /// Keeps [`doc`] in step with the inlined walks below, like [`next_doc`]
+    /// and [`advance`] do.
+    [[gnu::always_inline]] [[nodiscard]] Result<int32_t> remember_doc(Result<int32_t> next) {
+        if (next.has_value()) {
+            doc_ = next.value();
+        }
+        return next;
     }
 
     /// The iterator whose documents are visited: the impacts iterator when
@@ -209,12 +265,12 @@ private:
     DocIdSetIterator *cursor_{nullptr};
     /// [`has_fast_score`], resolved once at construction.
     bool fast_score_ok_{false};
-    /// [`freq_source`] as the concrete block postings type, when it is one.
+    /// The postings as the concrete block postings type, when they are one: the
+    /// type the cursor walks and [`freq`] reads.
     ///
-    /// Calling `freq()` on the concrete type is a static call that inlines into
-    /// the scoring loop, which is what the reference implementation gets from
-    /// monomorphising.
-    BlockPostingsEnum *freq_source_concrete_{nullptr};
+    /// Calling it directly is a static call that inlines into the scoring loop,
+    /// which is what the reference implementation gets from monomorphising.
+    BlockPostingsEnum *postings_concrete_{nullptr};
 };
 
 } // namespace lucene

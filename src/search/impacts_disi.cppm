@@ -70,6 +70,39 @@ public:
     [[nodiscard]] Result<int32_t> advance(int32_t target) override;
     [[nodiscard]] Result<int64_t> cost() const override { return iterator_->cost(); }
 
+    // ---- the same walk over a statically typed upstream ----
+
+    /// [`next_doc`] and [`advance`] over `upstream`, which must be the concrete
+    /// type of [`iterator`].
+    ///
+    /// The document calls of the abstract path are two virtual calls per
+    /// document (this class to the upstream, and the upstream's own); with the
+    /// concrete postings they inline into the caller's scoring loop instead,
+    /// which is what the reference implementation gets from monomorphising.
+    /// Only the block boundary work (`advance_target`) stays out of line.
+    template <class UpstreamT>
+    [[gnu::always_inline]] Result<int32_t> next_doc_with(UpstreamT &upstream) {
+        const int32_t doc = upstream.doc_id();
+        if (doc < upto_) {
+            return upstream.next_doc();
+        }
+        return advance_with(upstream, doc + 1);
+    }
+
+    /// See [`next_doc_with`].
+    template <class UpstreamT>
+    [[gnu::always_inline]] Result<int32_t> advance_with(UpstreamT &upstream, int32_t target) {
+        auto doc = advance_target(target);
+        if (!doc.has_value()) {
+            return std::unexpected(std::move(doc.error()));
+        }
+        return upstream.advance(doc.value());
+    }
+
+    /// The last document of the competitive block, `NO_MORE_DOCS` before the
+    /// first block, `-1` when the block has to be recomputed.
+    [[nodiscard]] int32_t upto() const noexcept { return upto_; }
+
 private:
     /// Skips blocks whose maximum score is below the minimum competitive score;
     /// answers the document to advance to.

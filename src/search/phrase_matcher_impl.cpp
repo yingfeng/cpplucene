@@ -53,13 +53,24 @@ Result<int32_t> PhraseMatcherBase::align(int32_t target) {
         for (PostingsAndFreq &entry : postings_) {
             // One `doc_id` read per slot and pass: re-reading it after the
             // `advance` doubled the (indirect) calls of the alignment loop.
-            int32_t doc = entry.postings->doc_id();
+            // The concrete type makes both reads static calls that inline into
+            // this loop; through the abstract postings they are two virtual
+            // calls per slot and pass.
+            int32_t doc = entry.concrete != nullptr ? entry.concrete->doc_id() : entry.postings->doc_id();
             if (doc < next_target) {
-                auto advanced = entry.postings->advance(next_target);
-                if (!advanced.has_value()) {
-                    return std::unexpected(std::move(advanced.error()));
+                // A posting exactly one document behind is the common case (the
+                // candidates move forward by one); `next_doc` is the cheaper way
+                // to take that single step, `advance` the general one.
+                const bool adjacent = doc == next_target - 1;
+                Result<int32_t> moved = entry.concrete != nullptr
+                                                ? (adjacent ? entry.concrete->next_doc()
+                                                            : entry.concrete->advance(next_target))
+                                                : (adjacent ? entry.postings->next_doc()
+                                                            : entry.postings->advance(next_target));
+                if (!moved.has_value()) {
+                    return std::unexpected(std::move(moved.error()));
                 }
-                doc = advanced.value();
+                doc = moved.value();
                 if (doc == NO_MORE_DOCS) {
                     doc_ = NO_MORE_DOCS;
                     return doc_;

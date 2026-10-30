@@ -65,7 +65,7 @@ void TermScorer::prepare_fast_path() {
         freq_source_ = postings_.get();
     }
     if (auto *const concrete = dynamic_cast<BlockPostingsEnum *>(freq_source_); concrete != nullptr) {
-        freq_source_concrete_ = concrete;
+        postings_concrete_ = concrete;
     }
     fast_score_ok_ = bm25_norm_inverse_ != nullptr && norms_direct_;
 }
@@ -83,7 +83,7 @@ Result<std::unique_ptr<TermScorer>> TermScorer::from_impacts(std::unique_ptr<Imp
     // scoring path has no choice to make.
     scorer->freq_source_ = scorer->impacts_enum_.get();
     if (auto *const concrete = dynamic_cast<BlockPostingsEnum *>(scorer->freq_source_); concrete != nullptr) {
-        scorer->freq_source_concrete_ = concrete;
+        scorer->postings_concrete_ = concrete;
     }
     scorer->max_score_cache_ = std::make_unique<MaxScoreCache>(scorer->impacts_enum_.get(), scorer->sim_scorer_);
     scorer->cursor_ = scorer->impacts_enum_.get();
@@ -188,7 +188,7 @@ Result<float> TermScorer::score() {
         }
         int64_t norm = 1;
         if (norms_direct_) {
-            if (!norms_view_.value_at(current_doc(), norm)) {
+            if (!norm_of(current_doc(), norm)) {
                 // The document has no norm; the neutral value scores as an empty
                 // field.
                 norm = 1;
