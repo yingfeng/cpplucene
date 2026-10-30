@@ -29,16 +29,16 @@ using namespace lucene;
 
 namespace {
 
-std::any bytes_output(std::string_view text) {
-    return std::any{BytesRef::from_string(text)};
+FstOutput bytes_output(std::string_view text) {
+    return FstOutput{BytesRef::from_string(text)};
 }
 
-std::string text_of(const std::any &value) {
-    if (value.type() != typeid(BytesRef)) {
+std::string text_of(const FstOutput &value) {
+    const auto *bytes = value.as_ptr<BytesRef>();
+    if (bytes == nullptr) {
         return "<not bytes>";
     }
-    const auto &bytes = std::any_cast<const BytesRef &>(value);
-    return std::string(reinterpret_cast<const char *>(bytes.as_slice().data()), bytes.length());
+    return std::string(reinterpret_cast<const char *>(bytes->as_slice().data()), bytes->length());
 }
 
 } // namespace
@@ -73,8 +73,8 @@ TEST(FstByteSequenceOutputsTest, AddPrependsAndHandlesNoOutput) {
     EXPECT_EQ(text_of(outputs.add(outputs.get_no_output(), bytes_output("bar"))), "bar");
     EXPECT_EQ(text_of(outputs.add(bytes_output("foo"), outputs.get_no_output())), "foo");
 
-    std::any prefix = bytes_output("foo");
-    std::any output = bytes_output("bar");
+    FstOutput prefix = bytes_output("foo");
+    FstOutput output = bytes_output("bar");
     outputs.add_assign(prefix, output);
     EXPECT_EQ(text_of(prefix), "foobar");
 }
@@ -107,23 +107,23 @@ TEST(FstByteSequenceOutputsTest, RoundTripsThroughADataOutput) {
 TEST(FstPositiveIntOutputsTest, MinSumAndDifference) {
     const auto &outputs = FstPositiveIntOutputs::singleton();
 
-    EXPECT_EQ(std::any_cast<int64_t>(outputs.common(std::any{int64_t{5}}, std::any{int64_t{3}})), 3);
-    EXPECT_TRUE(outputs.is_no_output(outputs.common(std::any{int64_t{5}}, outputs.get_no_output())));
-    EXPECT_EQ(std::any_cast<int64_t>(outputs.add(std::any{int64_t{5}}, std::any{int64_t{3}})), 8);
-    EXPECT_EQ(std::any_cast<int64_t>(outputs.add(outputs.get_no_output(), std::any{int64_t{3}})), 3);
-    EXPECT_EQ(std::any_cast<int64_t>(outputs.subtract(std::any{int64_t{5}}, std::any{int64_t{3}})), 2);
-    EXPECT_TRUE(outputs.is_no_output(outputs.subtract(std::any{int64_t{5}}, std::any{int64_t{5}})));
-    EXPECT_EQ(std::any_cast<int64_t>(outputs.subtract(std::any{int64_t{5}}, outputs.get_no_output())), 5);
+    EXPECT_EQ((outputs.common(FstOutput{int64_t{5}}, FstOutput{int64_t{3}})).get<int64_t>(), 3);
+    EXPECT_TRUE(outputs.is_no_output(outputs.common(FstOutput{int64_t{5}}, outputs.get_no_output())));
+    EXPECT_EQ((outputs.add(FstOutput{int64_t{5}}, FstOutput{int64_t{3}})).get<int64_t>(), 8);
+    EXPECT_EQ((outputs.add(outputs.get_no_output(), FstOutput{int64_t{3}})).get<int64_t>(), 3);
+    EXPECT_EQ((outputs.subtract(FstOutput{int64_t{5}}, FstOutput{int64_t{3}})).get<int64_t>(), 2);
+    EXPECT_TRUE(outputs.is_no_output(outputs.subtract(FstOutput{int64_t{5}}, FstOutput{int64_t{5}})));
+    EXPECT_EQ((outputs.subtract(FstOutput{int64_t{5}}, outputs.get_no_output())).get<int64_t>(), 5);
 
     std::vector<uint8_t> buffer(32, 0);
     ByteArrayDataOutput out(buffer);
-    ASSERT_TRUE(outputs.write(std::any{int64_t{300}}, out).has_value());
+    ASSERT_TRUE(outputs.write(FstOutput{int64_t{300}}, out).has_value());
     ASSERT_TRUE(outputs.write(outputs.get_no_output(), out).has_value());
 
     ByteArrayDataInput in(std::span<const uint8_t>(buffer.data(), out.get_position()));
     auto first = outputs.read(in);
     ASSERT_TRUE(first.has_value());
-    EXPECT_EQ(std::any_cast<int64_t>(first.value()), 300);
+    EXPECT_EQ((first.value()).get<int64_t>(), 300);
     auto second = outputs.read(in);
     ASSERT_TRUE(second.has_value());
     EXPECT_TRUE(outputs.is_no_output(second.value()));
@@ -159,24 +159,24 @@ TEST(FstNoOutputsTest, EverythingIsNoOutput) {
 TEST(FstIntSequenceOutputsTest, PrefixAlgebraAndRoundTrip) {
     const auto &outputs = FstIntSequenceOutputs::singleton();
 
-    const std::any ab{IntsRef{std::vector<int32_t>{1, 2}}};
-    const std::any ac{IntsRef{std::vector<int32_t>{1, 3}}};
-    const std::any a{IntsRef{std::vector<int32_t>{1}}};
+    const FstOutput ab{IntsRef{std::vector<int32_t>{1, 2}}};
+    const FstOutput ac{IntsRef{std::vector<int32_t>{1, 3}}};
+    const FstOutput a{IntsRef{std::vector<int32_t>{1}}};
 
-    EXPECT_EQ(std::any_cast<IntsRef>(outputs.common(ab, ac)).to_string(), "[1]");
-    EXPECT_EQ(std::any_cast<IntsRef>(outputs.common(ab, a)).to_string(), "[1]");
-    EXPECT_EQ(std::any_cast<IntsRef>(outputs.common(a, ac)).to_string(), "[1]");
+    EXPECT_EQ((outputs.common(ab, ac)).get<IntsRef>().to_string(), "[1]");
+    EXPECT_EQ((outputs.common(ab, a)).get<IntsRef>().to_string(), "[1]");
+    EXPECT_EQ((outputs.common(a, ac)).get<IntsRef>().to_string(), "[1]");
     // Disjoint sequences share no prefix at all.
     EXPECT_TRUE(outputs.is_no_output(
         outputs.common(IntsRef{std::vector<int32_t>{1, 2}}, IntsRef{std::vector<int32_t>{3, 4}})));
-    EXPECT_EQ(std::any_cast<IntsRef>(outputs.subtract(ab, a)).to_string(), "[2]");
+    EXPECT_EQ((outputs.subtract(ab, a)).get<IntsRef>().to_string(), "[2]");
     EXPECT_TRUE(outputs.is_no_output(outputs.subtract(ab, ab)));
-    EXPECT_EQ(std::any_cast<IntsRef>(outputs.add(a, IntsRef{std::vector<int32_t>{2, 3}})).to_string(), "[1, 2, 3]");
-    EXPECT_EQ(std::any_cast<IntsRef>(outputs.add(outputs.get_no_output(), a)).to_string(), "[1]");
+    EXPECT_EQ((outputs.add(a, IntsRef{std::vector<int32_t>{2, 3}})).get<IntsRef>().to_string(), "[1, 2, 3]");
+    EXPECT_EQ((outputs.add(outputs.get_no_output(), a)).get<IntsRef>().to_string(), "[1]");
     EXPECT_EQ(outputs.output_to_string(outputs.get_no_output()), "[]");
 
     // Values larger than one byte exercise the vint encoding.
-    const std::any wide{IntsRef{std::vector<int32_t>{3, 1000, 100000}}};
+    const FstOutput wide{IntsRef{std::vector<int32_t>{3, 1000, 100000}}};
     std::vector<uint8_t> buffer(64, 0);
     ByteArrayDataOutput out(buffer);
     ASSERT_TRUE(outputs.write(wide, out).has_value());
@@ -185,7 +185,7 @@ TEST(FstIntSequenceOutputsTest, PrefixAlgebraAndRoundTrip) {
     ByteArrayDataInput in(std::span<const uint8_t>(buffer.data(), out.get_position()));
     auto first = outputs.read(in);
     ASSERT_TRUE(first.has_value()) << (first ? "" : first.error().to_string());
-    EXPECT_EQ(std::any_cast<IntsRef>(first.value()).to_string(), "[3, 1000, 100000]");
+    EXPECT_EQ((first.value()).get<IntsRef>().to_string(), "[3, 1000, 100000]");
     auto second = outputs.read(in);
     ASSERT_TRUE(second.has_value());
     EXPECT_TRUE(outputs.is_no_output(second.value()));

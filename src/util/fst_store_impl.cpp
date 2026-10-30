@@ -30,45 +30,11 @@ import std;
 
 namespace lucene {
 
-namespace {
-
-/// Bounds check shared by both readers: `pos_` is a physical offset relative to
-/// the slice, and reads walk it **downwards**, so the very first read of a node
-/// happens at the node's highest address.
-bool in_bounds(int64_t position, size_t length) {
-    return position >= 0 && static_cast<size_t>(position) < length;
-}
-
-/// `true` when the next `count` reverse reads stay inside `[0, length)`.
-bool room_for(int64_t position, size_t count, size_t length) {
-    return position >= 0 && static_cast<size_t>(position) < length &&
-           static_cast<size_t>(position) + 1 >= count;
-}
-
-} // namespace
-
 // ---- OwnedBytesReader ----
 
 OwnedBytesReader::OwnedBytesReader(std::shared_ptr<const std::vector<uint8_t>> bytes, size_t offset, size_t length)
-    : bytes_(std::move(bytes)), offset_(offset), length_(length) {
-    debug_check(offset_ + length_ <= bytes_->size(), "the reader slice must fit into the buffer");
-}
-
-Result<uint8_t> OwnedBytesReader::read_byte() {
-    if (!in_bounds(pos_, length_)) {
-        return err(LuceneError::eof("read past the end of the FST data"));
-    }
-    return (*bytes_)[offset_ + static_cast<size_t>(pos_--)];
-}
-
-VoidResult OwnedBytesReader::read_bytes(std::span<uint8_t> b) {
-    if (!room_for(pos_, b.size(), length_)) {
-        return err(LuceneError::eof("read past the end of the FST data"));
-    }
-    for (auto &slot : b) {
-        slot = (*bytes_)[offset_ + static_cast<size_t>(pos_--)];
-    }
-    return {};
+    : bytes_(std::move(bytes)), data_(bytes_->data() + offset), length_(length) {
+    debug_check(offset + length_ <= bytes_->size(), "the reader slice must fit into the buffer");
 }
 
 VoidResult OwnedBytesReader::skip_bytes(int64_t num_bytes) {
@@ -78,23 +44,6 @@ VoidResult OwnedBytesReader::skip_bytes(int64_t num_bytes) {
 }
 
 // ---- SliceBytesReader ----
-
-Result<uint8_t> SliceBytesReader::read_byte() {
-    if (!in_bounds(pos_, bytes_.size())) {
-        return err(LuceneError::eof("read past the end of the FST slice"));
-    }
-    return bytes_[static_cast<size_t>(pos_--)];
-}
-
-VoidResult SliceBytesReader::read_bytes(std::span<uint8_t> b) {
-    if (!room_for(pos_, b.size(), bytes_.size())) {
-        return err(LuceneError::eof("read past the end of the FST slice"));
-    }
-    for (auto &slot : b) {
-        slot = bytes_[static_cast<size_t>(pos_--)];
-    }
-    return {};
-}
 
 VoidResult SliceBytesReader::skip_bytes(int64_t num_bytes) {
     pos_ -= num_bytes;

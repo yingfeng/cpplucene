@@ -39,8 +39,28 @@ export class OwnedBytesReader final : public FstBytesReader {
 public:
     OwnedBytesReader(std::shared_ptr<const std::vector<uint8_t>> bytes, size_t offset, size_t length);
 
-    [[nodiscard]] Result<uint8_t> read_byte() override;
-    [[nodiscard]] VoidResult read_bytes(std::span<uint8_t> b) override;
+    /// Both readers keep the raw pointer of their slice and read through it
+    /// inline: seeking a term reads a handful of bytes per arc, and a virtual call
+    /// that then chased `shared_ptr -> vector -> data` per byte dominated the
+    /// profile of every lookup.
+    [[nodiscard]] Result<uint8_t> read_byte() override {
+        if (pos_ < 0 || static_cast<size_t>(pos_) >= length_) {
+            return err(LuceneError::eof("read past the end of the FST data"));
+        }
+        return data_[static_cast<size_t>(pos_--)];
+    }
+
+    [[nodiscard]] VoidResult read_bytes(std::span<uint8_t> b) override {
+        if (pos_ < 0 || static_cast<size_t>(pos_) >= length_ ||
+            static_cast<size_t>(pos_) + 1 < b.size()) {
+            return err(LuceneError::eof("read past the end of the FST data"));
+        }
+        for (auto &slot : b) {
+            slot = data_[static_cast<size_t>(pos_--)];
+        }
+        return {};
+    }
+
     [[nodiscard]] VoidResult skip_bytes(int64_t num_bytes) override;
 
     [[nodiscard]] int64_t get_position() const override { return pos_; }
@@ -50,7 +70,8 @@ public:
 
 private:
     std::shared_ptr<const std::vector<uint8_t>> bytes_;
-    size_t offset_{0};
+    /// `bytes_->data() + offset`; the slice this reader walks.
+    const uint8_t *data_{nullptr};
     size_t length_{0};
     int64_t pos_{0};
 };
@@ -64,8 +85,24 @@ export class SliceBytesReader final : public FstBytesReader {
 public:
     explicit SliceBytesReader(std::span<const uint8_t> bytes) : bytes_(bytes) {}
 
-    [[nodiscard]] Result<uint8_t> read_byte() override;
-    [[nodiscard]] VoidResult read_bytes(std::span<uint8_t> b) override;
+    [[nodiscard]] Result<uint8_t> read_byte() override {
+        if (pos_ < 0 || static_cast<size_t>(pos_) >= bytes_.size()) {
+            return err(LuceneError::eof("read past the end of the FST slice"));
+        }
+        return bytes_[static_cast<size_t>(pos_--)];
+    }
+
+    [[nodiscard]] VoidResult read_bytes(std::span<uint8_t> b) override {
+        if (pos_ < 0 || static_cast<size_t>(pos_) >= bytes_.size() ||
+            static_cast<size_t>(pos_) + 1 < b.size()) {
+            return err(LuceneError::eof("read past the end of the FST slice"));
+        }
+        for (auto &slot : b) {
+            slot = bytes_[static_cast<size_t>(pos_--)];
+        }
+        return {};
+    }
+
     [[nodiscard]] VoidResult skip_bytes(int64_t num_bytes) override;
 
     [[nodiscard]] int64_t get_position() const override { return pos_; }

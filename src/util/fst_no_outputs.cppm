@@ -39,20 +39,20 @@ public:
 
     [[nodiscard]] std::string_view type_name() const noexcept override { return "NoOutputs"; }
 
-    [[nodiscard]] std::any common(const std::any &output1, const std::any &output2) const override;
-    [[nodiscard]] std::any subtract(const std::any &output, const std::any &inc) const override;
-    [[nodiscard]] std::any add(const std::any &prefix, const std::any &output) const override;
-    void add_assign(std::any &prefix, std::any &output) const override;
+    [[nodiscard]] FstOutput common(const FstOutput &output1, const FstOutput &output2) const override;
+    [[nodiscard]] FstOutput subtract(const FstOutput &output, const FstOutput &inc) const override;
+    [[nodiscard]] FstOutput add(const FstOutput &prefix, const FstOutput &output) const override;
+    void add_assign(FstOutput &prefix, FstOutput &output) const override;
 
-    [[nodiscard]] VoidResult write(const std::any &output, DataOutput &out) const override;
-    [[nodiscard]] Result<std::any> read(DataInput &input) const override;
+    [[nodiscard]] VoidResult write(const FstOutput &output, DataOutput &out) const override;
+    [[nodiscard]] Result<FstOutput> read(DataInput &input) const override;
     [[nodiscard]] VoidResult skip_output(DataInput &input) const override;
 
-    [[nodiscard]] std::any get_no_output() const override;
-    [[nodiscard]] bool is_no_output(const std::any &output) const override;
-    [[nodiscard]] std::string output_to_string(const std::any &output) const override;
-    [[nodiscard]] Result<std::any> merge(const std::any &first, const std::any &second) const override;
-    [[nodiscard]] int64_t ram_bytes_used(const std::any &output) const override;
+    [[nodiscard]] FstOutput get_no_output() const override;
+    [[nodiscard]] bool is_no_output(const FstOutput &output) const override;
+    [[nodiscard]] std::string output_to_string(const FstOutput &output) const override;
+    [[nodiscard]] Result<FstOutput> merge(const FstOutput &first, const FstOutput &second) const override;
+    [[nodiscard]] int64_t ram_bytes_used(const FstOutput &output) const override;
 };
 
 } // namespace lucene

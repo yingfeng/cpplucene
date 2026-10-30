@@ -78,14 +78,13 @@ std::vector<int32_t> key_of(std::string_view text) {
     return key;
 }
 
-std::string text_of(const std::any &value) {
-    if (value.type() == typeid(BytesRef)) {
-        const auto &bytes = std::any_cast<const BytesRef &>(value);
-        const auto slice = bytes.as_slice();
+std::string text_of(const FstOutput &value) {
+    if (const auto *bytes = value.as_ptr<BytesRef>(); bytes != nullptr) {
+        const auto slice = bytes->as_slice();
         return std::string(reinterpret_cast<const char *>(slice.data()), slice.size());
     }
-    if (value.type() == typeid(int64_t)) {
-        return std::to_string(std::any_cast<int64_t>(value));
+    if (const auto *number = value.as_ptr<int64_t>(); number != nullptr) {
+        return std::to_string(*number);
     }
     return "<other>";
 }
@@ -103,7 +102,7 @@ ByteFst build_byte_fst() {
     const std::vector<std::pair<std::string, std::string>> entries{
         {"", "root"}, {"a", "1"}, {"ab", "22"}, {"b", "3"}, {"cd", "4"}};
     for (const auto &[key, output] : entries) {
-        auto added = builder.add(key_of(key), std::any{BytesRef::from_string(output)});
+        auto added = builder.add(key_of(key), FstOutput{BytesRef::from_string(output)});
         EXPECT_TRUE(added.has_value());
     }
     auto result = builder.finish();
@@ -121,7 +120,7 @@ ByteFst build_int_fst() {
     FstBuilder builder(outputs, InputType::kByte1);
     const std::vector<std::pair<std::string, int64_t>> entries{{"a", 1}, {"ab", 5}, {"b", 9}};
     for (const auto &[key, output] : entries) {
-        auto added = builder.add(key_of(key), std::any{output});
+        auto added = builder.add(key_of(key), FstOutput{output});
         EXPECT_TRUE(added.has_value());
     }
     auto result = builder.finish();
@@ -212,7 +211,7 @@ TEST(FstUtilTest, ReadCeilArcReadsTheArcOnAMiss) {
     FstBuilder builder(outputs, InputType::kByte1);
     const std::vector<std::pair<std::string, std::string>> entries{{"", "root"}, {"a", "1"}, {"c", "3"}};
     for (const auto &[key, output] : entries) {
-        ASSERT_TRUE(builder.add(key_of(key), std::any{BytesRef::from_string(output)}).has_value());
+        ASSERT_TRUE(builder.add(key_of(key), FstOutput{BytesRef::from_string(output)}).has_value());
     }
     auto result = builder.finish();
     ASSERT_TRUE(result.has_value());
@@ -236,9 +235,9 @@ TEST(FstUtilTest, ShortestPathsReturnsCheapestInputs) {
     Arc start;
     fst.get_first_arc(start);
 
-    const OutputComparator comparator = [](const std::any &left, const std::any &right) -> int32_t {
-        const auto l = std::any_cast<int64_t>(left);
-        const auto r = std::any_cast<int64_t>(right);
+    const OutputComparator comparator = [](const FstOutput &left, const FstOutput &right) -> int32_t {
+        const auto l = (left).get<int64_t>();
+        const auto r = (right).get<int64_t>();
         return l < r ? -1 : (l > r ? 1 : 0);
     };
 
@@ -269,9 +268,9 @@ TEST(FstUtilTest, ShortestPathsStopsAtTheRequestedCount) {
 
     // Byte-sequence outputs compare lexicographically.
     const auto &outputs = FstByteSequenceOutputs::singleton();
-    const OutputComparator comparator = [](const std::any &left, const std::any &right) -> int32_t {
-        const auto &l = std::any_cast<const BytesRef &>(left);
-        const auto &r = std::any_cast<const BytesRef &>(right);
+    const OutputComparator comparator = [](const FstOutput &left, const FstOutput &right) -> int32_t {
+        const auto &l = (left).get<BytesRef>();
+        const auto &r = (right).get<BytesRef>();
         return l.compare_to(r);
     };
 

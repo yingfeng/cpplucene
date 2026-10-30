@@ -92,6 +92,7 @@ export import :packed_long_values;
 export import :long_heap;
 export import :priority_queue;
 export import :growable_writer;
+export import :fst_output;
 export import :fst_outputs;
 export import :fst_no_outputs;
 export import :fst_byte_sequence_outputs;

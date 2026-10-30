@@ -71,13 +71,12 @@ private:
     int64_t pos_{0};
 };
 
-std::string text_of(const std::any &value) {
-    if (value.type() == typeid(BytesRef)) {
-        const auto &bytes = std::any_cast<const BytesRef &>(value);
-        return std::string(reinterpret_cast<const char *>(bytes.as_slice().data()), bytes.length());
+std::string text_of(const FstOutput &value) {
+    if (const auto *bytes = value.as_ptr<BytesRef>(); bytes != nullptr) {
+        return std::string(reinterpret_cast<const char *>(bytes->as_slice().data()), bytes->length());
     }
-    if (value.type() == typeid(int64_t)) {
-        return std::to_string(std::any_cast<int64_t>(value));
+    if (const auto *number = value.as_ptr<int64_t>(); number != nullptr) {
+        return std::to_string(*number);
     }
     return "<other>";
 }
@@ -86,7 +85,7 @@ std::string text_of(const std::any &value) {
 std::optional<std::string> lookup(FST &fst, std::span<const int32_t> key, const FstOutputs &outputs) {
     Arc arc;
     fst.get_first_arc(arc);
-    std::any accumulated = outputs.get_no_output();
+    FstOutput accumulated = outputs.get_no_output();
     for (const int32_t label : key) {
         auto found = fst.find_target_arc(label, &arc, arc, fst.reader());
         if (!found.has_value()) {
@@ -126,7 +125,7 @@ TEST(FstBuilderTest, BuildsAndReadsBackByteSequenceOutputs) {
     const std::vector<std::pair<std::string, std::string>> entries{
         {"", "root"}, {"a", "1"}, {"ab", "22"}, {"b", "3"}, {"cd", "4"}};
     for (const auto &[key, output] : entries) {
-        auto added = builder.add(key_of(key), std::any{BytesRef::from_string(output)});
+        auto added = builder.add(key_of(key), FstOutput{BytesRef::from_string(output)});
         ASSERT_TRUE(added.has_value()) << (added ? "" : added.error().to_string());
         EXPECT_TRUE(added.value()) << key;
     }
@@ -160,7 +159,7 @@ TEST(FstBuilderTest, BuildsAndReadsBackPositiveIntOutputs) {
 
     const std::vector<std::pair<std::string, int64_t>> entries{{"a", 1}, {"ab", 5}, {"b", 9}};
     for (const auto &[key, output] : entries) {
-        auto added = builder.add(key_of(key), std::any{output});
+        auto added = builder.add(key_of(key), FstOutput{output});
         ASSERT_TRUE(added.has_value());
     }
 
@@ -191,7 +190,7 @@ TEST(FstBuilderTest, SharesIdenticalSubtrees) {
         entries.emplace_back(key, static_cast<int64_t>(i) + 1);
     }
     for (const auto &[key, value] : entries) {
-        auto added = builder.add(key_of(key), std::any{value});
+        auto added = builder.add(key_of(key), FstOutput{value});
         ASSERT_TRUE(added.has_value()) << (added ? "" : added.error().to_string());
         EXPECT_TRUE(added.value()) << "key " << key;
     }

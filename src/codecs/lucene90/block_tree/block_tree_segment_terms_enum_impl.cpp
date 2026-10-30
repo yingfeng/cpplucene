@@ -48,15 +48,21 @@ namespace lucene {
 
 namespace {
 
-/// The reference implementation's `Arc<BytesRef>` output slots are type erased (`std::any`) in this
+/// The reference implementation's `Arc<BytesRef>` output slots are type erased (`FstOutput`) in this
 /// port; `ByteSequenceOutputs` always stores a [`BytesRef`], and a missing slot
 /// means `NO_OUTPUT`.
-const BytesRef &arc_output(const std::any &slot) {
-    const auto *output = std::any_cast<BytesRef>(&slot);
+const BytesRef &arc_output(const FstOutput &slot) {
+    const auto *output = slot.as_ptr<BytesRef>();
     return output != nullptr ? *output : no_output();
 }
 
-std::any no_output_slot() { return std::any{BytesRef{}}; }
+/// An empty slot, i.e. the algebra's NO_OUTPUT.
+///
+/// A `FstOutput` holding a `BytesRef` is too large for its small-object buffer, so
+/// building one allocates; an empty `FstOutput` is the same value (the outputs
+/// implementations answer NO_OUTPUT for any slot that does not hold their type)
+/// and costs nothing.  Every arc of a seek used to allocate twice for its slot.
+FstOutput no_output_slot() { return {}; }
 
 int32_t compare_spans(std::span<const uint8_t> left, std::span<const uint8_t> right) {
     const size_t shared = std::min(left.size(), right.size());
@@ -116,6 +122,9 @@ VoidResult SegmentTermsEnum::init_index_input() {
 
 Result<size_t> SegmentTermsEnum::get_frame(size_t ord) {
     const size_t frame_idx = ord + 1;
+    // Note: `reserve`ring `frame_idx + 8` here was measured *slower* (the vector
+    // doubles anyway, so the extra reservations only over-allocate); the geometric
+    // growth of `push_back` is the cheaper policy.
     while (stack_.size() <= frame_idx) {
         const auto frame_ord = static_cast<int32_t>(stack_.size() - 1);
         auto frame = SegmentTermsEnumFrame::create(frame_ord, *fr_);
@@ -850,11 +859,10 @@ Result<SegmentTermsEnumFrame> SegmentTermsEnumFrame::create(int32_t ord, FieldRe
     frame.has_terms_orig = false;
     frame.is_floor = false;
 
-    // The reference implementation pre-sizes the buffers the same way; they grow on demand.
-    frame.suffix_bytes.assign(32, 0);
-    frame.suffix_length_bytes.assign(32, 0);
-    frame.stats_bytes.assign(64, 0);
-    frame.metadata_bytes.assign(32, 0);
+    // The block buffers are left empty: `load_block` grows them to the block size on
+    // first use and frames are reused for the rest of the seek, so pre-sizing only
+    // paid four allocations (and four memsets) for every frame ever created --
+    // including the ones a seek pushes and never loads.
     frame.reseat_readers();
 
     frame.prefix_length = 0;
@@ -1762,7 +1770,7 @@ VoidResult FieldReader::init_field_reader(IndexInput &index_in, FieldReader &rea
 
     // Keep the FST's empty output: the root code is replaced by it when equal,
     // so that the root block's floor data can be read from the FST.
-    const std::optional<std::any> empty_output = metadata.empty_output;
+    const std::optional<FstOutput> empty_output = metadata.empty_output;
 
     const OnHeapFstStore store(std::move(fst_bytes));
     auto fst_reader = store.make_reader();
@@ -1783,7 +1791,7 @@ VoidResult FieldReader::init_field_reader(IndexInput &index_in, FieldReader &rea
 
     bool replaced = false;
     if (empty_output.has_value()) {
-        const auto *empty = std::any_cast<BytesRef>(&empty_output.value());
+        const auto *empty = empty_output.value().as_ptr<BytesRef>();
         if (empty != nullptr && *empty == root_code) {
             reader.root_code_ = *empty;
             replaced = true;

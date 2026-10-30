@@ -17,6 +17,7 @@
 
 export module lucene_core:fst;
 
+import :fst_output;
 import :types;
 import :error;
 
@@ -104,7 +105,7 @@ public:
     Arc() = default;
 
     /// An arc whose output slots are pre-filled with this algebra's NO_OUTPUT.
-    [[nodiscard]] static Arc with_outputs(std::any output, std::any next_final_output);
+    [[nodiscard]] static Arc with_outputs(FstOutput output, FstOutput next_final_output);
 
     [[nodiscard]] bool is_last() const noexcept { return has_flag(flags_, BIT_LAST_ARC); }
     [[nodiscard]] bool is_final() const noexcept { return has_flag(flags_, BIT_FINAL_ARC); }
@@ -126,18 +127,18 @@ public:
     [[nodiscard]] int64_t bit_table_start() const noexcept { return bit_table_start_; }
     [[nodiscard]] int32_t presence_index() const noexcept { return presence_index_; }
 
-    [[nodiscard]] const std::any &output() const noexcept { return output_; }
-    [[nodiscard]] const std::any &next_final_output() const noexcept { return next_final_output_; }
+    [[nodiscard]] const FstOutput &output() const noexcept { return output_; }
+    [[nodiscard]] const FstOutput &next_final_output() const noexcept { return next_final_output_; }
     /// Mutable access, needed by `FstOutputs::add_assign` which consumes the
     /// arc's output as a scratch slot.
-    [[nodiscard]] std::any &output_mut() noexcept { return output_; }
-    [[nodiscard]] std::any &next_final_output_mut() noexcept { return next_final_output_; }
+    [[nodiscard]] FstOutput &output_mut() noexcept { return output_; }
+    [[nodiscard]] FstOutput &next_final_output_mut() noexcept { return next_final_output_; }
 
     void set_label(int32_t label) noexcept { label_ = label; }
-    void set_output(std::any output) { output_ = std::move(output); }
+    void set_output(FstOutput output) { output_ = std::move(output); }
     void set_target(int64_t target) noexcept { target_ = target; }
     void set_flags(uint8_t flags) noexcept { flags_ = flags; }
-    void set_next_final_output(std::any output) { next_final_output_ = std::move(output); }
+    void set_next_final_output(FstOutput output) { next_final_output_ = std::move(output); }
     void set_next_arc(int64_t next_arc) noexcept { next_arc_ = next_arc; }
     void set_node_flags(uint8_t node_flags) noexcept { node_flags_ = node_flags; }
     void set_pos_arcs_start(int64_t pos) noexcept { pos_arcs_start_ = pos; }
@@ -155,10 +156,10 @@ public:
 
 private:
     int32_t label_{0};
-    std::any output_{};
+    FstOutput output_{};
     int64_t target_{0};
     uint8_t flags_{0};
-    std::any next_final_output_{};
+    FstOutput next_final_output_{};
     int64_t next_arc_{0};
     uint8_t node_flags_{0};
     int32_t bytes_per_arc_{0};
@@ -179,7 +180,7 @@ export struct FSTMetadata {
     const FstOutputs *outputs{nullptr};
     int32_t version{VERSION_CURRENT};
     /// If set, the FST accepts the empty string and produces this output.
-    std::optional<std::any> empty_output{};
+    std::optional<FstOutput> empty_output{};
     int64_t start_node{0};
     int64_t num_bytes{0};
 

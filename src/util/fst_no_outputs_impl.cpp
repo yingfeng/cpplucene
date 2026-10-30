@@ -33,51 +33,51 @@ const FstNoOutputs &FstNoOutputs::singleton() {
     return instance;
 }
 
-std::any FstNoOutputs::common(const std::any & /*output1*/, const std::any & /*output2*/) const {
-    return std::any{std::monostate{}};
+FstOutput FstNoOutputs::common(const FstOutput & /*output1*/, const FstOutput & /*output2*/) const {
+    return FstOutput{std::monostate{}};
 }
 
-std::any FstNoOutputs::subtract(const std::any &output, const std::any & /*inc*/) const {
+FstOutput FstNoOutputs::subtract(const FstOutput &output, const FstOutput & /*inc*/) const {
     return output;
 }
 
-std::any FstNoOutputs::add(const std::any &prefix, const std::any & /*output*/) const {
+FstOutput FstNoOutputs::add(const FstOutput &prefix, const FstOutput & /*output*/) const {
     return prefix;
 }
 
-void FstNoOutputs::add_assign(std::any & /*prefix*/, std::any & /*output*/) const {
+void FstNoOutputs::add_assign(FstOutput & /*prefix*/, FstOutput & /*output*/) const {
     // Nothing to combine: every value is NO_OUTPUT.
 }
 
-VoidResult FstNoOutputs::write(const std::any & /*output*/, DataOutput & /*out*/) const {
+VoidResult FstNoOutputs::write(const FstOutput & /*output*/, DataOutput & /*out*/) const {
     return {};
 }
 
-Result<std::any> FstNoOutputs::read(DataInput & /*input*/) const {
-    return std::any{std::monostate{}};
+Result<FstOutput> FstNoOutputs::read(DataInput & /*input*/) const {
+    return FstOutput{std::monostate{}};
 }
 
 VoidResult FstNoOutputs::skip_output(DataInput & /*input*/) const {
     return {};
 }
 
-std::any FstNoOutputs::get_no_output() const {
-    return std::any{std::monostate{}};
+FstOutput FstNoOutputs::get_no_output() const {
+    return FstOutput{std::monostate{}};
 }
 
-bool FstNoOutputs::is_no_output(const std::any & /*output*/) const {
+bool FstNoOutputs::is_no_output(const FstOutput & /*output*/) const {
     return true;
 }
 
-std::string FstNoOutputs::output_to_string(const std::any & /*output*/) const {
+std::string FstNoOutputs::output_to_string(const FstOutput & /*output*/) const {
     return {};
 }
 
-Result<std::any> FstNoOutputs::merge(const std::any & /*first*/, const std::any & /*second*/) const {
-    return std::any{std::monostate{}};
+Result<FstOutput> FstNoOutputs::merge(const FstOutput & /*first*/, const FstOutput & /*second*/) const {
+    return FstOutput{std::monostate{}};
 }
 
-int64_t FstNoOutputs::ram_bytes_used(const std::any & /*output*/) const {
+int64_t FstNoOutputs::ram_bytes_used(const FstOutput & /*output*/) const {
     return 0;
 }
 

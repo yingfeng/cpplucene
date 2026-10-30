@@ -87,12 +87,12 @@ void emit_dot_state(std::string &out, std::string_view name, std::string_view sh
 
 // ---- FSTPath ----
 
-FSTPath::FSTPath(std::any output, const Arc &arc, IntsRefBuilder input, float boost, std::string context,
+FSTPath::FSTPath(FstOutput output, const Arc &arc, IntsRefBuilder input, float boost, std::string context,
                  int32_t payload)
     : arc(arc), output(std::move(output)), input(std::move(input)), boost(boost), context(std::move(context)),
       payload(payload) {}
 
-FSTPath FSTPath::new_path(std::any new_output, IntsRefBuilder new_input) const {
+FSTPath FSTPath::new_path(FstOutput new_output, IntsRefBuilder new_input) const {
     return FSTPath(std::move(new_output), arc, std::move(new_input), boost, context, payload);
 }
 
@@ -148,7 +148,7 @@ VoidResult TopNSearcher::insert_queue(FSTPath path) {
 VoidResult TopNSearcher::add_if_competitive(FSTPath &path) {
     debug_check(queue_.has_value(), "add_if_competitive needs an open queue");
     const auto &outputs = fst_->outputs();
-    const std::any output = outputs.add(path.output, path.arc.output());
+    const FstOutput output = outputs.add(path.output, path.arc.output());
 
     if (!queue_->empty() && queue_->size() == max_queue_depth_ && max_queue_depth_ > 0) {
         const FSTPath &bottom = queue_->back();
@@ -192,13 +192,13 @@ VoidResult TopNSearcher::add_if_competitive(FSTPath &path) {
     return {};
 }
 
-VoidResult TopNSearcher::add_start_paths(const Arc &node, std::any start_output, bool allow_empty_string,
+VoidResult TopNSearcher::add_start_paths(const Arc &node, FstOutput start_output, bool allow_empty_string,
                                          IntsRefBuilder input) {
     return add_start_paths_with_context(node, std::move(start_output), allow_empty_string, std::move(input), 0.0F, "",
                                         -1);
 }
 
-VoidResult TopNSearcher::add_start_paths_with_context(const Arc &node, std::any start_output,
+VoidResult TopNSearcher::add_start_paths_with_context(const Arc &node, FstOutput start_output,
                                                       bool allow_empty_string, IntsRefBuilder input, float boost,
                                                       std::string context, int32_t payload) {
     FSTPath path(std::move(start_output), node, std::move(input), boost, std::move(context), payload);
@@ -224,7 +224,7 @@ VoidResult TopNSearcher::add_start_paths_with_context(const Arc &node, std::any 
 Result<TopResults> TopNSearcher::search() {
     TopResults out;
     const auto &outputs = fst_->outputs();
-    const std::any no_output = outputs.get_no_output();
+    const FstOutput no_output = outputs.get_no_output();
     size_t reject_count = 0;
 
     while (out.top_n.size() < top_n_) {
@@ -270,7 +270,12 @@ Result<TopResults> TopNSearcher::search() {
             // instead, which is what the following step expects.
             bool scratch_valid = false;
             while (true) {
-                if (comparator_(no_output, path.arc.output()) == 0) {
+                // A slot that was never assigned an output is empty rather than a
+                // materialised `no_output`; normalise it here because the
+                // comparator belongs to the caller and may `any_cast` it.
+                const FstOutput &arc_output =
+                    path.arc.output().has_value() ? path.arc.output() : no_output;
+                if (comparator_(no_output, arc_output) == 0) {
                     if (!queue_.has_value()) {
                         found_zero = true;
                         break;
@@ -336,12 +341,12 @@ Result<TopResults> TopNSearcher::search() {
 
 // ---- FstUtil ----
 
-Result<std::optional<std::any>> FstUtil::get_from_ints(const FST &fst, std::span<const int32_t> input) {
+Result<std::optional<FstOutput>> FstUtil::get_from_ints(const FST &fst, std::span<const int32_t> input) {
     const auto &outputs = fst.outputs();
-    const std::any no_output = outputs.get_no_output();
+    const FstOutput no_output = outputs.get_no_output();
     Arc arc = Arc::with_outputs(no_output, no_output);
     fst.get_first_arc(arc);
-    std::any output = no_output;
+    FstOutput output = no_output;
     FstBytesReader &reader = fst.reader();
 
     for (const int32_t label : input) {
@@ -350,19 +355,19 @@ Result<std::optional<std::any>> FstUtil::get_from_ints(const FST &fst, std::span
             return err(found.error());
         }
         if (!found.value()) {
-            return std::optional<std::any>{};
+            return std::optional<FstOutput>{};
         }
         outputs.add_assign(output, arc.output_mut());
     }
 
     if (!arc.is_final()) {
-        return std::optional<std::any>{};
+        return std::optional<FstOutput>{};
     }
     outputs.add_assign(output, arc.next_final_output_mut());
-    return std::optional<std::any>(std::move(output));
+    return std::optional<FstOutput>(std::move(output));
 }
 
-Result<std::optional<std::any>> FstUtil::get_from_bytes(const FST &fst, const BytesRef &input) {
+Result<std::optional<FstOutput>> FstUtil::get_from_bytes(const FST &fst, const BytesRef &input) {
     debug_check(fst.metadata().input_type == InputType::kByte1, "get_from_bytes needs a BYTE1 FST");
     const auto bytes = input.as_slice();
     std::vector<int32_t> labels;
@@ -520,7 +525,7 @@ Result<int32_t> FstUtil::binary_search(const FST &fst, const Arc &arc, int32_t t
     return -1 - low;
 }
 
-Result<TopResults> FstUtil::shortest_paths(const FST &fst, const Arc &from_node, std::any start_output,
+Result<TopResults> FstUtil::shortest_paths(const FST &fst, const Arc &from_node, FstOutput start_output,
                                            OutputComparator comparator, size_t top_n, bool allow_empty_string) {
     auto searcher_result = TopNSearcher::by_tie_break(fst, top_n, top_n, std::move(comparator));
     if (!searcher_result.has_value()) {
@@ -560,7 +565,7 @@ VoidResult FstUtil::to_dot(const FST &fst, std::string &out, bool same_rank, boo
     emit_dot_state(out, "initial", "point", "white", "");
 
     const auto &outputs = fst.outputs();
-    const std::any no_output = outputs.get_no_output();
+    const FstOutput no_output = outputs.get_no_output();
     FstBytesReader &reader = fst.reader();
 
     {

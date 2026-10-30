@@ -27,11 +27,11 @@ import std;
 
 namespace lucene {
 
-void FstOutputs::add_assign(std::any &prefix, std::any &output) const {
+void FstOutputs::add_assign(FstOutput &prefix, FstOutput &output) const {
     prefix = add(prefix, output);
 }
 
-VoidResult FstOutputs::write_final_output(const std::any &output, DataOutput &out) const {
+VoidResult FstOutputs::write_final_output(const FstOutput &output, DataOutput &out) const {
     return write(output, out);
 }
 
@@ -44,7 +44,7 @@ VoidResult FstOutputs::skip_output(DataInput &input) const {
     return {};
 }
 
-Result<std::any> FstOutputs::read_final_output(DataInput &input) const {
+Result<FstOutput> FstOutputs::read_final_output(DataInput &input) const {
     return read(input);
 }
 
@@ -52,7 +52,7 @@ VoidResult FstOutputs::skip_final_output(DataInput &input) const {
     return skip_output(input);
 }
 
-Result<std::any> FstOutputs::merge(const std::any &first, const std::any &second) const {
+Result<FstOutput> FstOutputs::merge(const FstOutput &first, const FstOutput &second) const {
     (void)first;
     (void)second;
     return err(LuceneError::unsupported_operation("merge is not supported by " + std::string(type_name())));

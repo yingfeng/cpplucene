@@ -17,6 +17,7 @@
 
 export module lucene_core:fst_util;
 
+import :fst_output;
 import :types;
 import :error;
 
@@ -35,16 +36,16 @@ namespace lucene {
 /// they are equal, positive otherwise.
 ///
 /// **Deviation:** the reference implementation makes the comparator a type parameter of
-/// `TopNSearcher`.  Here the output value is already type erased as `std::any`,
+/// `TopNSearcher`.  Here the output value is already type erased as `FstOutput`,
 /// so the comparator is likewise erased into a `std::function`.
-export using OutputComparator = std::function<int32_t(const std::any &, const std::any &)>;
+export using OutputComparator = std::function<int32_t(const FstOutput &, const FstOutput &)>;
 
 /// One completed search result: the input key plus the output it produces.
 ///
 /// Port of `TopResult<T>` (`util/fst_impl/util.rs`).
 export struct TopResult {
     IntsRef input;
-    std::any output;
+    FstOutput output;
 };
 
 /// The (possibly incomplete) result of a [`TopNSearcher`] run.
@@ -60,15 +61,15 @@ export struct TopResults {
 export class FSTPath {
 public:
     FSTPath() = default;
-    FSTPath(std::any output, const Arc &arc, IntsRefBuilder input, float boost, std::string context, int32_t payload);
+    FSTPath(FstOutput output, const Arc &arc, IntsRefBuilder input, float boost, std::string context, int32_t payload);
 
     /// A copy of this path with a different output and input.
-    [[nodiscard]] FSTPath new_path(std::any output, IntsRefBuilder input) const;
+    [[nodiscard]] FSTPath new_path(FstOutput output, IntsRefBuilder input) const;
 
     [[nodiscard]] std::string to_string() const;
 
     Arc arc;
-    std::any output;
+    FstOutput output;
     IntsRefBuilder input;
     float boost{0.0F};
     std::string context;
@@ -95,7 +96,7 @@ public:
     }
 
     /// Called for a finished result.
-    [[nodiscard]] virtual bool accept_result(const IntsRefBuilder &input, const std::any &output) {
+    [[nodiscard]] virtual bool accept_result(const IntsRefBuilder &input, const FstOutput &output) {
         (void)input;
         (void)output;
         return true;
@@ -123,11 +124,11 @@ public:
     [[nodiscard]] VoidResult add_if_competitive(FSTPath &path);
 
     /// Queues every arc leaving `node`, including the final (END_LABEL) arc.
-    [[nodiscard]] VoidResult add_start_paths(const Arc &node, std::any start_output, bool allow_empty_string,
+    [[nodiscard]] VoidResult add_start_paths(const Arc &node, FstOutput start_output, bool allow_empty_string,
                                              IntsRefBuilder input);
 
     /// [`add_start_paths`] with the suggester bookkeeping fields.
-    [[nodiscard]] VoidResult add_start_paths_with_context(const Arc &node, std::any start_output,
+    [[nodiscard]] VoidResult add_start_paths_with_context(const Arc &node, FstOutput start_output,
                                                           bool allow_empty_string, IntsRefBuilder input, float boost,
                                                           std::string context, int32_t payload);
 
@@ -156,11 +157,11 @@ private:
 /// Port of `Util` (`util/fst_impl/util.rs`).
 export struct FstUtil {
     /// The output for `input`, or `std::nullopt` when the FST does not accept it.
-    [[nodiscard]] static Result<std::optional<std::any>> get_from_ints(const FST &fst,
+    [[nodiscard]] static Result<std::optional<FstOutput>> get_from_ints(const FST &fst,
                                                                         std::span<const int32_t> input);
 
     /// [`get_from_ints`] for a byte-oriented (BYTE1) FST.
-    [[nodiscard]] static Result<std::optional<std::any>> get_from_bytes(const FST &fst, const BytesRef &input);
+    [[nodiscard]] static Result<std::optional<FstOutput>> get_from_bytes(const FST &fst, const BytesRef &input);
 
     /// Reads the first arc leaving `follow` whose label is `>= label`.
     ///
@@ -176,7 +177,7 @@ export struct FstUtil {
 
     /// The `top_n` cheapest completions reachable from `from_node`.
     [[nodiscard]] static Result<TopResults> shortest_paths(const FST &fst, const Arc &from_node,
-                                                            std::any start_output, OutputComparator comparator,
+                                                            FstOutput start_output, OutputComparator comparator,
                                                             size_t top_n, bool allow_empty_string);
 
     /// Renders the FST in GraphViz' dot language, appended to `out`.

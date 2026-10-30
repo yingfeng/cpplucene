@@ -77,7 +77,7 @@ FstBuilder::Node *FstBuilder::child_for(Node &node, int32_t label) {
     return raw;
 }
 
-Result<bool> FstBuilder::add(std::span<const int32_t> key, std::any output) {
+Result<bool> FstBuilder::add(std::span<const int32_t> key, FstOutput output) {
     if (finished_) {
         return err(LuceneError::illegal_state("add() after finish()"));
     }
@@ -97,7 +97,7 @@ void FstBuilder::compute_outputs(Node &node, bool is_root) {
         node.output = node.final_output;
         return;
     }
-    std::any common_output;
+    FstOutput common_output;
     bool first = true;
     for (auto &arc : node.arcs) {
         compute_outputs(*arc.child, false);
@@ -158,7 +158,7 @@ int64_t FstBuilder::serialize(Node &node) {
         }
 
         // The output that applies when the path ends at the child node.
-        std::any next_final_output = outputs_->get_no_output();
+        FstOutput next_final_output = outputs_->get_no_output();
         bool has_final_output = false;
         if (child.is_final) {
             next_final_output = outputs_->subtract(child.final_output, child.output);

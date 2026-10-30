@@ -157,7 +157,7 @@ public:
     CompiledIndex &operator=(CompiledIndex &&) noexcept = default;
 
     [[nodiscard]] int64_t num_bytes() const noexcept { return metadata_.num_bytes; }
-    [[nodiscard]] const std::optional<std::any> &empty_output() const noexcept { return metadata_.empty_output; }
+    [[nodiscard]] const std::optional<FstOutput> &empty_output() const noexcept { return metadata_.empty_output; }
     [[nodiscard]] const FST &fst() const noexcept { return *fst_; }
 
     /// Writes the FST metadata to `meta_out` and the FST bytes to `out`
@@ -216,8 +216,8 @@ struct PendingBlock {
 /// `fst_enum` stack; the writer only needs "walk everything once", so a depth
 /// first walk over the arcs covers it.
 [[nodiscard]] VoidResult walk_fst(const FST &fst, const FstOutputs &outputs, std::vector<int32_t> &key,
-                                  const Arc &follow, const std::any &follow_output,
-                                  const std::function<VoidResult(std::span<const int32_t>, const std::any &)> &visit) {
+                                  const Arc &follow, const FstOutput &follow_output,
+                                  const std::function<VoidResult(std::span<const int32_t>, const FstOutput &)> &visit) {
     Arc arc;
     if (auto read = fst.read_first_target_arc(follow, arc, fst.reader()); !read) {
         return read;
@@ -226,7 +226,7 @@ struct PendingBlock {
         if (arc.label() == END_LABEL) {
             // The virtual arc inserted for a final node: its output completes
             // the key.
-            const std::any key_output = outputs.add(follow_output, arc.output());
+            const FstOutput key_output = outputs.add(follow_output, arc.output());
             if (auto visited = visit(key, key_output); !visited) {
                 return visited;
             }
@@ -242,7 +242,7 @@ struct PendingBlock {
         debug_check(arc.is_final() || arc.target() > 0, "a non-final node without arcs accepts no key");
         if (arc.is_final() || arc.target() > 0) {
             key.push_back(arc.label());
-            const std::any child_output = outputs.add(follow_output, arc.output());
+            const FstOutput child_output = outputs.add(follow_output, arc.output());
             if (auto walked = walk_fst(fst, outputs, key, arc, child_output, visit); !walked) {
                 return walked;
             }
@@ -267,13 +267,13 @@ VoidResult append_index(const CompiledIndex &sub_index, FstBuilder &fst_compiler
     sub_index.fst().get_first_arc(start_arc);
     return walk_fst(sub_index.fst(), outputs, key, start_arc, outputs.get_no_output(),
                     [&fst_compiler, &scratch_ints_ref](std::span<const int32_t> input,
-                                                       const std::any &output) -> VoidResult {
+                                                       const FstOutput &output) -> VoidResult {
                         if (auto copied = scratch_ints_ref.copy_ints(input, 0, input.size()); !copied) {
                             return copied;
                         }
                         auto added = fst_compiler.add(
                                 std::span<const int32_t>(scratch_ints_ref.ints().data(), scratch_ints_ref.length()),
-                                std::any(output));
+                                FstOutput(output));
                         if (!added) {
                             return err(std::move(added.error()));
                         }
@@ -337,7 +337,7 @@ Result<PendingBlock> PendingBlock::compile_index(std::vector<PendingBlock> &bloc
         return err(std::move(to_ints.error()));
     }
     auto added = fst_compiler.add(std::span<const int32_t>(scratch_ints_ref.ints().data(), scratch_ints_ref.length()),
-                                  std::any(std::move(first_key)));
+                                  FstOutput(std::move(first_key)));
     if (!added) {
         return err(std::move(added.error()));
     }
@@ -489,7 +489,7 @@ public:
         if (!root.index->empty_output().has_value()) {
             return err(LuceneError::illegal_state("root terms index has no empty output"));
         }
-        const auto *root_code = std::any_cast<BytesRef>(&root.index->empty_output().value());
+        const auto *root_code = root.index->empty_output().value().as_ptr<BytesRef>();
         if (root_code == nullptr) {
             return err(LuceneError::illegal_state("the root output is not a byte sequence"));
         }

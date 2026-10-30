@@ -30,13 +30,7 @@ using namespace lucene;
 
 namespace {
 
-const BytesRef &as_bytes(const std::any &value) {
-    static const BytesRef empty;
-    if (value.type() != typeid(BytesRef)) {
-        return empty;
-    }
-    return std::any_cast<const BytesRef &>(value);
-}
+const BytesRef &as_bytes(const FstOutput &value) { return value.as<BytesRef>(); }
 
 /// A [`FstBytesReader`] over a buffer, used to exercise `FST::read_label`.
 class BufferReader final : public FstBytesReader {
@@ -81,7 +75,7 @@ TEST(FstMetadataTest, RoundTripsWithAnEmptyOutput) {
     FSTMetadata metadata;
     metadata.input_type = InputType::kByte2;
     metadata.outputs = &outputs;
-    metadata.empty_output = std::any{BytesRef::from_string("empty-output")};
+    metadata.empty_output = FstOutput{BytesRef::from_string("empty-output")};
     metadata.start_node = 42;
     metadata.num_bytes = 123456;
 
@@ -152,7 +146,7 @@ TEST(FstMetadataTest, RejectsAForeignOrCorruptHeader) {
 }
 
 TEST(FstArcTest, ExposesFlagsAndCopiesAllFields) {
-    Arc arc = Arc::with_outputs(std::any{BytesRef()}, std::any{BytesRef()});
+    Arc arc = Arc::with_outputs(FstOutput{BytesRef()}, FstOutput{BytesRef()});
     arc.set_label('a');
     arc.set_target(77);
     arc.set_flags(static_cast<uint8_t>(BIT_FINAL_ARC | BIT_LAST_ARC | BIT_ARC_HAS_OUTPUT));
@@ -164,7 +158,7 @@ TEST(FstArcTest, ExposesFlagsAndCopiesAllFields) {
     arc.set_arc_idx(2);
     arc.set_pos_arcs_start(11);
     arc.set_presence_index(1);
-    arc.set_next_final_output(std::any{BytesRef::from_string("final")});
+    arc.set_next_final_output(FstOutput{BytesRef::from_string("final")});
 
     EXPECT_TRUE(arc.is_final());
     EXPECT_TRUE(arc.is_last());
@@ -216,7 +210,7 @@ TEST(FstTest, FirstArcReflectsTheEmptyOutput) {
     FSTMetadata with_empty;
     with_empty.outputs = &outputs;
     with_empty.start_node = 0;
-    with_empty.empty_output = std::any{BytesRef::from_string("x")};
+    with_empty.empty_output = FstOutput{BytesRef::from_string("x")};
     FST fst(with_empty, std::make_unique<BufferReader>(std::span<const uint8_t>()));
     fst.get_first_arc(arc);
     EXPECT_TRUE(arc.is_final());
@@ -236,7 +230,7 @@ TEST(FstTest, ReadEndArcOnlyAppliesToFinalArcs) {
     Arc follow;
     follow.set_flags(BIT_FINAL_ARC);
     follow.set_target(0);
-    follow.set_next_final_output(std::any{BytesRef::from_string("final")});
+    follow.set_next_final_output(FstOutput{BytesRef::from_string("final")});
 
     Arc arc;
     ASSERT_TRUE(read_end_arc(follow, arc));
@@ -336,7 +330,7 @@ TEST(FstTest, FollowsAFinalArcIntoTheEndLabelArc) {
     Arc follow;
     follow.set_flags(BIT_FINAL_ARC);
     follow.set_target(0);
-    follow.set_next_final_output(std::any{BytesRef::from_string("f")});
+    follow.set_next_final_output(FstOutput{BytesRef::from_string("f")});
 
     Arc arc;
     ASSERT_TRUE(fst.read_first_target_arc(follow, arc, fst.reader()).has_value());
@@ -414,7 +408,7 @@ TEST(FstTest, FindsTheEndLabelOnlyForFinalArcs) {
     Arc follow;
     follow.set_flags(BIT_FINAL_ARC);
     follow.set_target(0);
-    follow.set_next_final_output(std::any{BytesRef::from_string("z")});
+    follow.set_next_final_output(FstOutput{BytesRef::from_string("z")});
 
     Arc arc;
     auto found = fst.find_target_arc(END_LABEL, &follow, arc, fst.reader());

@@ -83,7 +83,7 @@ VoidResult write_label(DataOutput &out, InputType input_type, int32_t label) {
     return err(LuceneError::illegal_state("invalid input type"));
 }
 
-Arc Arc::with_outputs(std::any output, std::any next_final_output) {
+Arc Arc::with_outputs(FstOutput output, FstOutput next_final_output) {
     Arc arc;
     arc.output_ = std::move(output);
     arc.next_final_output_ = std::move(next_final_output);
@@ -378,7 +378,12 @@ VoidResult FST::read_arc(Arc &arc, FstBytesReader &reader) const {
         }
         arc.set_output(output.value());
     } else {
-        arc.set_output(outputs.get_no_output());
+        // An empty `FstOutput` is NO_OUTPUT for every outputs implementation (they
+        // answer their empty value for a slot that does not hold their type), and
+        // unlike `get_no_output()` it does not allocate: a `BytesRef` does not fit
+        // the small-object buffer.  Reading an arc is on the seek path of every
+        // term, so this used to allocate twice per arc.
+        arc.set_output(FstOutput{});
     }
 
     if (has_flag(arc.flags(), BIT_ARC_HAS_FINAL_OUTPUT)) {
@@ -388,7 +393,7 @@ VoidResult FST::read_arc(Arc &arc, FstBytesReader &reader) const {
         }
         arc.set_next_final_output(output.value());
     } else {
-        arc.set_next_final_output(outputs.get_no_output());
+        arc.set_next_final_output(FstOutput{});
     }
 
     if (has_flag(arc.flags(), BIT_STOP_NODE)) {

@@ -31,12 +31,9 @@ namespace lucene {
 
 namespace {
 
-int64_t as_int(const std::any &value) {
-    if (value.type() != typeid(int64_t)) {
-        return 0;
-    }
-    return std::any_cast<int64_t>(value);
-}
+/// `FstOutput::get` already answers 0 for a slot that holds nothing or another
+/// type, which is this algebra's NO_OUTPUT.
+int64_t as_int(const FstOutput &value) { return value.get<int64_t>(); }
 
 } // namespace
 
@@ -45,47 +42,47 @@ const FstPositiveIntOutputs &FstPositiveIntOutputs::singleton() {
     return instance;
 }
 
-std::any FstPositiveIntOutputs::common(const std::any &output1, const std::any &output2) const {
+FstOutput FstPositiveIntOutputs::common(const FstOutput &output1, const FstOutput &output2) const {
     const int64_t first = as_int(output1);
     const int64_t second = as_int(output2);
     if (first == 0 || second == 0) {
         return get_no_output();
     }
     debug_check(first > 0 && second > 0, "PositiveIntOutputs only accepts non-negative values");
-    return std::any{std::min(first, second)};
+    return FstOutput{std::min(first, second)};
 }
 
-std::any FstPositiveIntOutputs::subtract(const std::any &output, const std::any &inc) const {
+FstOutput FstPositiveIntOutputs::subtract(const FstOutput &output, const FstOutput &inc) const {
     const int64_t value = as_int(output);
     const int64_t increment = as_int(inc);
     debug_check(value >= increment, "the subtracted output must not be greater than the output");
     if (increment == 0) {
-        return std::any{value};
+        return FstOutput{value};
     }
     if (value == increment) {
         return get_no_output();
     }
-    return std::any{value - increment};
+    return FstOutput{value - increment};
 }
 
-std::any FstPositiveIntOutputs::add(const std::any &prefix, const std::any &output) const {
+FstOutput FstPositiveIntOutputs::add(const FstOutput &prefix, const FstOutput &output) const {
     const int64_t first = as_int(prefix);
     const int64_t second = as_int(output);
     if (first == 0) {
-        return std::any{second};
+        return FstOutput{second};
     }
     if (second == 0) {
-        return std::any{first};
+        return FstOutput{first};
     }
-    return std::any{first + second};
+    return FstOutput{first + second};
 }
 
-VoidResult FstPositiveIntOutputs::write(const std::any &output, DataOutput &out) const {
+VoidResult FstPositiveIntOutputs::write(const FstOutput &output, DataOutput &out) const {
     debug_check(as_int(output) >= 0, "PositiveIntOutputs only accepts non-negative values");
     return out.write_vlong(as_int(output));
 }
 
-Result<std::any> FstPositiveIntOutputs::read(DataInput &input) const {
+Result<FstOutput> FstPositiveIntOutputs::read(DataInput &input) const {
     auto value = input.read_vlong();
     if (!value.has_value()) {
         return err(value.error());
@@ -93,22 +90,22 @@ Result<std::any> FstPositiveIntOutputs::read(DataInput &input) const {
     if (value.value() == 0) {
         return get_no_output();
     }
-    return std::any{value.value()};
+    return FstOutput{value.value()};
 }
 
-std::any FstPositiveIntOutputs::get_no_output() const {
-    return std::any{int64_t{0}};
+FstOutput FstPositiveIntOutputs::get_no_output() const {
+    return FstOutput{int64_t{0}};
 }
 
-bool FstPositiveIntOutputs::is_no_output(const std::any &output) const {
+bool FstPositiveIntOutputs::is_no_output(const FstOutput &output) const {
     return as_int(output) == 0;
 }
 
-std::string FstPositiveIntOutputs::output_to_string(const std::any &output) const {
+std::string FstPositiveIntOutputs::output_to_string(const FstOutput &output) const {
     return std::to_string(as_int(output));
 }
 
-int64_t FstPositiveIntOutputs::ram_bytes_used(const std::any & /*output*/) const {
+int64_t FstPositiveIntOutputs::ram_bytes_used(const FstOutput & /*output*/) const {
     return static_cast<int64_t>(sizeof(int64_t));
 }
 

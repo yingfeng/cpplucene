@@ -17,6 +17,7 @@
 
 export module lucene_core:fst_builder;
 
+import :fst_output;
 import :types;
 import :error;
 
@@ -72,7 +73,7 @@ public:
     /// Adds one key with its output; keys must arrive in strictly increasing
     /// order.  Returns `false` when the key was already present (the last
     /// output wins, like Lucene's `add`).
-    [[nodiscard]] Result<bool> add(std::span<const int32_t> key, std::any output);
+    [[nodiscard]] Result<bool> add(std::span<const int32_t> key, FstOutput output);
 
     /// Serializes the automaton.  Must be called once, after all keys.
     [[nodiscard]] Result<BuildResult> finish();
@@ -83,14 +84,14 @@ private:
     struct ArcEntry {
         int32_t label{0};
         Node *child{nullptr};
-        std::any output{};
+        FstOutput output{};
     };
 
     struct Node {
         std::vector<ArcEntry> arcs;
         bool is_final{false};
-        std::any final_output{};
-        std::any output{};
+        FstOutput final_output{};
+        FstOutput output{};
         int64_t address{NON_FINAL_END_NODE};
 
         [[nodiscard]] bool has_arcs() const noexcept { return !arcs.empty(); }

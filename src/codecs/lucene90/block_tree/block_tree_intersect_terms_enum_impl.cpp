@@ -48,9 +48,9 @@ namespace lucene {
 
 namespace {
 
-/// The FST outputs are type erased (`std::any`); a missing slot is NO_OUTPUT.
-const BytesRef &arc_output(const std::any &slot) {
-    const auto *output = std::any_cast<BytesRef>(&slot);
+/// The FST outputs are type erased (`FstOutput`); a missing slot is NO_OUTPUT.
+const BytesRef &arc_output(const FstOutput &slot) {
+    const auto *output = slot.as_ptr<BytesRef>();
     return output != nullptr ? *output : no_output();
 }
 
@@ -595,7 +595,7 @@ VoidResult IntersectTermsEnum::get_frame(size_t ord) {
 
 Result<size_t> IntersectTermsEnum::get_arc(size_t ord) {
     while (arcs_.size() <= ord) {
-        arcs_.push_back(Arc::with_outputs(std::any{BytesRef{}}, std::any{BytesRef{}}));
+        arcs_.push_back(Arc::with_outputs(FstOutput{BytesRef{}}, FstOutput{BytesRef{}}));
     }
     return ord;
 }

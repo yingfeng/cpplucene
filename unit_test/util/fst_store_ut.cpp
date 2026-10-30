@@ -52,7 +52,7 @@ Built build_fst() {
     FstBuilder builder(outputs, InputType::kByte1);
     const std::vector<std::pair<std::string, std::string>> entries{{"a", "1"}, {"ab", "22"}, {"b", "3"}};
     for (const auto &[key, output] : entries) {
-        auto added = builder.add(key_of(key), std::any{BytesRef::from_string(output)});
+        auto added = builder.add(key_of(key), FstOutput{BytesRef::from_string(output)});
         EXPECT_TRUE(added.has_value());
     }
     auto result = builder.finish();
@@ -68,7 +68,7 @@ std::string lookup(FST &fst, std::string_view key) {
     if (!value.has_value() || !value->has_value()) {
         return "<miss>";
     }
-    const auto &bytes = std::any_cast<const BytesRef &>(value->value());
+    const auto &bytes = (value->value()).get<BytesRef>();
     return std::string(reinterpret_cast<const char *>(bytes.as_slice().data()), bytes.as_slice().size());
 }
 
