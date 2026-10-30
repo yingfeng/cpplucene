@@ -7,6 +7,16 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_dependency(Threads)
 find_dependency(ZLIB)
 
+# A ThinLTO build publishes `-flto=thin` with the target (the archive holds LLVM
+# bitcode, see the comment next to it in src/CMakeLists.txt).  Only clang can link
+# that, so say it here instead of letting the linker report an unrecognized file.
+if (@LUCENE_CORE_BITCODE_ARCHIVE@ AND NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    message(WARNING
+            "lucene_core: this package was built with ThinLTO, so its archive holds "
+            "LLVM bitcode and only clang can link it.  Rebuild the library with "
+            "-DLUCENE_CORE_LTO=OFF to consume it from another toolchain.")
+endif ()
+
 include("${CMAKE_CURRENT_LIST_DIR}/lucene_coreTargets.cmake")
 
 # `lucene_core` is a C++23 module library: consuming it means compiling the module

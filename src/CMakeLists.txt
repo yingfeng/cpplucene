@@ -82,6 +82,26 @@ target_link_libraries(lucene_core PUBLIC Threads::Threads)
 find_package(ZLIB REQUIRED)
 target_link_libraries(lucene_core PUBLIC ZLIB::ZLIB)
 
+# A ThinLTO build stores LLVM bitcode in the archive instead of machine code, so
+# the *link* step of whoever consumes the installed library has to run LTO too —
+# otherwise GNU ld answers "liblucene_core.a: error adding symbols: file format
+# not recognized" (it has no way to read the members).  `INTERPROCEDURAL_OPTIMIZATION`
+# only adds the flag to this build's own link lines, so the requirement is
+# published with the target: a consumer that links `lucene_core::lucene_core`
+# (or uses the pkg-config file) gets the flag without having to know about it.
+#
+# The flag is emitted for the configuration that was actually built, not for the
+# consumer's: a Release library is bitcode no matter what the consumer builds.
+if (LUCENE_CORE_LTO AND CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND
+        "${CMAKE_BUILD_TYPE}" STREQUAL "Release")
+    target_link_options(lucene_core INTERFACE -flto=thin)
+    set(LUCENE_CORE_PC_LTO_FLAG "-flto=thin ")
+    set(LUCENE_CORE_BITCODE_ARCHIVE ON)
+else ()
+    set(LUCENE_CORE_PC_LTO_FLAG "")
+    set(LUCENE_CORE_BITCODE_ARCHIVE OFF)
+endif ()
+
 # clang 20 (20.1.8) crashes in LLVM IR generation on these two implementation
 # units of a Release build: "Generating code for declaration
 # 'std::__uniq_ptr_data<lucene::NumericDocValues, ...>::__uniq_ptr_data'"

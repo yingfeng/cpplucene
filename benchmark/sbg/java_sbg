@@ -1,0 +1,7 @@
+#!/bin/sh
+# Wrapper so `run_bench.py --driver java=.../java_sbg` can spawn the Java driver.
+# Override with JAVA_HOME / LUCENE_JARS / SBG_CLASSES when the toolchain moves.
+JAVA=${JAVA_HOME:-$HOME/codebase/toolchain/jdk-21.0.13+9}/bin/java
+JARS=${LUCENE_JARS:-$HOME/codebase/toolchain/lib}
+CLASSES=${SBG_CLASSES:-$HOME/codebase/workspace/clucene/benchmark/sbg/classes}
+exec "$JAVA" -Xmx3g -cp "$CLASSES:$JARS/*" java_sbg "$@"

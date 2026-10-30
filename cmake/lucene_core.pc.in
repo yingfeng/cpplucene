@@ -11,6 +11,8 @@ Name: lucene_core
 Description: @PROJECT_DESCRIPTION@
 Version: @PROJECT_VERSION@
 Requires.private: zlib
-Libs: -L${libdir} -llucene_core
+# A ThinLTO build ships LLVM bitcode, so linking has to run LTO as well; the
+# flag is empty for a build without it.
+Libs: @LUCENE_CORE_PC_LTO_FLAG@-L${libdir} -llucene_core
 Libs.private: -pthread
 Cflags: -I${includedir} -std=c++23
