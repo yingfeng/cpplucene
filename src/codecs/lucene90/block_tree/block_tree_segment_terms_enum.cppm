@@ -348,8 +348,8 @@ public:
     [[nodiscard]] BytesRefBuilder &term_builder() noexcept { return term_; }
     [[nodiscard]] const BytesRefBuilder &term_builder() const noexcept { return term_; }
     [[nodiscard]] std::span<const uint8_t> term_bytes() const noexcept { return term_.get_bytes_ref().as_slice(); }
-    [[nodiscard]] std::vector<SegmentTermsEnumFrame> &stack() noexcept { return stack_; }
-    [[nodiscard]] const std::vector<SegmentTermsEnumFrame> &stack() const noexcept { return stack_; }
+    [[nodiscard]] std::deque<SegmentTermsEnumFrame> &stack() noexcept { return stack_; }
+    [[nodiscard]] const std::deque<SegmentTermsEnumFrame> &stack() const noexcept { return stack_; }
     [[nodiscard]] std::unique_ptr<IndexInput> &input() noexcept { return input_; }
     [[nodiscard]] OutputAccumulator &output_accumulator() noexcept { return output_accumulator_; }
     [[nodiscard]] std::vector<Arc> &arcs() noexcept { return arcs_; }
@@ -382,7 +382,10 @@ private:
     /// Lazily cloned `.tim` input (the reference implementation: `input: Option<I>`).
     std::unique_ptr<IndexInput> input_{};
     /// `stack[0]` is the static frame used for seek by term state.
-    std::vector<SegmentTermsEnumFrame> stack_{};
+    /// A `deque`, not a `vector`: a seek pushes one frame per byte of the term and
+    /// a frame owns five buffers, so growing a vector reallocated and moved all of
+    /// them (and that move was one of the hottest allocator callers of a lookup).
+    std::deque<SegmentTermsEnumFrame> stack_{};
     size_t current_frame_idx_{STATIC_FRAME_IDX};
     bool term_exists_{false};
     /// Length of the prefix the FST walk already matched; `-1` means "equal to

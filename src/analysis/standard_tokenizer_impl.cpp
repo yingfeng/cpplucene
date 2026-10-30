@@ -168,7 +168,10 @@ constexpr bool is_word_start(WordBreakClass cls) noexcept {
 
 } // namespace
 
-WordBreakClass word_break_class(char32_t cp) noexcept {
+namespace {
+
+/// The class of every code point, by the range scans below.
+WordBreakClass word_break_class_slow(char32_t cp) noexcept {
     if (char_is_whitespace(cp)) {
         return WordBreakClass::Other;
     }
@@ -219,6 +222,29 @@ WordBreakClass word_break_class(char32_t cp) noexcept {
         return WordBreakClass::ExtendNumLet;
     }
     return WordBreakClass::Other;
+}
+
+/// ASCII answers from a table: the slow path binary-searches a dozen sorted
+/// tables, which every character of a query token paid for.  Built from the same
+/// function, so the classification cannot drift from the full one.
+const std::array<WordBreakClass, 0x80> &ascii_classes() {
+    static const std::array<WordBreakClass, 0x80> table = [] {
+        std::array<WordBreakClass, 0x80> built{};
+        for (size_t i = 0; i < built.size(); ++i) {
+            built[i] = word_break_class_slow(static_cast<char32_t>(i));
+        }
+        return built;
+    }();
+    return table;
+}
+
+} // namespace
+
+WordBreakClass word_break_class(char32_t cp) noexcept {
+    if (cp < 0x80) {
+        return ascii_classes()[static_cast<size_t>(cp)];
+    }
+    return word_break_class_slow(cp);
 }
 
 StandardTokenizer::StandardTokenizer(size_t max_token_length)
