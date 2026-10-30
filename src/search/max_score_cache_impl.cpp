@@ -33,18 +33,44 @@ namespace lucene {
 MaxScoreCache::MaxScoreCache(ImpactsSource *impacts_source, std::shared_ptr<const SimScorer> scorer)
         : impacts_source_(impacts_source),
           scorer_(std::move(scorer)),
-          global_max_score_(scorer_->score(std::numeric_limits<float>::max(), 1)) {}
+          global_max_score_(scorer_->score(std::numeric_limits<float>::max(), 1)) {
+    // BM25 is the default similarity and the one every scoring loop runs with;
+    // hoisting its coefficients turns one impact's score into a multiply-add.
+    if (const auto *bm25 = dynamic_cast<const BM25Scorer *>(scorer_.get()); bm25 != nullptr) {
+        bm25_weight_ = bm25->weight();
+        bm25_norm_inverse_ = bm25->norm_inverse_cache();
+    }
+}
+
+Result<Impacts *> MaxScoreCache::refresh_impacts() {
+    auto impacts = impacts_source_->get_impacts();
+    if (!impacts.has_value()) {
+        return std::unexpected(std::move(impacts.error()));
+    }
+    impacts_ = impacts.value();
+    return impacts_;
+}
+
+Result<Impacts *> MaxScoreCache::current_impacts() const {
+    if (impacts_ == nullptr) {
+        auto impacts = impacts_source_->get_impacts();
+        if (!impacts.has_value()) {
+            return std::unexpected(std::move(impacts.error()));
+        }
+        impacts_ = impacts.value();
+    }
+    return impacts_;
+}
 
 Result<int32_t> MaxScoreCache::advance_shallow(int32_t target) {
     auto advanced = impacts_source_->advance_shallow(target);
     if (!advanced.has_value()) {
         return std::unexpected(std::move(advanced.error()));
     }
-    auto impacts = impacts_source_->get_impacts();
-    if (!impacts.has_value()) {
-        return std::unexpected(std::move(impacts.error()));
+    if (auto refreshed = refresh_impacts(); !refreshed.has_value()) {
+        return std::unexpected(std::move(refreshed.error()));
     }
-    return impacts.value()->get_doc_id_upto(0);
+    return impacts_->get_doc_id_upto(0);
 }
 
 VoidResult MaxScoreCache::ensure_cache_size(size_t size) {
@@ -55,7 +81,7 @@ VoidResult MaxScoreCache::ensure_cache_size(size_t size) {
 }
 
 Result<std::optional<size_t>> MaxScoreCache::get_level(int32_t upto) const {
-    auto impacts = impacts_source_->get_impacts();
+    auto impacts = current_impacts();
     if (!impacts.has_value()) {
         return std::unexpected(std::move(impacts.error()));
     }
@@ -85,7 +111,7 @@ Result<float> MaxScoreCache::get_max_score_with_level(size_t level) {
     if (auto grown = ensure_cache_size(level + 1); !grown.has_value()) {
         return std::unexpected(std::move(grown.error()));
     }
-    auto impacts = impacts_source_->get_impacts();
+    auto impacts = current_impacts();
     if (!impacts.has_value()) {
         return std::unexpected(std::move(impacts.error()));
     }
@@ -98,7 +124,7 @@ Result<float> MaxScoreCache::get_max_score_with_level(size_t level) {
         }
         float max_score = 0.0F;
         for (const auto &impact : level_impacts.value()) {
-            const float score = scorer_->score(static_cast<float>(impact.freq), impact.norm);
+            const float score = score_of(impact);
             if (score > max_score) {
                 max_score = score;
             }
@@ -109,8 +135,44 @@ Result<float> MaxScoreCache::get_max_score_with_level(size_t level) {
     return entry.score;
 }
 
+Result<int32_t> MaxScoreCache::advance_shallow_and_block_max(int32_t target, float &max_score) {
+    auto advanced = impacts_source_->advance_shallow(target);
+    if (!advanced.has_value()) {
+        return std::unexpected(std::move(advanced.error()));
+    }
+    if (auto refreshed = refresh_impacts(); !refreshed.has_value()) {
+        return std::unexpected(std::move(refreshed.error()));
+    }
+    auto impacts = current_impacts();
+    if (!impacts.has_value()) {
+        return std::unexpected(std::move(impacts.error()));
+    }
+    const int32_t level_upto = impacts.value()->get_doc_id_upto(0);
+    if (auto grown = ensure_cache_size(1); !grown.has_value()) {
+        return std::unexpected(std::move(grown.error()));
+    }
+    CacheEntry &entry = cache_[0];
+    if (entry.upto < level_upto) {
+        auto level_impacts = impacts.value()->get_impacts(0);
+        if (!level_impacts.has_value()) {
+            return std::unexpected(std::move(level_impacts.error()));
+        }
+        float block_max = 0.0F;
+        for (const auto &impact : level_impacts.value()) {
+            const float score = score_of(impact);
+            if (score > block_max) {
+                block_max = score;
+            }
+        }
+        entry.score = block_max;
+        entry.upto = level_upto;
+    }
+    max_score = entry.score;
+    return level_upto;
+}
+
 Result<std::optional<size_t>> MaxScoreCache::get_skip_level(float min_score) {
-    auto impacts = impacts_source_->get_impacts();
+    auto impacts = current_impacts();
     if (!impacts.has_value()) {
         return std::unexpected(std::move(impacts.error()));
     }
@@ -137,7 +199,7 @@ Result<int32_t> MaxScoreCache::get_skip_up_to(float min_score) {
     if (!level.value().has_value()) {
         return -1;
     }
-    auto impacts = impacts_source_->get_impacts();
+    auto impacts = current_impacts();
     if (!impacts.has_value()) {
         return std::unexpected(std::move(impacts.error()));
     }

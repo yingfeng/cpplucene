@@ -241,8 +241,57 @@ public:
 
     // ---- PostingsEnum ----
 
-    [[nodiscard]] Result<int32_t> freq() override;
-    [[nodiscard]] Result<int32_t> next_position() override;
+    /// The term frequency of the current document.
+    ///
+    /// The first document of a block pays for decoding the whole frequency
+    /// block; every other document is one array read here, which is why this
+    /// stays in the interface (a caller with a concrete pointer inlines it, and
+    /// only the block decode goes out of line).
+    [[nodiscard]] Result<int32_t> freq() override {
+        if (!needs_freq_) {
+            return 1;
+        }
+        if (has_freq_fp_) {
+            if (auto decoded = decode_freq_block(); !decoded.has_value()) {
+                return std::unexpected(std::move(decoded.error()));
+            }
+        }
+        return freq_buffer_[doc_buffer_upto_ - 1];
+    }
+    /// The next position of the current document.
+    ///
+    /// Defined here because position decoding is the phrase matcher's inner
+    /// loop: a caller holding this concrete type (through
+    /// `PostingsAndFreq::concrete`) inlines the buffer read and only leaves the
+    /// block refill out of line.
+    [[gnu::always_inline]] [[nodiscard]] Result<int32_t> next_position() override {
+        if (!needs_pos_) {
+            return -1;
+        }
+        debug_check(pos_doc_buffer_upto_ <= doc_buffer_upto_);
+        if (pos_doc_buffer_upto_ != doc_buffer_upto_) {
+            if (auto accumulated = accumulate_pending_positions(); !accumulated.has_value()) {
+                return std::unexpected(std::move(accumulated.error()));
+            }
+            position_ = 0;
+            last_start_offset_ = 0;
+        }
+        if (pos_buffer_upto_ == static_cast<int32_t>(ForUtil::BLOCK_SIZE)) {
+            if (auto refilled = refill_positions(); !refilled.has_value()) {
+                return std::unexpected(std::move(refilled.error()));
+            }
+            pos_buffer_upto_ = 0;
+        }
+        position_ += pos_delta_buffer_[pos_buffer_upto_];
+        if (needs_offsets_or_payloads_) {
+            if (auto accumulated = accumulate_payload_and_offsets(); !accumulated.has_value()) {
+                return std::unexpected(std::move(accumulated.error()));
+            }
+        }
+        pos_buffer_upto_ += 1;
+        pos_pending_count_ -= 1;
+        return position_;
+    }
     [[nodiscard]] Result<int32_t> start_offset() const override;
     [[nodiscard]] Result<int32_t> end_offset() const override;
     [[nodiscard]] Result<std::optional<std::span<const uint8_t>>> get_payload() const override;
@@ -255,6 +304,9 @@ public:
 
 private:
     BlockPostingsEnum() = default;
+
+    /// Decodes the frequency block the current document is in.
+    [[nodiscard]] VoidResult decode_freq_block();
 
     [[nodiscard]] VoidResult refill_full_block();
     [[nodiscard]] VoidResult refill_remainder();
@@ -360,6 +412,10 @@ private:
     int64_t level1_pay_end_fp_{0};
     int32_t level1_block_pay_upto_{0};
     std::vector<uint8_t> level1_serialized_impacts_;
+    /// The used length of the impact buffers above.  They only ever grow, so that
+    /// reading one block does not re-size (and zero-fill) them again.
+    size_t level0_impacts_len_{0};
+    size_t level1_impacts_len_{0};
     /// The single [`ImpactsImpl`] this enum hands out; built on first use.
     std::unique_ptr<ImpactsImpl> impacts_cache_;
 

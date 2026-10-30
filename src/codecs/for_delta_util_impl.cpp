@@ -434,7 +434,7 @@ VoidResult ForDeltaUtil::decode_and_prefix_sum(PostingDecodingUtil &pdu, int32_t
     if (ints.size() < BLOCK_SIZE) {
         return err(LuceneError::illegal_argument("decode_and_prefix_sum requires 128 values"));
     }
-    auto token = pdu.input().read_byte();
+    auto token = pdu.read_byte();
     if (!token) {
         return std::unexpected(std::move(token.error()));
     }

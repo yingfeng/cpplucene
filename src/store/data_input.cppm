@@ -114,7 +114,7 @@ export [[nodiscard]] VoidResult read_ints_bulk(DataInput &input,
 /// [`DataInput`] backed by a byte array.  Port of `ByteArrayDataInput`.
 ///
 /// The input never copies the bytes; the caller keeps the buffer alive.
-export class ByteArrayDataInput : public DataInput {
+export class ByteArrayDataInput final : public DataInput {
 public:
     ByteArrayDataInput() = default;
     explicit ByteArrayDataInput(std::span<const uint8_t> bytes);
@@ -131,12 +131,54 @@ public:
     [[nodiscard]] bool eof() const noexcept { return pos_ == limit_; }
     [[nodiscard]] std::span<const uint8_t> bytes() const noexcept { return bytes_; }
 
-    [[nodiscard]] Result<uint8_t> read_byte() override;
+    /// The three byte-level readers are defined here rather than out of line:
+    /// this class is `final`, so a caller holding a `ByteArrayDataInput &` (the
+    /// impacts and terms decoders do) resolves them statically, and the body is
+    /// then a bounds check and a load instead of a call.
+    [[gnu::always_inline]] [[nodiscard]] Result<uint8_t> read_byte() override {
+        const size_t pos = pos_;
+        if (pos >= limit_) {
+            return err(LuceneError::eof("read past eof"));
+        }
+        pos_ = pos + 1;
+        return bytes_[pos];
+    }
+
     /// Decoded from the buffer directly: the default walks one virtual
     /// `read_byte` per byte, which the postings decoders pay for on every skip
     /// list entry.
-    [[nodiscard]] Result<int32_t> read_vint() override;
-    [[nodiscard]] Result<int64_t> read_vlong() override;
+    [[gnu::always_inline]] [[nodiscard]] Result<int32_t> read_vint() override {
+        int32_t value = 0;
+        int32_t shift = 0;
+        size_t position = pos_;
+        while (position < limit_ && shift < 35) {
+            const int32_t byte = bytes_[position++];
+            value |= static_cast<int32_t>(static_cast<uint32_t>(byte & 0x7F) << shift);
+            if ((byte & 0x80) == 0) {
+                pos_ = position;
+                return value;
+            }
+            shift += 7;
+        }
+        // Malformed or truncated: let the generic decoder report it.
+        return DataInput::read_vint();
+    }
+
+    [[gnu::always_inline]] [[nodiscard]] Result<int64_t> read_vlong() override {
+        int64_t value = 0;
+        int64_t shift = 0;
+        size_t position = pos_;
+        while (position < limit_ && shift < 70) {
+            const int64_t byte = bytes_[position++];
+            value |= (byte & 0x7F) << shift;
+            if ((byte & 0x80) == 0) {
+                pos_ = position;
+                return value;
+            }
+            shift += 7;
+        }
+        return DataInput::read_vlong();
+    }
     [[nodiscard]] VoidResult read_bytes(std::span<uint8_t> b) override;
     [[nodiscard]] VoidResult skip_bytes(int64_t num_bytes) override;
 

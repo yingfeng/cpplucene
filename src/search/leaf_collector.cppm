@@ -27,6 +27,25 @@ import :scorable;
 
 namespace lucene {
 
+/// The statically bound "collect one scored hit" entry point of a leaf
+/// collector, fetched once per leaf.
+///
+/// Port of the mechanism the reference implementation gets for free: it makes
+/// its bulk scorer generic over the collector type, so the collector's
+/// `collect` method is inlined into the scoring loop.  A C++ bulk scorer only
+/// sees [`LeafCollector`], but a collector whose body is compiled into one
+/// concrete function can hand that function out here: the loop then pays one
+/// direct-address indirect call per document instead of a vtable call plus a
+/// forwarding layer plus a `Result<bool>`.
+export struct ScoredCollectorOps {
+    /// The collector the function expects.
+    void *self{nullptr};
+    /// Collects `doc` with the already computed `score`.
+    [[nodiscard]] VoidResult (*collect_scored)(void *self, int32_t doc, Scorable &scorable, float score){nullptr};
+
+    [[nodiscard]] bool valid() const noexcept { return self != nullptr && collect_scored != nullptr; }
+};
+
 /// Collects the matches of one leaf (segment).
 ///
 /// Port of `LeafCollector` (`core/search/leaf_collector.rs`).
@@ -47,22 +66,17 @@ public:
     /// Called once per matching document, in increasing order of `doc`.
     [[nodiscard]] virtual VoidResult collect(int32_t doc, Scorable &scorer) = 0;
 
-    /// Whether [`collect_with_score`] is implemented, i.e. whether the caller may
-    /// compute the score itself and hand it in.
+    /// The statically bound "collect one scored hit" entry point, when the
+    /// collector has one.  A bulk scorer asks once per leaf and then drives the
+    /// returned function directly.
     ///
     /// **Deviation:** the reference implementation monomorphises the bulk scorer
-    /// over the collector, so the score is computed in the loop by construction.
-    /// This port keeps the collector abstract, so a bulk scorer asks first and
-    /// then calls [`collect_with_score`] on the hot path — which is what lets the
-    /// score be computed by a *statically dispatched* scorer instead of through
-    /// [`Scorable::score`].
-    [[nodiscard]] virtual bool supports_precomputed_score() const { return false; }
-
-    /// The same as [`collect`], for a caller that already computed `score`.
-    /// Only called when [`supports_precomputed_score`] is true.
-    [[nodiscard]] virtual Result<bool> collect_with_score(int32_t /*doc*/, Scorable & /*scorable*/, float /*score*/) {
-        return err(LuceneError::need_implemented("collect_with_score"));
-    }
+    /// over the collector, so the collector's body is inlined into the scoring
+    /// loop by construction.  This port keeps the collector abstract, so a
+    /// collector whose body is compiled once into a concrete function hands that
+    /// function out here: the loop then pays one direct-address indirect call per
+    /// document, with the score computed by a statically dispatched scorer.
+    [[nodiscard]] virtual ScoredCollectorOps scored_ops() { return {}; }
 
     /// Bulk-collects the documents of `stream`.
     ///

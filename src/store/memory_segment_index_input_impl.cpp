@@ -189,7 +189,7 @@ VoidResult MemorySegmentIndexInput::seek(size_t pos) {
     return {};
 }
 
-Result<uint8_t> MemorySegmentIndexInput::read_byte() {
+Result<uint8_t> MemorySegmentIndexInput::slow_read_byte() {
     // The pointer lookup covers both the slice bound and the mapping bound, and
     // the postings decoders read one byte per call, so the diagnostics of
     // `check_range` (a `std::format` per failure) stay off that path.
@@ -206,62 +206,8 @@ Result<uint8_t> MemorySegmentIndexInput::read_byte() {
     return value;
 }
 
-Result<int32_t> MemorySegmentIndexInput::read_vint() {
-    const size_t available = pos_ <= length_ ? std::min<size_t>(length_ - pos_, 5) : 0;
-    if (available >= 1) {
-        if (const uint8_t *const pointer = mapping_->ptr_at(offset_ + pos_, available); pointer != nullptr) {
-            int32_t value = 0;
-            int32_t shift = 0;
-            for (size_t used = 0; used < available; ++used) {
-                const int32_t byte = pointer[used];
-                value |= static_cast<int32_t>(static_cast<uint32_t>(byte & 0x7F) << shift);
-                if ((byte & 0x80) == 0) {
-                    pos_ += used + 1;
-                    return value;
-                }
-                shift += 7;
-            }
-        }
-    }
-    // Straddling a chunk boundary, or a malformed varint: use the generic decoder.
-    return DataInput::read_vint();
-}
 
-Result<int64_t> MemorySegmentIndexInput::read_vlong() {
-    const size_t available = pos_ <= length_ ? std::min<size_t>(length_ - pos_, 10) : 0;
-    if (available >= 1) {
-        if (const uint8_t *const pointer = mapping_->ptr_at(offset_ + pos_, available); pointer != nullptr) {
-            int64_t value = 0;
-            int64_t shift = 0;
-            for (size_t used = 0; used < available; ++used) {
-                const int64_t byte = pointer[used];
-                value |= (byte & 0x7F) << shift;
-                if ((byte & 0x80) == 0) {
-                    pos_ += used + 1;
-                    return value;
-                }
-                shift += 7;
-            }
-        }
-    }
-    return DataInput::read_vlong();
-}
 
-VoidResult MemorySegmentIndexInput::read_bytes(std::span<uint8_t> b) {
-    if (b.empty()) {
-        return {};
-    }
-    if (auto r = check_range(pos_, b.size()); !r) {
-        return r;
-    }
-    if (const auto span = mapping_->contiguous_span(offset_ + pos_, b.size()); span.has_value()) {
-        std::memcpy(b.data(), span->data(), b.size());
-    } else {
-        mapping_->read(offset_ + pos_, b);
-    }
-    pos_ += b.size();
-    return {};
-}
 
 VoidResult MemorySegmentIndexInput::skip_bytes(int64_t num_bytes) {
     if (num_bytes < 0) {

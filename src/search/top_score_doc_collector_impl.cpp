@@ -74,21 +74,22 @@ public:
         return collect_scored(doc, scorer, score_result.value());
     }
 
-    [[nodiscard]] bool supports_precomputed_score() const override { return true; }
-
-    [[nodiscard]] Result<bool> collect_with_score(int32_t doc, Scorable &scorer, float score) override {
-        auto collected = collect_scored(doc, scorer, score);
-        if (!collected.has_value()) {
-            return std::unexpected(std::move(collected.error()));
-        }
-        return true;
+    /// The scored path without a wrapper, so a bulk scorer reaches the body with
+    /// a single indirect call (see [`ScoredCollectorOps`]).
+    [[nodiscard]] ScoredCollectorOps scored_ops() override {
+        return ScoredCollectorOps{this, &TopScoreDocLeafCollector::collect_scored_thunk};
     }
 
     [[nodiscard]] std::string to_string() const override { return "TopScoreDocLeafCollector"; }
 
 private:
+    /// [`collect_scored`] with the type-erased signature [`ScoredCollectorOps`] uses.
+    [[nodiscard]] static VoidResult collect_scored_thunk(void *self, int32_t doc, Scorable &scorer, float score) {
+        return static_cast<TopScoreDocLeafCollector *>(self)->collect_scored(doc, scorer, score);
+    }
+
     /// The body of both [`collect`] and [`collect_with_score`].
-    [[nodiscard]] VoidResult collect_scored(int32_t doc, Scorable &scorer, float score) {
+    [[gnu::always_inline]] [[nodiscard]] VoidResult collect_scored(int32_t doc, Scorable &scorer, float score) {
         TopDocsCollectorBase &base = base_.base();
         ++base.total_hits;
         const size_t hit_count_so_far = base.total_hits;

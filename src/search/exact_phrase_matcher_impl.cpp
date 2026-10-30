@@ -44,9 +44,8 @@ Result<bool> ExactPhraseMatcher::advance_position(size_t index, int32_t target) 
     if (slot.upto == slot.freq) {
         return false;
     }
-    PostingsEnum &postings = postings_at(index);
     while (true) {
-        auto position = postings.next_position();
+        auto position = next_position_at(index);
         if (!position.has_value()) {
             return std::unexpected(std::move(position.error()));
         }
@@ -68,7 +67,7 @@ Result<float> ExactPhraseMatcher::max_freq() {
     // `reset` can finish.
     float lowest = std::numeric_limits<float>::max();
     for (size_t i = 0; i < slots_.size(); ++i) {
-        auto frequency = postings_at(i).freq();
+        auto frequency = freq_at(i);
         if (!frequency.has_value()) {
             return std::unexpected(std::move(frequency.error()));
         }
@@ -90,7 +89,7 @@ VoidResult ExactPhraseMatcher::reset() {
         return {};
     }
     for (size_t i = 0; i < slots_.size(); ++i) {
-        auto frequency = postings_at(i).freq();
+        auto frequency = freq_at(i);
         if (!frequency.has_value()) {
             return std::unexpected(std::move(frequency.error()));
         }
@@ -108,7 +107,7 @@ Result<bool> ExactPhraseMatcher::next_match() {
     if (lead.upto >= lead.freq) {
         return false;
     }
-    auto position = postings_at(0).next_position();
+    auto position = next_position_at(0);
     if (!position.has_value()) {
         return std::unexpected(std::move(position.error()));
     }

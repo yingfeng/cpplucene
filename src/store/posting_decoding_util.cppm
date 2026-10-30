@@ -20,8 +20,9 @@ export module lucene_core:posting_decoding_util;
 import :types;
 import std;
 
-import :error;
 import :data_input;
+import :error;
+import :memory_segment_index_input;
 
 namespace lucene {
 
@@ -45,9 +46,71 @@ public:
     static constexpr bool has_vector_kernels = false;
 #endif
 
-    explicit PostingDecodingUtil(DataInput &input) : input_(input) {}
+    explicit PostingDecodingUtil(DataInput &input)
+        : input_(input),
+          // Resolved once: the postings readers always hand in a memory mapped
+          // input, and reading it through the concrete type turns the per-byte
+          // virtual calls of the decoders into inlined loads.
+          concrete_(dynamic_cast<MemorySegmentIndexInput *>(&input)) {}
 
     [[nodiscard]] DataInput &input() noexcept { return input_; }
+
+    /// One byte, from the concrete input when there is one.
+    [[gnu::always_inline]] [[nodiscard]] Result<uint8_t> read_byte() {
+        if (concrete_ != nullptr) {
+            return concrete_->read_byte();
+        }
+        return input_.read_byte();
+    }
+
+    [[gnu::always_inline]] [[nodiscard]] Result<int16_t> read_short() {
+        if (concrete_ != nullptr) {
+            return concrete_->read_short();
+        }
+        return input_.read_short();
+    }
+
+    [[gnu::always_inline]] [[nodiscard]] Result<int32_t> read_vint() {
+        if (concrete_ != nullptr) {
+            return concrete_->read_vint();
+        }
+        return input_.read_vint();
+    }
+
+    [[gnu::always_inline]] [[nodiscard]] Result<int64_t> read_vlong() {
+        if (concrete_ != nullptr) {
+            return concrete_->read_vlong();
+        }
+        return input_.read_vlong();
+    }
+
+    [[gnu::always_inline]] [[nodiscard]] Result<int32_t> read_int() {
+        if (concrete_ != nullptr) {
+            return concrete_->read_int();
+        }
+        return input_.read_int();
+    }
+
+    [[gnu::always_inline]] [[nodiscard]] Result<int64_t> read_long() {
+        if (concrete_ != nullptr) {
+            return concrete_->read_long();
+        }
+        return input_.read_long();
+    }
+
+    [[gnu::always_inline]] [[nodiscard]] VoidResult read_bytes(std::span<uint8_t> bytes) {
+        if (concrete_ != nullptr) {
+            return concrete_->read_bytes(bytes);
+        }
+        return input_.read_bytes(bytes);
+    }
+
+    [[gnu::always_inline]] [[nodiscard]] VoidResult read_ints(std::span<int32_t> dst, size_t offset, size_t len) {
+        if (concrete_ != nullptr) {
+            return concrete_->read_ints(dst, offset, len);
+        }
+        return input_.read_ints(dst, offset, len);
+    }
 
     /// Core method for decoding blocks of docs / freqs / positions / offsets:
     ///
@@ -77,6 +140,7 @@ public:
 
 private:
     DataInput &input_;
+    MemorySegmentIndexInput *concrete_;
 };
 
 } // namespace lucene

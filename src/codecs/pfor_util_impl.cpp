@@ -153,14 +153,14 @@ VoidResult PForUtil::decode(PostingDecodingUtil &pdu, std::span<int32_t> ints) {
     if (ints.size() < ForUtil::BLOCK_SIZE) {
         return err(LuceneError::illegal_argument("decode requires 128 values"));
     }
-    auto token = pdu.input().read_byte();
+    auto token = pdu.read_byte();
     if (!token) {
         return std::unexpected(std::move(token.error()));
     }
     const int32_t bits_per_value = token.value() & 0x1F;
 
     if (bits_per_value == 0) {
-        auto value = pdu.input().read_vint();
+        auto value = pdu.read_vint();
         if (!value) {
             return std::unexpected(std::move(value.error()));
         }
@@ -174,11 +174,11 @@ VoidResult PForUtil::decode(PostingDecodingUtil &pdu, std::span<int32_t> ints) {
 
     const size_t num_exceptions = token.value() >> 5;
     for (size_t i = 0; i < num_exceptions; ++i) {
-        auto index = pdu.input().read_byte();
+        auto index = pdu.read_byte();
         if (!index) {
             return std::unexpected(std::move(index.error()));
         }
-        auto patch = pdu.input().read_byte();
+        auto patch = pdu.read_byte();
         if (!patch) {
             return std::unexpected(std::move(patch.error()));
         }

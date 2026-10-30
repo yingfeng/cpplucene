@@ -63,16 +63,11 @@ Result<int32_t> ImpactsDISI::advance_target(int32_t target) {
         // Still in the current block, which the impacts consider competitive.
         return target;
     }
-    auto shallow = cache_->advance_shallow(target);
+    auto shallow = cache_->advance_shallow_and_block_max(target, max_score_);
     if (!shallow.has_value()) {
         return std::unexpected(std::move(shallow.error()));
     }
     upto_ = shallow.value();
-    auto block_max = cache_->get_max_score_with_level_zero();
-    if (!block_max.has_value()) {
-        return std::unexpected(std::move(block_max.error()));
-    }
-    max_score_ = block_max.value();
 
     for (;;) {
         if (upto_ < target) {
@@ -104,16 +99,11 @@ Result<int32_t> ImpactsDISI::advance_target(int32_t target) {
             target = skip_up_to.value() + 1;
         }
 
-        auto next_shallow = cache_->advance_shallow(target);
+        auto next_shallow = cache_->advance_shallow_and_block_max(target, max_score_);
         if (!next_shallow.has_value()) {
             return std::unexpected(std::move(next_shallow.error()));
         }
         upto_ = next_shallow.value();
-        auto next_block_max = cache_->get_max_score_with_level_zero();
-        if (!next_block_max.has_value()) {
-            return std::unexpected(std::move(next_block_max.error()));
-        }
-        max_score_ = next_block_max.value();
     }
 }
 

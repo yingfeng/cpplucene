@@ -199,6 +199,7 @@ export import :compound_directory;
 export import :compound_format;
 export import :lucene90_compound_reader;
 export import :lucene90_compound_format;
+export import :vector_util;
 export import :version;
 export import :segment_info;
 export import :segment_info_format;

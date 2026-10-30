@@ -29,6 +29,7 @@ import :impacts_source;
 import :index_searcher;
 import :leaf_reader;
 import :leaf_reader_context;
+import :lucene101_postings_reader;
 import :match_no_docs_query;
 import :numeric_doc_values;
 import :phrase_matcher;
@@ -186,9 +187,13 @@ Result<std::unique_ptr<PhraseScorer>> build_phrase_scorer(LeafReader &reader, st
             }
             postings = std::move(plain.value());
         }
+        // Resolve the concrete postings type once: the matcher then reads
+        // positions with an inlined call instead of an indirect one.
+        auto *concrete = dynamic_cast<BlockPostingsEnum *>(postings.get());
         opened.emplace_back(doc_freq.value(),
                             PostingsAndFreq{.postings = std::move(postings),
                                             .impacts = impacts,
+                                            .concrete = concrete,
                                             .position = positions[i],
                                             .terms = {terms[i]}});
     }

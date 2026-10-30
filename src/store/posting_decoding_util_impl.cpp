@@ -475,7 +475,7 @@ VoidResult PostingDecodingUtil::split_ints_same(size_t count,
     if (dec <= 0) {
         return err(LuceneError::illegal_argument("dec must be positive"));
     }
-    auto read = input_.read_ints(b_and_c, c_index, count);
+    auto read = read_ints(b_and_c, c_index, count);
     if (!read) {
         return read;
     }
@@ -494,7 +494,7 @@ VoidResult PostingDecodingUtil::split_ints_diff(size_t count,
     if (dec <= 0) {
         return err(LuceneError::illegal_argument("dec must be positive"));
     }
-    auto read = input_.read_ints(c, c_index, count);
+    auto read = read_ints(c, c_index, count);
     if (!read) {
         return read;
     }

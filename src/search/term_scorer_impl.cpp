@@ -40,6 +40,7 @@ namespace lucene {
 TermScorer::TermScorer(std::unique_ptr<PostingsEnum> postings, std::shared_ptr<SimScorer> sim_scorer,
                        std::unique_ptr<NumericDocValues> norms)
         : postings_(std::move(postings)), sim_scorer_(std::move(sim_scorer)), norms_(std::move(norms)) {
+    cursor_ = postings_.get();
     prepare_fast_path();
 }
 
@@ -85,6 +86,7 @@ Result<std::unique_ptr<TermScorer>> TermScorer::from_impacts(std::unique_ptr<Imp
         scorer->freq_source_concrete_ = concrete;
     }
     scorer->max_score_cache_ = std::make_unique<MaxScoreCache>(scorer->impacts_enum_.get(), scorer->sim_scorer_);
+    scorer->cursor_ = scorer->impacts_enum_.get();
     if (top_level_scoring_clause) {
         // Iterating through the impacts iterator is what lets the collector's
         // minimum competitive score prune blocks.
@@ -93,6 +95,7 @@ Result<std::unique_ptr<TermScorer>> TermScorer::from_impacts(std::unique_ptr<Imp
             return std::unexpected(std::move(disi.error()));
         }
         scorer->impacts_disi_ = std::move(disi.value());
+        scorer->cursor_ = scorer->impacts_disi_.get();
     }
     return scorer;
 }
@@ -125,17 +128,6 @@ Result<int32_t> TermScorer::slow_advance(int32_t target) {
 
 Result<int64_t> TermScorer::cost() const { return cursor().cost(); }
 
-Result<int32_t> TermScorer::freq() {
-    if (freq_source_concrete_ != nullptr) {
-        // Statically dispatched: `BlockPostingsEnum` is final, so this is a
-        // direct call that inlines into the scoring loop.
-        return static_cast<BlockPostingsEnum *>(freq_source_concrete_)->freq();
-    }
-    if (freq_source_ != nullptr) {
-        return freq_source_->freq();
-    }
-    return postings_->freq();
-}
 
 Result<float> TermScorer::get_max_score(int32_t upto) {
     if (max_score_cache_ == nullptr) {
@@ -179,20 +171,6 @@ Result<std::pair<int32_t, int64_t>> TermScorer::freq_and_norm() {
         return std::unexpected(std::move(frequency.error()));
     }
     return std::pair<int32_t, int64_t>{frequency.value(), norm};
-}
-
-Result<float> TermScorer::fast_score() {
-    auto frequency = freq();
-    if (!frequency.has_value()) {
-        return std::unexpected(std::move(frequency.error()));
-    }
-    int64_t norm = 1;
-    if (!norms_view_.value_at(current_doc(), norm)) {
-        // The document has no norm; the neutral value scores as an empty field.
-        norm = 1;
-    }
-    return bm25_tf_score(bm25_weight_, bm25_norm_inverse_[static_cast<uint8_t>(norm)],
-                         static_cast<float>(frequency.value()));
 }
 
 Result<float> TermScorer::score() {

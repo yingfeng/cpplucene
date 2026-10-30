@@ -23,6 +23,7 @@ import :codec_util;
 import :data_input;
 import :debug;
 import :doc_id_set_iterator;
+import :vector_util;
 import :error;
 import :field_infos;
 import :for_delta_util;
@@ -167,6 +168,25 @@ void ImpactsImpl::update(bool index_has_freq, int32_t level0_last_doc_id, int32_
                          std::optional<std::span<const uint8_t>> level0_serialized_impacts,
                          std::optional<std::span<const uint8_t>> level1_serialized_impacts,
                          size_t max_num_impacts_at_level0, size_t max_num_impacts_at_level1) {
+    const auto same_serialized = [](const std::optional<std::span<const uint8_t>> &current,
+                                    const std::optional<std::span<const uint8_t>> &next) noexcept {
+        if (current.has_value() != next.has_value()) {
+            return false;
+        }
+        if (!current.has_value()) {
+            return true;
+        }
+        return current->data() == next->data() && current->size() == next->size();
+    };
+    if (generation_ != 0 && level0_last_doc_id == level0_last_doc_id_ && level1_last_doc_id == level1_last_doc_id_ &&
+        same_serialized(level0_serialized_impacts_, level0_serialized_impacts) &&
+        same_serialized(level1_serialized_impacts_, level1_serialized_impacts)) {
+        // The same block: the decodes are still valid, so the generation must
+        // not change.  `MaxScoreCache` asks for the impacts several times per
+        // block (block maximum, skip decision, block end), and bumping the
+        // generation here would decode them again each time.
+        return;
+    }
     index_has_freq_ = index_has_freq;
     level0_last_doc_id_ = level0_last_doc_id;
     level1_last_doc_id_ = level1_last_doc_id;
@@ -598,14 +618,9 @@ namespace {
 
 constexpr size_t BLOCK_SIZE = Lucene101PostingsFormat::BLOCK_SIZE;
 
-/// `VECTOR_UTIL.find_next_geq` of the reference implementation, scalar.
+/// `VectorUtil::find_next_geq`: the vectorised block scan.
 size_t find_next_geq(std::span<const int32_t> buffer, int32_t target, size_t from, size_t to) {
-    for (size_t i = from; i < to; ++i) {
-        if (buffer[i] >= target) {
-            return i;
-        }
-    }
-    return to;
+    return VectorUtil::find_next_geq(buffer, target, from, to);
 }
 
 } // namespace
@@ -927,8 +942,11 @@ VoidResult BlockPostingsEnum::skip_level1_to(int32_t target) {
             const auto impact_bytes = static_cast<size_t>(num_impact_bytes.value());
 
             if (needs_impacts_ && level1_last_doc_id_ >= target) {
-                level1_serialized_impacts_.resize(impact_bytes);
-                const std::span<uint8_t> impacts(level1_serialized_impacts_);
+                if (level1_serialized_impacts_.size() < impact_bytes) {
+                    level1_serialized_impacts_.resize(impact_bytes);
+                }
+                level1_impacts_len_ = impact_bytes;
+                const std::span<uint8_t> impacts(level1_serialized_impacts_.data(), impact_bytes);
                 if (auto read = doc_in.read_bytes(impacts); !read) {
                     return read;
                 }
@@ -1074,8 +1092,11 @@ VoidResult BlockPostingsEnum::skip_level0_to(int32_t target) {
                     }
                     const auto impact_bytes = static_cast<size_t>(num_impact_bytes.value());
                     if (needs_impacts_ && found) {
-                        level0_serialized_impacts_.resize(impact_bytes);
-                        const std::span<uint8_t> impacts(level0_serialized_impacts_);
+                        if (level0_serialized_impacts_.size() < impact_bytes) {
+                            level0_serialized_impacts_.resize(impact_bytes);
+                        }
+                        level0_impacts_len_ = impact_bytes;
+                        const std::span<uint8_t> impacts(level0_serialized_impacts_.data(), impact_bytes);
                         if (auto read = doc_in.read_bytes(impacts); !read) {
                             return read;
                         }
@@ -1535,8 +1556,11 @@ VoidResult BlockPostingsEnum::do_move_to_next_level0_block() {
             }
             const auto impact_bytes = static_cast<size_t>(num_impact_bytes.value());
             if (needs_impacts_) {
-                level0_serialized_impacts_.resize(impact_bytes);
-                const std::span<uint8_t> target(level0_serialized_impacts_);
+                if (level0_serialized_impacts_.size() < impact_bytes) {
+                    level0_serialized_impacts_.resize(impact_bytes);
+                }
+                level0_impacts_len_ = impact_bytes;
+                const std::span<uint8_t> target(level0_serialized_impacts_.data(), impact_bytes);
                 if (auto read = doc_in.read_bytes(target); !read) {
                     return read;
                 }
@@ -1645,63 +1669,23 @@ Result<int32_t> BlockPostingsEnum::advance(int32_t target) {
     return doc_;
 }
 
-Result<int32_t> BlockPostingsEnum::freq() {
-    if (!needs_freq_) {
-        return 1;
+VoidResult BlockPostingsEnum::decode_freq_block() {
+    if (!doc_in_util_.has_value()) {
+        return err(LuceneError::illegal_state("documents input is missing"));
     }
-    if (has_freq_fp_) {
-        if (!doc_in_util_.has_value()) {
-            return err(LuceneError::illegal_state("documents input is missing"));
-        }
-        if (auto seeked = doc_in_clone_->seek(freq_fp_); !seeked) {
-            return std::unexpected(std::move(seeked.error()));
-        }
-        if (!pfor_util_.has_value()) {
-            return err(LuceneError::illegal_state("PFor decoder is missing"));
-        }
-        if (auto decoded = pfor_util_->decode(*doc_util(), std::span<int32_t>(freq_buffer_)); !decoded) {
-            return std::unexpected(std::move(decoded.error()));
-        }
-        has_freq_fp_ = false;
+    if (auto seeked = doc_in_clone_->seek(freq_fp_); !seeked) {
+        return std::unexpected(std::move(seeked.error()));
     }
-    return freq_buffer_[doc_buffer_upto_ - 1];
+    if (!pfor_util_.has_value()) {
+        return err(LuceneError::illegal_state("PFor decoder is missing"));
+    }
+    if (auto decoded = pfor_util_->decode(*doc_util(), std::span<int32_t>(freq_buffer_)); !decoded) {
+        return std::unexpected(std::move(decoded.error()));
+    }
+    has_freq_fp_ = false;
+    return {};
 }
 
-Result<int32_t> BlockPostingsEnum::next_position() {
-    if (!needs_pos_) {
-        return -1;
-    }
-
-    debug_check(pos_doc_buffer_upto_ <= doc_buffer_upto_);
-
-    if (pos_doc_buffer_upto_ != doc_buffer_upto_) {
-        if (auto accumulated = accumulate_pending_positions(); !accumulated) {
-            return std::unexpected(std::move(accumulated.error()));
-        }
-        position_ = 0;
-        last_start_offset_ = 0;
-    }
-
-    if (pos_buffer_upto_ == BLOCK_SIZE) {
-        if (auto refilled = refill_positions(); !refilled) {
-            return std::unexpected(std::move(refilled.error()));
-        }
-        pos_buffer_upto_ = 0;
-    }
-
-    position_ += pos_delta_buffer_[pos_buffer_upto_];
-
-    if (needs_offsets_or_payloads_) {
-        if (auto accumulated = accumulate_payload_and_offsets(); !accumulated) {
-            return std::unexpected(std::move(accumulated.error()));
-        }
-    }
-
-    pos_buffer_upto_ += 1;
-    pos_pending_count_ -= 1;
-
-    return position_;
-}
 
 Result<int32_t> BlockPostingsEnum::start_offset() const {
     if (!needs_offsets_) {
@@ -1759,8 +1743,8 @@ Result<Impacts *> BlockPostingsEnum::get_impacts() {
     std::optional<std::span<const uint8_t>> level0_serialized;
     std::optional<std::span<const uint8_t>> level1_serialized;
     if (needs_freq_ && needs_impacts_) {
-        level0_serialized = std::span<const uint8_t>(level0_serialized_impacts_);
-        level1_serialized = std::span<const uint8_t>(level1_serialized_impacts_);
+        level0_serialized = std::span<const uint8_t>(level0_serialized_impacts_.data(), level0_impacts_len_);
+        level1_serialized = std::span<const uint8_t>(level1_serialized_impacts_.data(), level1_impacts_len_);
     }
 
     if (impacts_cache_ == nullptr) {

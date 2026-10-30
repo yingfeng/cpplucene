@@ -20,10 +20,12 @@ export module lucene_core:term_scorer;
 import :types;
 import std;
 
+import :bm25_similarity;
 import :doc_id_set_iterator;
 import :error;
 import :impacts_disi;
 import :impacts_enum;
+import :lucene101_postings_reader;
 import :max_score_cache;
 import :numeric_doc_values;
 import :postings_enum;
@@ -70,7 +72,19 @@ public:
     [[nodiscard]] Result<int64_t> cost() const override;
 
     /// Document frequency of the current document; must be positioned first.
-    [[nodiscard]] Result<int32_t> freq();
+    ///
+    /// Defined here rather than out of line so that the bulk scorer, which holds
+    /// the concrete scorer type, inlines it: the concrete block postings read is
+    /// then one array access in the scoring loop instead of a call.
+    [[gnu::always_inline]] [[nodiscard]] Result<int32_t> freq() {
+        if (freq_source_concrete_ != nullptr) {
+            return freq_source_concrete_->freq();
+        }
+        if (freq_source_ != nullptr) {
+            return freq_source_->freq();
+        }
+        return postings_->freq();
+    }
 
     /// Whether this scorer can skip non-competitive blocks.
     [[nodiscard]] bool has_impacts() const noexcept { return max_score_cache_ != nullptr; }
@@ -113,7 +127,23 @@ public:
     /// [`score`] without the state tests: no branches on which similarity or
     /// norms encoding is in use, just one postings call, one norm load and the
     /// BM25 factor.  Only valid when [`has_fast_score`].
-    [[nodiscard]] Result<float> fast_score();
+    ///
+    /// In the interface for the same reason as [`freq`]: the whole body then
+    /// inlines into the scoring loop.
+    [[gnu::always_inline]] [[nodiscard]] Result<float> fast_score() {
+        auto frequency = freq();
+        if (!frequency.has_value()) {
+            return std::unexpected(std::move(frequency.error()));
+        }
+        int64_t norm = 1;
+        if (!norms_view_.value_at(current_doc(), norm)) {
+            // The document has no norm; the neutral value scores as an empty
+            // field.
+            norm = 1;
+        }
+        return bm25_tf_score(bm25_weight_, bm25_norm_inverse_[static_cast<uint8_t>(norm)],
+                             static_cast<float>(frequency.value()));
+    }
 
     /// The score of `doc_id` as if the term did not occur in it.
     [[nodiscard]] Result<float> smoothing_score(int32_t doc_id) override;
@@ -133,31 +163,14 @@ private:
     /// The document the scorer is positioned on: the cached one, unless the
     /// postings were handed out and the caller keeps them in step.
     [[nodiscard]] int32_t current_doc() const noexcept {
-        return handed_out_postings_ ? cursor().doc_id() : doc_;
+        return handed_out_postings_ ? cursor_->doc_id() : doc_;
     }
 
     /// The iterator whose documents are visited: the impacts iterator when
     /// pruning is possible, the impacts enum when only the impacts are used, the
-    /// postings otherwise.
-    [[nodiscard]] DocIdSetIterator &cursor() noexcept {
-        if (impacts_disi_ != nullptr) {
-            return static_cast<DocIdSetIterator &>(*impacts_disi_);
-        }
-        if (impacts_enum_ != nullptr) {
-            return static_cast<DocIdSetIterator &>(*impacts_enum_);
-        }
-        return static_cast<DocIdSetIterator &>(*postings_);
-    }
-
-    [[nodiscard]] const DocIdSetIterator &cursor() const noexcept {
-        if (impacts_disi_ != nullptr) {
-            return static_cast<const DocIdSetIterator &>(*impacts_disi_);
-        }
-        if (impacts_enum_ != nullptr) {
-            return static_cast<const DocIdSetIterator &>(*impacts_enum_);
-        }
-        return static_cast<const DocIdSetIterator &>(*postings_);
-    }
+    /// postings otherwise.  Resolved once, in the constructors.
+    [[nodiscard]] DocIdSetIterator &cursor() noexcept { return *cursor_; }
+    [[nodiscard]] const DocIdSetIterator &cursor() const noexcept { return *cursor_; }
 
     std::unique_ptr<PostingsEnum> postings_;
     std::shared_ptr<SimScorer> sim_scorer_;
@@ -192,15 +205,16 @@ private:
     /// the postings otherwise.  Resolved once so [`fast_score`] has no choice to
     /// make.
     PostingsEnum *freq_source_{nullptr};
+    /// The iterator the scorer is driven by; see [`cursor`].
+    DocIdSetIterator *cursor_{nullptr};
     /// [`has_fast_score`], resolved once at construction.
     bool fast_score_ok_{false};
     /// [`freq_source`] as the concrete block postings type, when it is one.
     ///
-    /// Typed as `void *` so this interface does not have to depend on the codec
-    /// modules; `prepare_fast_path` stores the pointer and the implementation
-    /// knows what it is.  Calling `freq()` on the concrete type is a static call,
-    /// which is what makes [`fast_score`] smaller than a virtual dispatch.
-    void *freq_source_concrete_{nullptr};
+    /// Calling `freq()` on the concrete type is a static call that inlines into
+    /// the scoring loop, which is what the reference implementation gets from
+    /// monomorphising.
+    BlockPostingsEnum *freq_source_concrete_{nullptr};
 };
 
 } // namespace lucene

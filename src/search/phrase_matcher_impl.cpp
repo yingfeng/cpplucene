@@ -51,17 +51,20 @@ Result<int32_t> PhraseMatcherBase::align(int32_t target) {
         int32_t lowest = NO_MORE_DOCS;
         int32_t highest = -1;
         for (PostingsAndFreq &entry : postings_) {
-            if (entry.postings->doc_id() < next_target) {
+            // One `doc_id` read per slot and pass: re-reading it after the
+            // `advance` doubled the (indirect) calls of the alignment loop.
+            int32_t doc = entry.postings->doc_id();
+            if (doc < next_target) {
                 auto advanced = entry.postings->advance(next_target);
                 if (!advanced.has_value()) {
                     return std::unexpected(std::move(advanced.error()));
                 }
-                if (advanced.value() == NO_MORE_DOCS) {
+                doc = advanced.value();
+                if (doc == NO_MORE_DOCS) {
                     doc_ = NO_MORE_DOCS;
                     return doc_;
                 }
             }
-            const int32_t doc = entry.postings->doc_id();
             lowest = std::min(lowest, doc);
             highest = std::max(highest, doc);
         }

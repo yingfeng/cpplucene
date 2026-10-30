@@ -22,6 +22,7 @@ import std;
 
 import :error;
 import :impacts_source;
+import :lucene101_postings_reader;
 import :phrase_impacts;
 import :postings_enum;
 import :term;
@@ -41,6 +42,14 @@ export struct PostingsAndFreq {
     /// always describe the documents the postings are on.  Null when the
     /// postings carry no impacts, in which case nothing can be skipped.
     ImpactsSource *impacts{nullptr};
+    /// [`postings`] as the concrete block postings type, when it is one.
+    ///
+    /// The matcher reads a position per candidate per slot, so this is the
+    /// hottest call in a phrase query: with the concrete type the read inlines
+    /// into the matching loop instead of being an indirect call.  Null for the
+    /// postings of a multi-term slot and for test doubles, which then take the
+    /// abstract path.
+    BlockPostingsEnum *concrete{nullptr};
     /// Position of the slot inside the phrase.
     int32_t position{0};
     /// The terms of the slot; several only for a multi-term query, and used to
@@ -134,6 +143,23 @@ protected:
     explicit PhraseMatcherBase(std::vector<PostingsAndFreq> postings);
 
     [[nodiscard]] PostingsEnum &postings_at(size_t index) { return *postings_[index].postings; }
+
+    /// The next position of slot `index`; the concrete fast path inlines the
+    /// buffer read into the matcher.
+    [[gnu::always_inline]] [[nodiscard]] Result<int32_t> next_position_at(size_t index) {
+        if (postings_[index].concrete != nullptr) {
+            return postings_[index].concrete->next_position();
+        }
+        return postings_[index].postings->next_position();
+    }
+
+    /// The frequency of slot `index` in the current document.
+    [[gnu::always_inline]] [[nodiscard]] Result<int32_t> freq_at(size_t index) {
+        if (postings_[index].concrete != nullptr) {
+            return postings_[index].concrete->freq();
+        }
+        return postings_[index].postings->freq();
+    }
     [[nodiscard]] const std::vector<PostingsAndFreq> &postings() const noexcept { return postings_; }
     [[nodiscard]] size_t num_postings() const noexcept { return postings_.size(); }
 

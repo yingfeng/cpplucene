@@ -106,13 +106,82 @@ public:
     [[nodiscard]] VoidResult seek(size_t pos) override;
     [[nodiscard]] Result<size_t> length() const override { return length_; }
 
-    [[nodiscard]] Result<uint8_t> read_byte() override;
+    /// One byte out of the mapping.
+    ///
+    /// Defined here because the postings decoders read one byte per call — a
+    /// varint byte, a PFor token, a packed-int byte.  A caller that holds this
+    /// concrete type (the postings readers do, through
+    /// [`PostingDecodingUtil`](lucene_core:posting_decoding_util)) inlines the
+    /// read; the diagnostics of `check_range` (a `std::format` per failure) stay
+    /// off that path.
+    [[gnu::always_inline]] [[nodiscard]] Result<uint8_t> read_byte() override {
+        if (const uint8_t *const pointer = pointer_for(pos_, 1); pointer != nullptr) {
+            ++pos_;
+            return *pointer;
+        }
+        return slow_read_byte();
+    }
     /// Decoded straight out of the mapping: the default walks one virtual
-    /// `read_byte` per byte, and the skip lists of the postings decoders are
-    /// read one varint at a time.
-    [[nodiscard]] Result<int32_t> read_vint() override;
-    [[nodiscard]] Result<int64_t> read_vlong() override;
-    [[nodiscard]] VoidResult read_bytes(std::span<uint8_t> b) override;
+    /// `read_byte` per byte, and the skip lists of the postings decoders read one
+    /// varint at a time.  Inline so that a caller holding the concrete type (the
+    /// postings decoders do, through `PostingDecodingUtil`) reads the bytes
+    /// without a call.
+    [[nodiscard]] Result<int32_t> read_vint() override {
+        const size_t available = pos_ <= length_ ? std::min<size_t>(length_ - pos_, 5) : 0;
+        if (available >= 1) {
+            if (const uint8_t *const pointer = mapping_->ptr_at(offset_ + pos_, available); pointer != nullptr) {
+                int32_t value = 0;
+                int32_t shift = 0;
+                for (size_t used = 0; used < available; ++used) {
+                    const int32_t byte = pointer[used];
+                    value |= static_cast<int32_t>(static_cast<uint32_t>(byte & 0x7F) << shift);
+                    if ((byte & 0x80) == 0) {
+                        pos_ += used + 1;
+                        return value;
+                    }
+                    shift += 7;
+                }
+            }
+        }
+        // Straddling a chunk boundary, or a malformed varint: the generic decoder
+        // reports it.
+        return DataInput::read_vint();
+    }
+
+    [[nodiscard]] Result<int64_t> read_vlong() override {
+        const size_t available = pos_ <= length_ ? std::min<size_t>(length_ - pos_, 10) : 0;
+        if (available >= 1) {
+            if (const uint8_t *const pointer = mapping_->ptr_at(offset_ + pos_, available); pointer != nullptr) {
+                int64_t value = 0;
+                int64_t shift = 0;
+                for (size_t used = 0; used < available; ++used) {
+                    const int64_t byte = pointer[used];
+                    value |= (byte & 0x7F) << shift;
+                    if ((byte & 0x80) == 0) {
+                        pos_ += used + 1;
+                        return value;
+                    }
+                    shift += 7;
+                }
+            }
+        }
+        return DataInput::read_vlong();
+    }
+    [[gnu::always_inline]] [[nodiscard]] VoidResult read_bytes(std::span<uint8_t> b) override {
+        if (b.empty()) {
+            return {};
+        }
+        if (auto r = check_range(pos_, b.size()); !r.has_value()) {
+            return r;
+        }
+        if (const auto span = mapping_->contiguous_span(offset_ + pos_, b.size()); span.has_value()) {
+            std::memcpy(b.data(), span->data(), b.size());
+        } else {
+            mapping_->read(offset_ + pos_, b);
+        }
+        pos_ += b.size();
+        return {};
+    }
     [[nodiscard]] VoidResult skip_bytes(int64_t num_bytes) override;
 
     [[nodiscard]] Result<int16_t> read_short() override;
@@ -142,6 +211,9 @@ public:
     [[nodiscard]] std::optional<std::span<const uint8_t>> contiguous_bytes() const override;
 
 private:
+    /// [`read_byte`] when the byte is not directly addressable.
+    [[nodiscard]] Result<uint8_t> slow_read_byte();
+
     [[nodiscard]] VoidResult check_range(size_t pos, size_t num_bytes) const;
 
     /// `num_bytes` bytes at `pos`, when they lie inside this slice and inside one
