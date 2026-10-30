@@ -133,9 +133,27 @@ public:
 /// [`PhraseImpacts`] the scorer can use to skip blocks.
 export class PhraseMatcherBase : public PhraseMatcher {
 public:
-    [[nodiscard]] int32_t doc_id() const override { return doc_; }
-    [[nodiscard]] Result<int32_t> next_doc() override;
-    [[nodiscard]] Result<int32_t> advance(int32_t target) override;
+    [[gnu::always_inline]] [[nodiscard]] int32_t doc_id() const override final { return doc_; }
+
+    /// The candidate walk, sealed in this class: every matcher walks the same
+    /// conjunction, so marking these `final` lets a scorer that holds the base
+    /// pointer call them directly and inline the whole loop, instead of paying
+    /// one vtable dispatch per candidate document.  The reference implementation
+    /// has no matcher abstraction at all.
+    [[gnu::always_inline]] [[nodiscard]] Result<int32_t> next_doc() override final {
+        if (doc_ == NO_MORE_DOCS) {
+            return doc_;
+        }
+        return align(doc_ + 1);
+    }
+
+    [[gnu::always_inline]] [[nodiscard]] Result<int32_t> advance(int32_t target) override final {
+        if (doc_ >= target) {
+            return doc_;
+        }
+        return align(target);
+    }
+
     [[nodiscard]] Result<int64_t> cost() const override;
     [[nodiscard]] ImpactsSource *impacts() override { return impacts_.get(); }
 
@@ -165,7 +183,55 @@ protected:
 
     /// Moves `doc_` to the first document at or after `target` that all the
     /// postings agree on.
-    [[nodiscard]] Result<int32_t> align(int32_t target);
+    ///
+    /// Defined here, like the position accessors above, so that a scorer holding
+    /// the concrete matcher inlines the candidate walk into its own loop: the
+    /// reference implementation has no matcher abstraction at all, so this whole
+    /// chain is one inlined function there.
+    [[gnu::always_inline]] [[nodiscard]] Result<int32_t> align(int32_t target) {
+        int32_t next_target = target;
+        while (true) {
+            int32_t lowest = NO_MORE_DOCS;
+            int32_t highest = -1;
+            for (PostingsAndFreq &entry : postings_) {
+                // One `doc_id` read per slot and pass: re-reading it after the
+                // `advance` doubled the (indirect) calls of the alignment loop.
+                // The concrete type makes both reads static calls that inline
+                // into this loop; through the abstract postings they are two
+                // virtual calls per slot and pass.
+                int32_t doc = entry.concrete != nullptr ? entry.concrete->doc_id() : entry.postings->doc_id();
+                if (doc < next_target) {
+                    // A posting exactly one document behind is the common case
+                    // (the candidates move forward by one); `next_doc` is the
+                    // cheaper way to take that single step, `advance` the
+                    // general one.
+                    const bool adjacent = doc == next_target - 1;
+                    Result<int32_t> moved = entry.concrete != nullptr
+                                                    ? (adjacent ? entry.concrete->next_doc()
+                                                                : entry.concrete->advance(next_target))
+                                                    : (adjacent ? entry.postings->next_doc()
+                                                                : entry.postings->advance(next_target));
+                    if (!moved.has_value()) {
+                        return std::unexpected(std::move(moved.error()));
+                    }
+                    doc = moved.value();
+                    if (doc == NO_MORE_DOCS) {
+                        doc_ = NO_MORE_DOCS;
+                        return doc_;
+                    }
+                }
+                lowest = std::min(lowest, doc);
+                highest = std::max(highest, doc);
+            }
+            if (lowest == highest) {
+                doc_ = lowest;
+                return doc_;
+            }
+            // Not all postings agree: the ones that fell behind have to catch
+            // up with the highest document seen.
+            next_target = highest;
+        }
+    }
 
     std::vector<PostingsAndFreq> postings_;
     /// The merged impacts of `postings_`, null when any of them carries none.

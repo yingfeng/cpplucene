@@ -58,6 +58,7 @@ PhraseScorer::PhraseScorer(std::unique_ptr<PhraseMatcher> matcher, std::shared_p
         : matcher_(std::move(matcher)), sim_scorer_(std::move(sim_scorer)), norms_(std::move(norms)),
           score_mode_(score_mode) {
     exact_ = dynamic_cast<ExactPhraseMatcher *>(matcher_.get());
+    base_ = dynamic_cast<PhraseMatcherBase *>(matcher_.get());
     if (score_mode_ != ScoreMode::TopScores || sim_scorer_ == nullptr || matcher_->impacts() == nullptr) {
         // Without impacts (or without a scoring need) the matcher is walked as
         // is, which is always correct and never skips anything.
@@ -70,16 +71,25 @@ PhraseScorer::PhraseScorer(std::unique_ptr<PhraseMatcher> matcher, std::shared_p
 
 Result<int32_t> PhraseScorer::next_candidate() {
     if (impacts_approximation_ != nullptr) {
+        // The impacts iterator walks the matcher directly when the concrete type
+        // is known, instead of through the `MatcherApproximation` wrapper (which
+        // exists only so the iterator can be handed to `ImpactsDISI`).
+        if (base_ != nullptr) {
+            return impacts_approximation_->next_doc_with(*base_);
+        }
         return impacts_approximation_->next_doc();
     }
-    return matcher_->next_doc();
+    return matcher_next_doc();
 }
 
 Result<int32_t> PhraseScorer::advance_candidate(int32_t target) {
     if (impacts_approximation_ != nullptr) {
+        if (base_ != nullptr) {
+            return impacts_approximation_->advance_with(*base_, target);
+        }
         return impacts_approximation_->advance(target);
     }
-    return matcher_->advance(target);
+    return matcher_advance(target);
 }
 
 Result<int32_t> PhraseScorer::do_next(int32_t target, bool advance) {
@@ -154,9 +164,9 @@ VoidResult PhraseScorer::set_min_competitive_score(float min_score) {
 
 float PhraseScorer::match_cost() const { return matcher_->get_match_cost(); }
 
-Result<int32_t> PhraseScorer::approx_next_doc() { return matcher_->next_doc(); }
+Result<int32_t> PhraseScorer::approx_next_doc() { return matcher_next_doc(); }
 
-Result<int32_t> PhraseScorer::approx_advance(int32_t target) { return matcher_->advance(target); }
+Result<int32_t> PhraseScorer::approx_advance(int32_t target) { return matcher_advance(target); }
 
 Result<int64_t> PhraseScorer::approx_cost() const { return matcher_->cost(); }
 

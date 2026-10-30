@@ -45,64 +45,6 @@ PhraseMatcherBase::PhraseMatcherBase(std::vector<PostingsAndFreq> postings) : po
     impacts_ = std::make_unique<PhraseImpacts>(std::move(sources));
 }
 
-Result<int32_t> PhraseMatcherBase::align(int32_t target) {
-    int32_t next_target = target;
-    while (true) {
-        int32_t lowest = NO_MORE_DOCS;
-        int32_t highest = -1;
-        for (PostingsAndFreq &entry : postings_) {
-            // One `doc_id` read per slot and pass: re-reading it after the
-            // `advance` doubled the (indirect) calls of the alignment loop.
-            // The concrete type makes both reads static calls that inline into
-            // this loop; through the abstract postings they are two virtual
-            // calls per slot and pass.
-            int32_t doc = entry.concrete != nullptr ? entry.concrete->doc_id() : entry.postings->doc_id();
-            if (doc < next_target) {
-                // A posting exactly one document behind is the common case (the
-                // candidates move forward by one); `next_doc` is the cheaper way
-                // to take that single step, `advance` the general one.
-                const bool adjacent = doc == next_target - 1;
-                Result<int32_t> moved = entry.concrete != nullptr
-                                                ? (adjacent ? entry.concrete->next_doc()
-                                                            : entry.concrete->advance(next_target))
-                                                : (adjacent ? entry.postings->next_doc()
-                                                            : entry.postings->advance(next_target));
-                if (!moved.has_value()) {
-                    return std::unexpected(std::move(moved.error()));
-                }
-                doc = moved.value();
-                if (doc == NO_MORE_DOCS) {
-                    doc_ = NO_MORE_DOCS;
-                    return doc_;
-                }
-            }
-            lowest = std::min(lowest, doc);
-            highest = std::max(highest, doc);
-        }
-        if (lowest == highest) {
-            doc_ = lowest;
-            return doc_;
-        }
-        // Not all postings agree: the ones that fell behind have to catch up
-        // with the highest document seen.
-        next_target = highest;
-    }
-}
-
-Result<int32_t> PhraseMatcherBase::next_doc() {
-    if (doc_ == NO_MORE_DOCS) {
-        return doc_;
-    }
-    return align(doc_ + 1);
-}
-
-Result<int32_t> PhraseMatcherBase::advance(int32_t target) {
-    if (doc_ >= target) {
-        return doc_;
-    }
-    return align(target);
-}
-
 Result<int64_t> PhraseMatcherBase::cost() const {
     int64_t lowest = std::numeric_limits<int64_t>::max();
     for (const PostingsAndFreq &entry : postings_) {

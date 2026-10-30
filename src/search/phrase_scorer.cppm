@@ -156,10 +156,31 @@ private:
         return matcher_->sloppy_weight();
     }
 
+    /// The candidate walk, through the concrete matcher when it has one: the
+    /// alignment loop is an interface-unit body, so this removes three
+    /// out-of-line calls per candidate document.
+    [[gnu::always_inline]] [[nodiscard]] Result<int32_t> matcher_next_doc() {
+        if (base_ != nullptr) {
+            return base_->next_doc();
+        }
+        return matcher_->next_doc();
+    }
+
+    /// See [`matcher_next_doc`].
+    [[gnu::always_inline]] [[nodiscard]] Result<int32_t> matcher_advance(int32_t target) {
+        if (base_ != nullptr) {
+            return base_->advance(target);
+        }
+        return matcher_->advance(target);
+    }
+
     std::unique_ptr<PhraseMatcher> matcher_;
     /// [`matcher`] as the exact matcher, the type of every phrase without slop;
     /// null for a sloppy or multi-term matcher, which take the abstract path.
     ExactPhraseMatcher *exact_{nullptr};
+    /// [`matcher`] as the conjunction base, the type of every phrase matcher;
+    /// null only for a test double.
+    PhraseMatcherBase *base_{nullptr};
     std::shared_ptr<const SimScorer> sim_scorer_;
     std::unique_ptr<NumericDocValues> norms_;
     ScoreMode score_mode_;

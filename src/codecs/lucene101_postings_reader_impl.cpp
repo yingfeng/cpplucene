@@ -618,11 +618,6 @@ namespace {
 
 constexpr size_t BLOCK_SIZE = Lucene101PostingsFormat::BLOCK_SIZE;
 
-/// `VectorUtil::find_next_geq`: the vectorised block scan.
-size_t find_next_geq(std::span<const int32_t> buffer, int32_t target, size_t from, size_t to) {
-    return VectorUtil::find_next_geq(buffer, target, from, to);
-}
-
 } // namespace
 
 PostingDecodingUtil *BlockPostingsEnum::doc_util() {
@@ -1628,45 +1623,6 @@ VoidResult BlockPostingsEnum::move_to_next_level0_block() {
         return {};
     }
     return do_move_to_next_level0_block();
-}
-
-Result<int32_t> BlockPostingsEnum::next_doc() {
-    if (doc_util() == nullptr && doc_freq_ > 1) {
-        return err(LuceneError::illegal_state("documents input is missing"));
-    }
-    int32_t doc = 0;
-    if (doc_buffer_upto_ < doc_buffer_.size() && doc_buffer_upto_ < doc_buffer_size_) {
-        doc = doc_buffer_[doc_buffer_upto_];
-    } else {
-        if (doc_buffer_upto_ == BLOCK_SIZE) {
-            if (auto moved = move_to_next_level0_block(); !moved) {
-                return std::unexpected(std::move(moved.error()));
-            }
-        }
-        doc = doc_buffer_[doc_buffer_upto_];
-    }
-    doc_ = doc;
-    doc_buffer_upto_ += 1;
-    return doc;
-}
-
-Result<int32_t> BlockPostingsEnum::advance(int32_t target) {
-    if (target > level0_last_doc_id_ || needs_refilling_) {
-        if (target > level0_last_doc_id_) {
-            if (auto advanced = do_advance_shallow(target); !advanced) {
-                return std::unexpected(std::move(advanced.error()));
-            }
-        }
-        if (auto refilled = refill_docs(); !refilled) {
-            return std::unexpected(std::move(refilled.error()));
-        }
-        needs_refilling_ = false;
-    }
-    const size_t next = find_next_geq(std::span<const int32_t>(doc_buffer_), target, doc_buffer_upto_,
-                                      doc_buffer_size_);
-    doc_ = doc_buffer_[next];
-    doc_buffer_upto_ = next + 1;
-    return doc_;
 }
 
 VoidResult BlockPostingsEnum::decode_freq_block() {

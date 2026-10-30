@@ -41,6 +41,7 @@ import :postings_reader_base;
 import :postings_util;
 import :segment_info;
 import :segment_read_state;
+import :vector_util;
 
 namespace lucene {
 
@@ -235,8 +236,55 @@ public:
     // ---- DocIdSetIterator ----
 
     [[nodiscard]] int32_t doc_id() const override { return doc_; }
-    [[nodiscard]] Result<int32_t> next_doc() override;
-    [[nodiscard]] Result<int32_t> advance(int32_t target) override;
+
+    /// The next document of the postings block.
+    ///
+    /// Defined here, like [`freq`] and [`next_position`], for the same reason:
+    /// only the first document of a block pays for the block refill, every other
+    /// one is one array read here, and a caller holding this concrete type
+    /// inlines that read into its own per-document loop.  The reference
+    /// implementation gets the same effect by monomorphising.
+    [[gnu::always_inline]] [[nodiscard]] Result<int32_t> next_doc() override {
+        if (!doc_in_util_.has_value() && doc_freq_ > 1) {
+            return err(LuceneError::illegal_state("documents input is missing"));
+        }
+        int32_t doc = 0;
+        if (doc_buffer_upto_ < doc_buffer_.size() && doc_buffer_upto_ < doc_buffer_size_) {
+            doc = doc_buffer_[doc_buffer_upto_];
+        } else {
+            if (doc_buffer_upto_ == Lucene101PostingsFormat::BLOCK_SIZE) {
+                if (auto moved = move_to_next_level0_block(); !moved) {
+                    return std::unexpected(std::move(moved.error()));
+                }
+            }
+            doc = doc_buffer_[doc_buffer_upto_];
+        }
+        doc_ = doc;
+        doc_buffer_upto_ += 1;
+        return doc;
+    }
+
+    /// Advances to the first document at or after `target`; the block switch is
+    /// the only part that stays out of line, see [`next_doc`].
+    [[gnu::always_inline]] [[nodiscard]] Result<int32_t> advance(int32_t target) override {
+        if (target > level0_last_doc_id_ || needs_refilling_) {
+            if (target > level0_last_doc_id_) {
+                if (auto advanced = do_advance_shallow(target); !advanced) {
+                    return std::unexpected(std::move(advanced.error()));
+                }
+            }
+            if (auto refilled = refill_docs(); !refilled) {
+                return std::unexpected(std::move(refilled.error()));
+            }
+            needs_refilling_ = false;
+        }
+        const size_t next = VectorUtil::find_next_geq(std::span<const int32_t>(doc_buffer_), target,
+                                                      doc_buffer_upto_, doc_buffer_size_);
+        doc_ = doc_buffer_[next];
+        doc_buffer_upto_ = next + 1;
+        return doc_;
+    }
+
     [[nodiscard]] Result<int64_t> cost() const override { return static_cast<int64_t>(doc_freq_); }
 
     // ---- PostingsEnum ----
