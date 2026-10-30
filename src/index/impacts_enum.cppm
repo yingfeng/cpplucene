@@ -80,8 +80,8 @@ public:
     [[nodiscard]] VoidResult advance_shallow(int32_t target) override {
         return std::visit([target](auto &enumeration) { return enumeration.advance_shallow(target); }, inner_);
     }
-    [[nodiscard]] Result<std::unique_ptr<Impacts>> get_impacts() const override {
-        return std::visit([](const auto &enumeration) { return enumeration.get_impacts(); }, inner_);
+    [[nodiscard]] Result<Impacts *> get_impacts() override {
+        return std::visit([](auto &enumeration) { return enumeration.get_impacts(); }, inner_);
     }
 
 private:

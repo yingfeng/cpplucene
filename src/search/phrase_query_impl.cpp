@@ -25,6 +25,7 @@ import :collection_statistics;
 import :error;
 import :exact_phrase_matcher;
 import :explanation;
+import :impacts_source;
 import :index_searcher;
 import :leaf_reader;
 import :leaf_reader_context;
@@ -113,13 +114,18 @@ Result<std::optional<LeafPhrase>> analyze_leaf(LeafReader &reader, std::string_v
     return std::optional<LeafPhrase>(info);
 }
 
-/// Opens the postings of every term of the phrase, sorted by ascending document
-/// frequency (the exact matcher expects its lead first); `nullptr` when a term is
-/// missing from the leaf, i.e. the leaf cannot match.
+/// Opens the postings of every term of the phrase, in phrase order; `nullptr`
+/// when a term is missing from the leaf, i.e. the leaf cannot match.
+///
+/// In `ScoreMode::TopScores` the postings are opened through
+/// `TermsEnum::impacts`, which gives the very same enumeration plus the impacts
+/// of the upcoming blocks, so the scorer can skip blocks whose maximum score
+/// cannot compete.
 Result<std::unique_ptr<PhraseScorer>> build_phrase_scorer(LeafReader &reader, std::string_view field,
                                                           const std::vector<Term> &terms,
                                                           const std::vector<int32_t> &positions, int32_t slop,
-                                                          float match_cost, std::shared_ptr<const SimScorer> sim_scorer) {
+                                                          float match_cost, std::shared_ptr<const SimScorer> sim_scorer,
+                                                          ScoreMode score_mode) {
     auto field_terms = reader.terms(field);
     if (!field_terms.has_value()) {
         return std::unexpected(std::move(field_terms.error()));
@@ -133,6 +139,7 @@ Result<std::unique_ptr<PhraseScorer>> build_phrase_scorer(LeafReader &reader, st
         return std::unexpected(std::move(terms_enum.error()));
     }
 
+    bool can_use_impacts = score_mode == ScoreMode::TopScores;
     std::vector<std::pair<int64_t, PostingsAndFreq>> opened;
     opened.reserve(terms.size());
     for (size_t i = 0; i < terms.size(); ++i) {
@@ -147,15 +154,41 @@ Result<std::unique_ptr<PhraseScorer>> build_phrase_scorer(LeafReader &reader, st
         if (!doc_freq.has_value()) {
             return std::unexpected(std::move(doc_freq.error()));
         }
-        auto postings = terms_enum.value()->postings_with_flags(nullptr, POSITIONS);
-        if (!postings.has_value()) {
-            return std::unexpected(std::move(postings.error()));
+        std::unique_ptr<PostingsEnum> postings;
+        ImpactsSource *impacts = nullptr;
+        if (can_use_impacts) {
+            auto with_impacts = terms_enum.value()->impacts(POSITIONS);
+            if (!with_impacts.has_value()) {
+                if (with_impacts.error().kind() != ErrorKind::kUnsupportedOperation) {
+                    return std::unexpected(std::move(with_impacts.error()));
+                }
+                // This dictionary cannot describe its impacts (doc values, a
+                // wrapper, ...): plain postings still match, they just cannot be
+                // skipped.
+                can_use_impacts = false;
+            } else if (with_impacts.value() == nullptr) {
+                return std::unique_ptr<PhraseScorer>{};
+            } else {
+                // An `ImpactsEnum` *is* a `PostingsEnum` over the same documents,
+                // so the impacts stay in sync with the positions the matcher
+                // reads.
+                impacts = with_impacts.value().get();
+                postings = std::move(with_impacts.value());
+            }
         }
-        if (postings.value() == nullptr) {
-            return std::unique_ptr<PhraseScorer>{};
+        if (postings == nullptr) {
+            auto plain = terms_enum.value()->postings_with_flags(nullptr, POSITIONS);
+            if (!plain.has_value()) {
+                return std::unexpected(std::move(plain.error()));
+            }
+            if (plain.value() == nullptr) {
+                return std::unique_ptr<PhraseScorer>{};
+            }
+            postings = std::move(plain.value());
         }
         opened.emplace_back(doc_freq.value(),
-                            PostingsAndFreq{.postings = std::move(postings.value()),
+                            PostingsAndFreq{.postings = std::move(postings),
+                                            .impacts = impacts,
                                             .position = positions[i],
                                             .terms = {terms[i]}});
     }
@@ -190,16 +223,17 @@ Result<std::unique_ptr<PhraseScorer>> build_phrase_scorer(LeafReader &reader, st
         return std::unexpected(std::move(norms.error()));
     }
     return std::unique_ptr<PhraseScorer>(new PhraseScorer(std::move(matcher), std::move(sim_scorer),
-                                                          std::move(norms.value())));
+                                                          std::move(norms.value()), score_mode));
 }
 
 /// Supplies the phrase scorer of one leaf.
 class PhraseScorerSupplier final : public ScorerSupplier {
 public:
     PhraseScorerSupplier(std::string field, std::vector<Term> terms, std::vector<int32_t> positions, int32_t slop,
-                         int64_t cost, float match_cost, std::shared_ptr<const SimScorer> sim_scorer)
+                         int64_t cost, float match_cost, std::shared_ptr<const SimScorer> sim_scorer,
+                         ScoreMode score_mode)
             : field_(std::move(field)), terms_(std::move(terms)), positions_(std::move(positions)), slop_(slop),
-              cost_(cost), match_cost_(match_cost), sim_scorer_(std::move(sim_scorer)) {}
+              cost_(cost), match_cost_(match_cost), sim_scorer_(std::move(sim_scorer)), score_mode_(score_mode) {}
 
     [[nodiscard]] Result<std::unique_ptr<Scorer>> get(int64_t /*lead_cost*/, const LeafReaderContext &context,
                                                       const IndexSearcher & /*searcher*/) override {
@@ -207,7 +241,8 @@ public:
         if (reader == nullptr) {
             return std::unique_ptr<Scorer>{};
         }
-        auto scorer = build_phrase_scorer(*reader, field_, terms_, positions_, slop_, match_cost_, sim_scorer_);
+        auto scorer =
+                build_phrase_scorer(*reader, field_, terms_, positions_, slop_, match_cost_, sim_scorer_, score_mode_);
         if (!scorer.has_value()) {
             return std::unexpected(std::move(scorer.error()));
         }
@@ -230,6 +265,7 @@ private:
     int64_t cost_{0};
     float match_cost_{0.0F};
     std::shared_ptr<const SimScorer> sim_scorer_;
+    ScoreMode score_mode_;
 };
 
 } // namespace
@@ -483,7 +519,7 @@ Result<std::unique_ptr<PhraseScorer>> PhraseWeight::scorer_for(const LeafReaderC
         return std::unique_ptr<PhraseScorer>{};
     }
     return build_phrase_scorer(*reader, query_.field(), query_.terms(), query_.positions(), query_.slop(),
-                               analyzed.value().value().match_cost, sim_scorer_);
+                               analyzed.value().value().match_cost, sim_scorer_, score_mode_);
 }
 
 Result<std::unique_ptr<ScorerSupplier>> PhraseWeight::scorer_supplier(const LeafReaderContext &context,
@@ -505,7 +541,7 @@ Result<std::unique_ptr<ScorerSupplier>> PhraseWeight::scorer_supplier(const Leaf
     }
     std::unique_ptr<ScorerSupplier> supplier(new PhraseScorerSupplier(
             query_.field(), query_.terms(), query_.positions(), query_.slop(), analyzed.value().value().cost,
-            analyzed.value().value().match_cost, sim_scorer_));
+            analyzed.value().value().match_cost, sim_scorer_, score_mode_));
     return supplier;
 }
 

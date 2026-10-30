@@ -44,6 +44,16 @@ public:
     /// Number of bytes reachable through this view (relative to its own origin).
     [[nodiscard]] virtual Result<size_t> length() const = 0;
 
+    /// The whole view as one contiguous block of memory, when the backing store
+    /// is memory mapped and the view does not straddle two mappings.
+    ///
+    /// **Deviation:** the reference implementation has no such accessor.  Per
+    /// value reads out of a memory mapped file (norms, doc values) otherwise pay
+    /// a virtual call, a bounds check and a `memcpy` each, which dominates the
+    /// scoring loop; taking the bytes once lets a reader index them directly.
+    /// Callers must keep `pos + len <= length()`.
+    [[nodiscard]] virtual std::optional<std::span<const uint8_t>> contiguous_bytes() const { return std::nullopt; }
+
     // ---- defaults built on the primitives above ----
 
     [[nodiscard]] VoidResult read_ints(size_t pos, std::span<int32_t> dst, size_t offset, size_t len) const;

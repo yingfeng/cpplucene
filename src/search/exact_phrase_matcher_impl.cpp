@@ -62,14 +62,33 @@ Result<bool> ExactPhraseMatcher::advance_position(size_t index, int32_t target) 
 }
 
 Result<float> ExactPhraseMatcher::max_freq() {
-    float lowest = static_cast<float>(slots_[0].freq);
-    for (size_t i = 1; i < slots_.size(); ++i) {
-        lowest = std::min(lowest, static_cast<float>(slots_[i].freq));
+    // Load the frequencies eagerly: a scorer asks for this upper bound of the
+    // phrase frequency *before* resetting the positions, to decide whether the
+    // document is worth matching at all, so the state has to be left in a shape
+    // `reset` can finish.
+    float lowest = std::numeric_limits<float>::max();
+    for (size_t i = 0; i < slots_.size(); ++i) {
+        auto frequency = postings_at(i).freq();
+        if (!frequency.has_value()) {
+            return std::unexpected(std::move(frequency.error()));
+        }
+        slots_[i].freq = frequency.value();
+        lowest = std::min(lowest, static_cast<float>(frequency.value()));
     }
+    freqs_loaded_ = true;
     return lowest;
 }
 
 VoidResult ExactPhraseMatcher::reset() {
+    if (freqs_loaded_) {
+        // `max_freq` already read the frequencies of the current document.
+        freqs_loaded_ = false;
+        for (Slot &slot : slots_) {
+            slot.pos = -1;
+            slot.upto = 0;
+        }
+        return {};
+    }
     for (size_t i = 0; i < slots_.size(); ++i) {
         auto frequency = postings_at(i).freq();
         if (!frequency.has_value()) {

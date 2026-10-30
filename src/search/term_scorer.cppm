@@ -88,6 +88,17 @@ public:
 
     [[nodiscard]] TwoPhaseState has_two_phase_iterator() const override { return TwoPhaseState::No; }
 
+    /// The postings themselves, when this scorer only forwards to them.  With an
+    /// impacts enum or an impacts iterator in use the cursor can drift from the
+    /// postings (the impacts view is what decides which blocks are visited), so
+    /// nothing is handed out then.
+    [[nodiscard]] DocIdSetIterator *matching_iterator() override {
+        if (impacts_disi_ != nullptr || impacts_enum_ != nullptr) {
+            return nullptr;
+        }
+        return postings_.get();
+    }
+
     // ---- Scorable ----
 
     [[nodiscard]] Result<float> score() override;

@@ -38,7 +38,9 @@ namespace lucene {
 /// be moved out of it.  The source must outlive the cache.
 export class MaxScoreCache {
 public:
-    MaxScoreCache(ImpactsSource *impacts_source, std::shared_ptr<SimScorer> scorer);
+    /// `scorer` is only read, so a scorer borrowed from a weight can be shared
+    /// with the scorers that delegate their maximum score here.
+    MaxScoreCache(ImpactsSource *impacts_source, std::shared_ptr<const SimScorer> scorer);
 
     MaxScoreCache(const MaxScoreCache &) = delete;
     MaxScoreCache &operator=(const MaxScoreCache &) = delete;
@@ -92,7 +94,7 @@ private:
     [[nodiscard]] Result<std::optional<size_t>> get_skip_level(float min_score);
 
     ImpactsSource *impacts_source_;
-    std::shared_ptr<SimScorer> scorer_;
+    std::shared_ptr<const SimScorer> scorer_;
     float global_max_score_;
     /// The score cache, one entry per impacts level.
     std::vector<CacheEntry> cache_;

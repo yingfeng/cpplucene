@@ -74,10 +74,12 @@ private:
 } // namespace
 
 ConjunctionBulkScorer::ConjunctionBulkScorer(std::vector<std::unique_ptr<Scorer>> all_scores,
-                                             size_t required_scoring_len, std::vector<size_t> all_scores_input_idx)
+                                             size_t required_scoring_len, std::vector<size_t> all_scores_input_idx,
+                                             std::vector<DocIdSetIterator *> iterators)
         : all_scores_(std::move(all_scores)),
           required_scoring_len_(required_scoring_len),
-          all_scores_input_idx_(std::move(all_scores_input_idx)) {}
+          all_scores_input_idx_(std::move(all_scores_input_idx)),
+          iterators_(std::move(iterators)) {}
 
 Result<std::unique_ptr<ConjunctionBulkScorer>>
 ConjunctionBulkScorer::create(std::vector<std::unique_ptr<Scorer>> required_scoring,
@@ -118,15 +120,25 @@ ConjunctionBulkScorer::create(std::vector<std::unique_ptr<Scorer>> required_scor
         all_scores.push_back(std::move(input[index]));
     }
 
-    std::unique_ptr<ConjunctionBulkScorer> scorer(
-            new ConjunctionBulkScorer(std::move(all_scores), required_scoring_len, std::move(all_scores_input_idx)));
+    // A clause that only forwards to its postings is iterated directly: the
+    // scorer layer above it would add a virtual call and a `Result` per document
+    // without changing which documents match.
+    std::vector<DocIdSetIterator *> iterators;
+    iterators.reserve(all_scores.size());
+    for (const auto &scorer : all_scores) {
+        DocIdSetIterator *direct = scorer->matching_iterator();
+        iterators.push_back(direct != nullptr ? direct : static_cast<DocIdSetIterator *>(scorer.get()));
+    }
+
+    std::unique_ptr<ConjunctionBulkScorer> scorer(new ConjunctionBulkScorer(
+            std::move(all_scores), required_scoring_len, std::move(all_scores_input_idx), std::move(iterators)));
     return scorer;
 }
 
 Result<int32_t> ConjunctionBulkScorer::score(LeafCollector &collector, const Bits *accept_docs, int32_t min,
                                              int32_t max) {
-    Scorer &lead1 = clause(0);
-    Scorer &lead2 = clause(1);
+    DocIdSetIterator &lead1 = iterator(0);
+    DocIdSetIterator &lead2 = iterator(1);
     debug_check(lead1.doc_id() >= lead2.doc_id(), "the lead clause must be ahead of the second clause");
 
     if (lead1.doc_id() < min) {
@@ -170,7 +182,7 @@ Result<int32_t> ConjunctionBulkScorer::score(LeafCollector &collector, const Bit
         if (accepted) {
             bool matched = true;
             for (size_t index = 1; index < all_scores_.size(); ++index) {
-                Scorer &other = clause(index);
+                DocIdSetIterator &other = iterator(index);
                 if (other.doc_id() < doc) {
                     auto next = other.advance(doc);
                     if (!next.has_value()) {

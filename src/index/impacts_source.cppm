@@ -46,7 +46,13 @@ public:
     ///
     /// The reference implementation models the return type as the GAT `Self::Impacts<'a>`; the port
     /// type-erases it to `Impacts` because C++ has no generic associated types.
-    [[nodiscard]] virtual Result<std::unique_ptr<Impacts>> get_impacts() const = 0;
+    ///
+    /// **Deviation:** the impacts are borrowed from this source and stay valid
+    /// until it is advanced again.  The reference implementation hands out a
+    /// borrowed view too (its `Impacts` is a cached field of the enum), but the
+    /// port originally boxed a fresh object per call, which allocated several
+    /// times per block in the scoring loop.
+    [[nodiscard]] virtual Result<Impacts *> get_impacts() = 0;
 };
 
 } // namespace lucene

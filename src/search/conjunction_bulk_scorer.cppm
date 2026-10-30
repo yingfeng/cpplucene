@@ -68,15 +68,24 @@ public:
     /// For every clause, its index in the cost-sorted array.
     [[nodiscard]] const std::vector<size_t> &all_scores_input_idx() const noexcept { return all_scores_input_idx_; }
 
+    /// The iterators to drive, in the same order as the clauses: a clause that
+    /// only forwards to its postings is iterated directly, the others through
+    /// their scorer.
+    [[nodiscard]] const std::vector<DocIdSetIterator *> &iterators() const noexcept { return iterators_; }
+
 private:
     ConjunctionBulkScorer(std::vector<std::unique_ptr<Scorer>> all_scores, size_t required_scoring_len,
-                          std::vector<size_t> all_scores_input_idx);
+                          std::vector<size_t> all_scores_input_idx, std::vector<DocIdSetIterator *> iterators);
 
     [[nodiscard]] Scorer &clause(size_t index) noexcept { return *all_scores_[index]; }
+
+    /// The iterator of a clause; see [`iterators`].
+    [[nodiscard]] DocIdSetIterator &iterator(size_t index) noexcept { return *iterators_[index]; }
 
     std::vector<std::unique_ptr<Scorer>> all_scores_;
     size_t required_scoring_len_;
     std::vector<size_t> all_scores_input_idx_;
+    std::vector<DocIdSetIterator *> iterators_;
 };
 
 } // namespace lucene

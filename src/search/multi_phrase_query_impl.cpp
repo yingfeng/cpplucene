@@ -27,6 +27,7 @@ import :collection_statistics;
 import :error;
 import :exact_phrase_matcher;
 import :explanation;
+import :impacts_source;
 import :index_searcher;
 import :leaf_reader;
 import :leaf_reader_context;
@@ -129,7 +130,8 @@ Result<std::optional<LeafCost>> analyze_leaf(LeafReader &reader, std::string_vie
 Result<std::unique_ptr<PhraseScorer>> build_scorer(LeafReader &reader, std::string_view field,
                                                    const std::vector<std::vector<Term>> &term_arrays,
                                                    const std::vector<int32_t> &positions, int32_t slop,
-                                                   float match_cost, std::shared_ptr<const SimScorer> sim_scorer) {
+                                                   float match_cost, std::shared_ptr<const SimScorer> sim_scorer,
+                                                   ScoreMode score_mode) {
     auto field_terms = reader.terms(field);
     if (!field_terms.has_value()) {
         return std::unexpected(std::move(field_terms.error()));
@@ -147,11 +149,16 @@ Result<std::unique_ptr<PhraseScorer>> build_scorer(LeafReader &reader, std::stri
         return std::unexpected(std::move(terms_enum.error()));
     }
 
+    // Only a position with a single term can expose impacts: the union of
+    // several terms has none, so such a phrase cannot skip blocks at all.  The
+    // matcher notices the missing impacts of one slot and disables skipping.
+    bool can_use_impacts = score_mode == ScoreMode::TopScores;
     std::vector<std::pair<int64_t, PostingsAndFreq>> opened;
     opened.reserve(term_arrays.size());
     for (size_t i = 0; i < term_arrays.size(); ++i) {
         const std::vector<Term> &terms = term_arrays[i];
         std::vector<std::unique_ptr<PostingsEnum>> subs;
+        ImpactsSource *impacts = nullptr;
         int64_t slot_freq = std::numeric_limits<int64_t>::max();
         for (const Term &term : terms) {
             auto found = terms_enum.value()->seek_exact(term.bytes().as_slice());
@@ -168,24 +175,46 @@ Result<std::unique_ptr<PhraseScorer>> build_scorer(LeafReader &reader, std::stri
             if (doc_freq.value() <= 0) {
                 continue;
             }
-            auto postings = terms_enum.value()->postings_with_flags(nullptr, POSITIONS);
-            if (!postings.has_value()) {
-                return std::unexpected(std::move(postings.error()));
+            std::unique_ptr<PostingsEnum> postings;
+            if (can_use_impacts && terms.size() == 1) {
+                auto with_impacts = terms_enum.value()->impacts(POSITIONS);
+                if (!with_impacts.has_value()) {
+                    if (with_impacts.error().kind() != ErrorKind::kUnsupportedOperation) {
+                        return std::unexpected(std::move(with_impacts.error()));
+                    }
+                    // This dictionary cannot describe its impacts: plain
+                    // postings still match, they just cannot be skipped.
+                    can_use_impacts = false;
+                } else if (with_impacts.value() == nullptr) {
+                    continue;
+                } else {
+                    impacts = with_impacts.value().get();
+                    postings = std::move(with_impacts.value());
+                }
             }
-            if (postings.value() == nullptr) {
-                continue;
+            if (postings == nullptr) {
+                auto plain = terms_enum.value()->postings_with_flags(nullptr, POSITIONS);
+                if (!plain.has_value()) {
+                    return std::unexpected(std::move(plain.error()));
+                }
+                if (plain.value() == nullptr) {
+                    continue;
+                }
+                postings = std::move(plain.value());
             }
             slot_freq = std::min(slot_freq, static_cast<int64_t>(doc_freq.value()));
-            subs.push_back(std::move(postings.value()));
+            subs.push_back(std::move(postings));
         }
         if (subs.empty()) {
             return std::unique_ptr<PhraseScorer>{};
         }
 
-        PostingsAndFreq slot{.postings = nullptr, .position = positions[i], .terms = terms};
+        PostingsAndFreq slot{.postings = nullptr, .impacts = impacts, .position = positions[i], .terms = terms};
         if (subs.size() == 1) {
             slot.postings = std::move(subs.front());
         } else {
+            // Several terms share the position, so no slot impacts survive.
+            slot.impacts = nullptr;
             slot.postings = std::make_unique<UnionPostingsEnum>(std::move(subs));
         }
         opened.emplace_back(slot_freq, std::move(slot));
@@ -215,8 +244,8 @@ Result<std::unique_ptr<PhraseScorer>> build_scorer(LeafReader &reader, std::stri
     if (!norms.has_value()) {
         return std::unexpected(std::move(norms.error()));
     }
-    return std::unique_ptr<PhraseScorer>(
-            new PhraseScorer(std::move(matcher), std::move(sim_scorer), std::move(norms.value())));
+    return std::unique_ptr<PhraseScorer>(new PhraseScorer(std::move(matcher), std::move(sim_scorer),
+                                                          std::move(norms.value()), score_mode));
 }
 
 /// Supplies the multi-phrase scorer of one leaf.
@@ -224,9 +253,10 @@ class MultiPhraseScorerSupplier final : public ScorerSupplier {
 public:
     MultiPhraseScorerSupplier(std::string field, std::vector<std::vector<Term>> term_arrays,
                               std::vector<int32_t> positions, int32_t slop, int64_t cost, float match_cost,
-                              std::shared_ptr<const SimScorer> sim_scorer)
+                              std::shared_ptr<const SimScorer> sim_scorer, ScoreMode score_mode)
             : field_(std::move(field)), term_arrays_(std::move(term_arrays)), positions_(std::move(positions)),
-              slop_(slop), cost_(cost), match_cost_(match_cost), sim_scorer_(std::move(sim_scorer)) {}
+              slop_(slop), cost_(cost), match_cost_(match_cost), sim_scorer_(std::move(sim_scorer)),
+              score_mode_(score_mode) {}
 
     [[nodiscard]] Result<std::unique_ptr<Scorer>> get(int64_t /*lead_cost*/, const LeafReaderContext &context,
                                                       const IndexSearcher & /*searcher*/) override {
@@ -234,7 +264,8 @@ public:
         if (reader == nullptr) {
             return std::unique_ptr<Scorer>{};
         }
-        auto scorer = build_scorer(*reader, field_, term_arrays_, positions_, slop_, match_cost_, sim_scorer_);
+        auto scorer =
+                build_scorer(*reader, field_, term_arrays_, positions_, slop_, match_cost_, sim_scorer_, score_mode_);
         if (!scorer.has_value()) {
             return std::unexpected(std::move(scorer.error()));
         }
@@ -257,6 +288,7 @@ private:
     int64_t cost_{0};
     float match_cost_{0.0F};
     std::shared_ptr<const SimScorer> sim_scorer_;
+    ScoreMode score_mode_;
 };
 
 /// All the terms of the query, flattened.
@@ -530,7 +562,7 @@ Result<std::unique_ptr<ScorerSupplier>> MultiPhraseWeight::scorer_supplier(const
     }
     std::unique_ptr<ScorerSupplier> supplier(new MultiPhraseScorerSupplier(
             query_.field().value(), query_.term_arrays(), query_.positions(), query_.slop(),
-            analyzed.value().value().cost, analyzed.value().value().match_cost, sim_scorer_));
+            analyzed.value().value().cost, analyzed.value().value().match_cost, sim_scorer_, score_mode_));
     return supplier;
 }
 
@@ -558,7 +590,7 @@ Result<Explanation> MultiPhraseWeight::explain(const LeafReaderContext &context,
         return Explanation::no_match_no_details("no matching term in this segment");
     }
     auto scorer = build_scorer(*reader, query_.field().value(), query_.term_arrays(), query_.positions(),
-                               query_.slop(), analyzed.value().value().match_cost, sim_scorer_);
+                               query_.slop(), analyzed.value().value().match_cost, sim_scorer_, score_mode_);
     if (!scorer.has_value()) {
         return std::unexpected(std::move(scorer.error()));
     }

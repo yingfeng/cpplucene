@@ -61,13 +61,26 @@ public:
     /// Copies `dst.size()` bytes at `pos`; the caller validates the range.
     void read(size_t pos, std::span<uint8_t> dst) const noexcept;
 
+    /// A pointer to `len` bytes at `pos`, or `nullptr` when the range straddles
+    /// two mapping chunks or lies outside the mapping.
+    ///
+    /// This is the fast path of the fixed-width readers: a shifted chunk lookup
+    /// and one load instead of a `memcpy` call per value.
+    [[nodiscard]] const uint8_t *ptr_at(size_t pos, size_t len) const noexcept;
+
+    /// `[pos, pos + len)` as one contiguous block, or nothing when it straddles
+    /// two mapping chunks.
+    [[nodiscard]] std::optional<std::span<const uint8_t>> contiguous_span(size_t pos, size_t len) const noexcept;
+
     /// Advises the kernel that `[pos, pos + len)` will be read soon.
     void prefetch(size_t pos, size_t len) const noexcept;
 
 private:
     std::vector<uint8_t *> segments_;
     std::vector<size_t> segment_sizes_;
+    /// Always a power of two, so chunk lookups are shifts (see [`map`]).
     size_t chunk_size_{0};
+    size_t chunk_shift_{0};
     size_t size_{0};
 };
 
@@ -121,9 +134,19 @@ public:
     [[nodiscard]] Result<int32_t> read_int(size_t pos) const override;
     [[nodiscard]] Result<int64_t> read_long(size_t pos) const override;
     [[nodiscard]] VoidResult read_bytes(size_t pos, std::span<uint8_t> bytes) const override;
+    [[nodiscard]] std::optional<std::span<const uint8_t>> contiguous_bytes() const override;
 
 private:
     [[nodiscard]] VoidResult check_range(size_t pos, size_t num_bytes) const;
+
+    /// `num_bytes` bytes at `pos`, when they lie inside this slice and inside one
+    /// mapping chunk; `nullptr` otherwise, so the caller can report the error.
+    [[nodiscard]] const uint8_t *pointer_for(size_t pos, size_t num_bytes) const noexcept {
+        if (pos > length_ || num_bytes > length_ - pos) {
+            return nullptr;
+        }
+        return mapping_->ptr_at(offset_ + pos, num_bytes);
+    }
 
     std::shared_ptr<MemoryMapping> mapping_;
     size_t offset_{0};
@@ -144,10 +167,19 @@ public:
     [[nodiscard]] Result<int32_t> read_int(size_t pos) const override;
     [[nodiscard]] Result<int64_t> read_long(size_t pos) const override;
     [[nodiscard]] VoidResult read_bytes(size_t pos, std::span<uint8_t> bytes) const override;
+    [[nodiscard]] std::optional<std::span<const uint8_t>> contiguous_bytes() const override;
     [[nodiscard]] Result<size_t> length() const override { return length_; }
 
 private:
     [[nodiscard]] VoidResult check_range(size_t pos, size_t num_bytes) const;
+
+    /// [`MemorySegmentIndexInput::pointer_for`], for this view.
+    [[nodiscard]] const uint8_t *pointer_for(size_t pos, size_t num_bytes) const noexcept {
+        if (pos > length_ || num_bytes > length_ - pos) {
+            return nullptr;
+        }
+        return mapping_->ptr_at(offset_ + pos, num_bytes);
+    }
 
     std::shared_ptr<MemoryMapping> mapping_;
     size_t offset_{0};

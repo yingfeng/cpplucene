@@ -158,21 +158,35 @@ VoidResult prefetch_postings(IndexInput &doc_in, const IntBlockTermState &state)
 ImpactsImpl::ImpactsImpl(bool index_has_freq, int32_t level0_last_doc_id, int32_t level1_last_doc_id,
                          std::optional<std::span<const uint8_t>> level0_serialized_impacts,
                          std::optional<std::span<const uint8_t>> level1_serialized_impacts,
-                         size_t max_num_impacts_at_level0, size_t max_num_impacts_at_level1)
-    : index_has_freq_(index_has_freq),
-      level0_last_doc_id_(level0_last_doc_id),
-      level1_last_doc_id_(level1_last_doc_id),
-      level0_serialized_impacts_(level0_serialized_impacts),
-      level1_serialized_impacts_(level1_serialized_impacts),
-      max_num_impacts_at_level0_(max_num_impacts_at_level0),
-      max_num_impacts_at_level1_(max_num_impacts_at_level1) {}
+                         size_t max_num_impacts_at_level0, size_t max_num_impacts_at_level1) {
+    update(index_has_freq, level0_last_doc_id, level1_last_doc_id, level0_serialized_impacts,
+           level1_serialized_impacts, max_num_impacts_at_level0, max_num_impacts_at_level1);
+}
 
-Result<MutableImpactList> ImpactsImpl::decode(std::span<const uint8_t> serialized, size_t level_impacts_len) {
+void ImpactsImpl::update(bool index_has_freq, int32_t level0_last_doc_id, int32_t level1_last_doc_id,
+                         std::optional<std::span<const uint8_t>> level0_serialized_impacts,
+                         std::optional<std::span<const uint8_t>> level1_serialized_impacts,
+                         size_t max_num_impacts_at_level0, size_t max_num_impacts_at_level1) {
+    index_has_freq_ = index_has_freq;
+    level0_last_doc_id_ = level0_last_doc_id;
+    level1_last_doc_id_ = level1_last_doc_id;
+    level0_serialized_impacts_ = level0_serialized_impacts;
+    level1_serialized_impacts_ = level1_serialized_impacts;
+    max_num_impacts_at_level0_ = max_num_impacts_at_level0;
+    max_num_impacts_at_level1_ = max_num_impacts_at_level1;
+}
+
+VoidResult ImpactsImpl::decode_into(std::span<const uint8_t> serialized, size_t level_impacts_len,
+                                    MutableImpactList &reuse) {
     ByteArrayDataInput scratch{serialized};
     // Each impact consumes at least one byte.
+    reuse.impacts.reserve(std::min(level_impacts_len, serialized.size()));
+    return read_impacts(scratch, reuse);
+}
+
+Result<MutableImpactList> ImpactsImpl::decode(std::span<const uint8_t> serialized, size_t level_impacts_len) {
     MutableImpactList level_impacts;
-    level_impacts.impacts.reserve(std::min(level_impacts_len, serialized.size()));
-    if (auto read = read_impacts(scratch, level_impacts); !read) {
+    if (auto read = decode_into(serialized, level_impacts_len, level_impacts); !read) {
         return std::unexpected(std::move(read.error()));
     }
     return level_impacts;
@@ -198,32 +212,34 @@ int32_t ImpactsImpl::get_doc_id_upto(size_t level) const {
     return NO_MORE_DOCS;
 }
 
-Result<std::vector<Impact>> ImpactsImpl::get_impacts(size_t level) const {
+Result<std::span<const Impact>> ImpactsImpl::get_impacts(size_t level) const {
+    constexpr size_t kMaxLevel = 1;
+    MutableImpactList &slot = decoded_[std::min(level, kMaxLevel)];
     if (index_has_freq_) {
         if (level == 0 && level0_last_doc_id_ != NO_MORE_DOCS) {
             if (!level0_serialized_impacts_.has_value()) {
                 return err(LuceneError::illegal_state("level 0 impacts are missing"));
             }
-            auto decoded = decode(level0_serialized_impacts_.value(), max_num_impacts_at_level0_);
-            if (!decoded) {
+            if (auto decoded = decode_into(level0_serialized_impacts_.value(), max_num_impacts_at_level0_, slot);
+                !decoded) {
                 return std::unexpected(std::move(decoded.error()));
             }
-            decoded.value().impacts.resize(decoded.value().length);
-            return std::move(decoded.value().impacts);
+            return std::span<const Impact>(slot.impacts.data(), slot.length);
         }
         if (level == 1) {
             if (!level1_serialized_impacts_.has_value()) {
                 return err(LuceneError::illegal_state("level 1 impacts are missing"));
             }
-            auto decoded = decode(level1_serialized_impacts_.value(), max_num_impacts_at_level1_);
-            if (!decoded) {
+            if (auto decoded = decode_into(level1_serialized_impacts_.value(), max_num_impacts_at_level1_, slot);
+                !decoded) {
                 return std::unexpected(std::move(decoded.error()));
             }
-            decoded.value().impacts.resize(decoded.value().length);
-            return std::move(decoded.value().impacts);
+            return std::span<const Impact>(slot.impacts.data(), slot.length);
         }
     }
-    return std::vector<Impact>{default_impact()};
+    slot.impacts.assign(1, default_impact());
+    slot.length = slot.impacts.size();
+    return std::span<const Impact>(slot.impacts.data(), slot.length);
 }
 
 namespace {
@@ -1726,7 +1742,7 @@ VoidResult BlockPostingsEnum::advance_shallow(int32_t target) {
     return {};
 }
 
-Result<std::unique_ptr<Impacts>> BlockPostingsEnum::get_impacts() const {
+Result<Impacts *> BlockPostingsEnum::get_impacts() {
     debug_check(needs_impacts_);
 
     // The reference implementation keeps `None` when the serialized impacts were not allocated.
@@ -1737,10 +1753,16 @@ Result<std::unique_ptr<Impacts>> BlockPostingsEnum::get_impacts() const {
         level1_serialized = std::span<const uint8_t>(level1_serialized_impacts_);
     }
 
-    return std::unique_ptr<Impacts>(std::make_unique<ImpactsImpl>(
-            index_has_freq_, level0_last_doc_id_, level1_last_doc_id_, level0_serialized, level1_serialized,
-            static_cast<size_t>(max_num_impacts_at_level0_),
-            static_cast<size_t>(max_num_impacts_at_level1_)));
+    if (impacts_cache_ == nullptr) {
+        impacts_cache_ = std::make_unique<ImpactsImpl>(
+                index_has_freq_, level0_last_doc_id_, level1_last_doc_id_, level0_serialized, level1_serialized,
+                static_cast<size_t>(max_num_impacts_at_level0_), static_cast<size_t>(max_num_impacts_at_level1_));
+    } else {
+        impacts_cache_->update(index_has_freq_, level0_last_doc_id_, level1_last_doc_id_, level0_serialized,
+                               level1_serialized, static_cast<size_t>(max_num_impacts_at_level0_),
+                               static_cast<size_t>(max_num_impacts_at_level1_));
+    }
+    return impacts_cache_.get();
 }
 
 } // namespace lucene

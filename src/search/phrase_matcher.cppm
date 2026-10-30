@@ -21,6 +21,8 @@ import :types;
 import std;
 
 import :error;
+import :impacts_source;
+import :phrase_impacts;
 import :postings_enum;
 import :term;
 
@@ -34,6 +36,11 @@ export struct PostingsAndFreq {
     /// Postings with positions (and offsets when a matches iterator is asked
     /// for).
     std::unique_ptr<PostingsEnum> postings;
+    /// The impacts of [`postings`], when they were opened through
+    /// `TermsEnum::impacts` — the same object, borrowed, so that the impacts
+    /// always describe the documents the postings are on.  Null when the
+    /// postings carry no impacts, in which case nothing can be skipped.
+    ImpactsSource *impacts{nullptr};
     /// Position of the slot inside the phrase.
     int32_t position{0};
     /// The terms of the slot; several only for a multi-term query, and used to
@@ -95,6 +102,16 @@ public:
 
     /// An estimate of the cost of finding every match of a document.
     [[nodiscard]] virtual float get_match_cost() const = 0;
+
+    /// The impacts of the phrase (the merge of the impacts of its postings), or
+    /// null when its postings carry none, in which case a scorer cannot skip
+    /// non-competitive blocks.
+    ///
+    /// **Deviation:** the reference implementation answers an `ImpactsDISI`
+    /// here; the port answers the merged source and lets the scorer build the
+    /// iterator, because its scorers are already iterators and have no separate
+    /// approximation object.
+    [[nodiscard]] virtual ImpactsSource *impacts() { return nullptr; }
 };
 
 /// A [`PhraseMatcher`] whose candidates are the documents all of its postings
@@ -102,13 +119,16 @@ public:
 ///
 /// **Deviation:** the reference implementation builds this conjunction out of
 /// `ConjunctionDISI` and impacts enums; here it is a plain loop over the
-/// postings, which is what the port's non impacts scorers do as well.
+/// postings, which is what the port's non impacts scorers do as well.  The
+/// impacts of the phrase, when its postings carry them, are merged into a
+/// [`PhraseImpacts`] the scorer can use to skip blocks.
 export class PhraseMatcherBase : public PhraseMatcher {
 public:
     [[nodiscard]] int32_t doc_id() const override { return doc_; }
     [[nodiscard]] Result<int32_t> next_doc() override;
     [[nodiscard]] Result<int32_t> advance(int32_t target) override;
     [[nodiscard]] Result<int64_t> cost() const override;
+    [[nodiscard]] ImpactsSource *impacts() override { return impacts_.get(); }
 
 protected:
     explicit PhraseMatcherBase(std::vector<PostingsAndFreq> postings);
@@ -122,6 +142,8 @@ protected:
     [[nodiscard]] Result<int32_t> align(int32_t target);
 
     std::vector<PostingsAndFreq> postings_;
+    /// The merged impacts of `postings_`, null when any of them carries none.
+    std::unique_ptr<PhraseImpacts> impacts_;
     int32_t doc_{-1};
 };
 

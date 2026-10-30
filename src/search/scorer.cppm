@@ -70,6 +70,19 @@ public:
     /// Whether [`matches`] has to be called.
     [[nodiscard]] virtual TwoPhaseState has_two_phase_iterator() const = 0;
 
+    /// The iterator this scorer merely forwards to, or `nullptr` when the scorer
+    /// decides matches itself.
+    ///
+    /// **Deviation:** the reference implementation does not need this, because its
+    /// scorers are a statically dispatched enum and the forwarding collapses at
+    /// compile time.  Here a conjunction of several terms is a chain of virtual
+    /// calls per document; handing out the underlying [`PostingsEnum`] lets the
+    /// intersection drive it directly, which is one virtual call instead of two.
+    ///
+    /// Driving it directly leaves the scorer's own `doc_id` stale, so this may
+    /// only be used for clauses whose score nobody reads.
+    [[nodiscard]] virtual DocIdSetIterator *matching_iterator() { return nullptr; }
+
     // ---- two-phase entry points; the defaults mean "no approximation" ----
 
     /// Whether the current candidate really matches.  Defaults to `true`.

@@ -78,9 +78,12 @@ class FakeImpacts : public Impacts {
 public:
     [[nodiscard]] size_t num_levels() const override { return 1; }
     [[nodiscard]] int32_t get_doc_id_upto(size_t /*level*/) const override { return 2; }
-    [[nodiscard]] Result<std::vector<Impact>> get_impacts(size_t /*level*/) const override {
-        return std::vector<Impact>({Impact{1, 4}, Impact{2, 8}});
+    [[nodiscard]] Result<std::span<const Impact>> get_impacts(size_t /*level*/) const override {
+        return std::span<const Impact>(impacts_);
     }
+
+private:
+    std::array<Impact, 2> impacts_{Impact{1, 4}, Impact{2, 8}};
 };
 
 /// `ImpactsEnum` over `FakePostingsEnum`, recording the last shallow target.
@@ -101,15 +104,14 @@ public:
         shallow_target_ = target;
         return {};
     }
-    [[nodiscard]] Result<std::unique_ptr<Impacts>> get_impacts() const override {
-        return std::unique_ptr<Impacts>(std::make_unique<FakeImpacts>());
-    }
+    [[nodiscard]] Result<Impacts *> get_impacts() override { return &impacts_; }
 
     [[nodiscard]] int32_t shallow_target() const { return shallow_target_; }
 
 private:
     FakePostingsEnum postings_;
     int32_t shallow_target_{-1};
+    FakeImpacts impacts_;
 };
 
 /// Same behaviour, distinct type: the second variant alternative.

@@ -74,11 +74,11 @@ public:
         return levels_[level].upto;
     }
 
-    [[nodiscard]] Result<std::vector<Impact>> get_impacts(size_t level) const override {
+    [[nodiscard]] Result<std::span<const Impact>> get_impacts(size_t level) const override {
         if (level >= levels_.size()) {
             return err(LuceneError::illegal_argument("no such impacts level"));
         }
-        return levels_[level].impacts;
+        return std::span<const Impact>(levels_[level].impacts);
     }
 
 private:
@@ -135,7 +135,7 @@ public:
         return {};
     }
 
-    [[nodiscard]] Result<std::unique_ptr<Impacts>> get_impacts() const override {
+    [[nodiscard]] Result<Impacts *> get_impacts() override {
         const int32_t target = shallow_target_ < 0 ? 0 : shallow_target_;
         const int32_t block = target / kBlockSize;
         const int32_t block_upto = std::min((block + 1) * kBlockSize - 1, kMaxDoc - 1);
@@ -146,12 +146,14 @@ public:
         std::vector<FakeImpacts::Level> levels;
         levels.push_back(FakeImpacts::Level{block_upto, std::move(block_impacts)});
         levels.push_back(FakeImpacts::Level{kMaxDoc - 1, std::move(global_impacts)});
-        return std::unique_ptr<Impacts>(std::make_unique<FakeImpacts>(std::move(levels)));
+        impacts_ = std::make_unique<FakeImpacts>(std::move(levels));
+        return impacts_.get();
     }
 
 private:
     int32_t doc_{-1};
     int32_t shallow_target_{-1};
+    std::unique_ptr<FakeImpacts> impacts_;
 };
 
 /// Drains a document iterator into the list of documents it visits.

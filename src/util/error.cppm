@@ -119,14 +119,20 @@ public:
     static LuceneError parse(std::string message);
 
     [[nodiscard]] ErrorKind kind() const noexcept { return kind_; }
-    [[nodiscard]] const std::string &message() const noexcept { return message_; }
+    /// The message; empty when the failure carries none.
+    ///
+    /// The text lives in the process-wide intern table, so the reference stays
+    /// valid for the lifetime of the process.
+    [[nodiscard]] const std::string &message() const noexcept;
 
     /// `"<kind>: <message>"`, the string form used in logs and tests.
     [[nodiscard]] std::string to_string() const;
 
     /// Attaches a suppressed failure (the C++ analogue of `add_suppressed`).
     void add_suppressed(const LuceneError &error);
-    [[nodiscard]] const std::shared_ptr<const LuceneError> &suppressed() const noexcept { return suppressed_; }
+    /// The suppressed failure, or `nullptr` when there is none.  Points into the
+    /// intern table, so it stays valid for the lifetime of the process.
+    [[nodiscard]] const LuceneError *suppressed() const noexcept;
 
     [[nodiscard]] bool is_eof() const noexcept { return kind_ == ErrorKind::kEof; }
     [[nodiscard]] bool is_io() const noexcept { return kind_ == ErrorKind::kIo; }
@@ -144,10 +150,30 @@ public:
     }
 
 private:
+    /// The message and the suppressed failure live in a process-wide intern
+    /// table; the error itself is only a kind and a table index.
+    ///
+    /// **Deviation**: the reference implementation's error is a small enum-like
+    /// value.  A `std::string` member would make `LuceneError` 56 bytes, and the
+    /// search hot loop returns a `Result` per document (doc id, freq, norm,
+    /// score), so the cost of copying one is the cost of the whole loop.
+    /// A `std::shared_ptr` payload (24 bytes) shrinks the error but keeps
+    /// `std::expected` non-trivially-copyable, which makes every `Result<int>`
+    /// 32 bytes returned through memory.  Interning the text instead keeps the
+    /// error at two words and trivially copyable, so `Result<int>` is 12 bytes
+    /// and comes back in registers.
+    static LuceneError interned(ErrorKind kind, std::string_view message, const LuceneError &suppressed);
+    /// `head` with `extra` appended to the end of its suppressed chain.
+    static LuceneError append_suppressed(const LuceneError &head, const LuceneError &extra);
+
     ErrorKind kind_{ErrorKind::kNone};
-    std::string message_{};
-    std::shared_ptr<const LuceneError> suppressed_{};
+    /// 0 when the failure carries no message and no suppressed failure.
+    uint32_t detail_{0};
 };
+
+/// The intern table is append-only, so an interned error costs two words and
+/// copies like an integer.
+static_assert(sizeof(LuceneError) == 8, "LuceneError must stay two words");
 
 /// `Result<T>`: the reference implementation's `Result<T>` = `std::expected<T, LuceneError>`.
 export template <class T>

@@ -23,12 +23,27 @@ import std;
 
 import :doc_id_set_iterator;
 import :error;
+import :impacts_source;
+import :phrase_impacts;
 import :postings_enum;
 import :types;
 
 namespace lucene {
 
-PhraseMatcherBase::PhraseMatcherBase(std::vector<PostingsAndFreq> postings) : postings_(std::move(postings)) {}
+PhraseMatcherBase::PhraseMatcherBase(std::vector<PostingsAndFreq> postings) : postings_(std::move(postings)) {
+    // Merging needs the impacts of every slot: with one of them missing the
+    // bound would describe only part of the phrase, so skipping is disabled
+    // instead of silently loosening (or worse, tightening) it.
+    std::vector<ImpactsSource *> sources;
+    sources.reserve(postings_.size());
+    for (const PostingsAndFreq &entry : postings_) {
+        if (entry.impacts == nullptr) {
+            return;
+        }
+        sources.push_back(entry.impacts);
+    }
+    impacts_ = std::make_unique<PhraseImpacts>(std::move(sources));
+}
 
 Result<int32_t> PhraseMatcherBase::align(int32_t target) {
     int32_t next_target = target;

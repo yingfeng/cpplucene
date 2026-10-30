@@ -20,7 +20,10 @@ export module lucene_core:phrase_scorer;
 import :types;
 import std;
 
+import :doc_id_set_iterator;
 import :error;
+import :impacts_disi;
+import :max_score_cache;
 import :numeric_doc_values;
 import :phrase_matcher;
 import :scorable;
@@ -36,20 +39,29 @@ namespace lucene {
 ///
 /// Port of `PhraseScorer` (`core/search/phrase_scorer.rs`).
 ///
+/// In `ScoreMode::TopScores` the candidate cursor is an [`ImpactsDISI`] over the
+/// impacts of the phrase, so blocks whose maximum score cannot compete with the
+/// collector's threshold are skipped without decoding any position; the
+/// documents that survive are still confirmed by the matcher.  Other modes walk
+/// the matcher's conjunction directly.
+///
 /// **Deviations** (C++ scope):
 ///  * the reference implementation exposes the matcher through a
-///    `TwoPhaseIterator` whose block-max and impacts entry points can prune
-///    blocks; the port's scorers have no impacts, so this scorer reports
-///    [`TwoPhaseState::No`] and does the full match in [`next_doc`] /
-///    [`advance`], while still answering [`matches`] correctly;
-///  * `get_max_score` answers positive infinity, which only disables competitive
-///    skipping.
+///    `TwoPhaseIterator`; the port's [`Scorer`] carries the two-phase entry
+///    points itself and this scorer reports [`TwoPhaseState::No`], doing the
+///    full match in [`next_doc`] / [`advance`] while still answering
+///    [`matches`] correctly;
+///  * `get_max_score` answers positive infinity when the phrase has no impacts
+///    (a field without frequencies or norms, or a mode that does not need
+///    scores), which only disables competitive skipping.
 export class PhraseScorer final : public Scorer {
 public:
     /// A scorer for `matcher`; `norms` may be null when the field has no norms,
     /// in which case the norm `1` is used, and `sim_scorer` must not be null.
+    /// `score_mode` decides whether the impacts of the matcher are used to skip
+    /// non-competitive blocks.
     PhraseScorer(std::unique_ptr<PhraseMatcher> matcher, std::shared_ptr<const SimScorer> sim_scorer,
-                 std::unique_ptr<NumericDocValues> norms);
+                 std::unique_ptr<NumericDocValues> norms, ScoreMode score_mode);
 
     // ---- DocIdSetIterator ----
 
@@ -61,7 +73,8 @@ public:
     // ---- Scorer ----
 
     [[nodiscard]] Result<int32_t> scoring_doc_id() override { return doc_; }
-    [[nodiscard]] Result<float> get_max_score(int32_t /*upto*/) override;
+    [[nodiscard]] Result<int32_t> advance_shallow(int32_t target) override;
+    [[nodiscard]] Result<float> get_max_score(int32_t upto) override;
     [[nodiscard]] TwoPhaseState has_two_phase_iterator() const override { return TwoPhaseState::No; }
 
     /// Computes the phrase frequency of the current document; the score is that
@@ -77,6 +90,10 @@ public:
 
     [[nodiscard]] Result<float> score() override;
 
+    /// Tells the scorer that documents scoring below `min_score` cannot make it
+    /// into the top hits, so whole blocks may be skipped.
+    [[nodiscard]] VoidResult set_min_competitive_score(float min_score) override;
+
     /// The matcher of this scorer; exposed for the `matches()` entry points of
     /// the query level machinery.
     [[nodiscard]] const PhraseMatcher &matcher() const noexcept { return *matcher_; }
@@ -85,13 +102,30 @@ public:
     [[nodiscard]] float freq() const noexcept { return freq_; }
 
 private:
+    /// The candidate cursor, with competitive skipping when the impacts allow
+    /// it: either the matcher itself or the impacts iterator that drives it.
+    [[nodiscard]] Result<int32_t> next_candidate();
+    [[nodiscard]] Result<int32_t> advance_candidate(int32_t target);
+
     /// Advances the candidate cursor and confirms the match, so that [`doc_id`]
     /// only ever reports documents the phrase really matches.
-    [[nodiscard]] Result<int32_t> do_next(int32_t target);
+    [[nodiscard]] Result<int32_t> do_next(int32_t target, bool advance);
+
+    /// The norm of [`doc`], `1` when the field has no norms.
+    [[nodiscard]] Result<int64_t> norm_of_current_doc();
 
     std::unique_ptr<PhraseMatcher> matcher_;
     std::shared_ptr<const SimScorer> sim_scorer_;
     std::unique_ptr<NumericDocValues> norms_;
+    ScoreMode score_mode_;
+
+    // The skipping machinery, in construction order: the iterator borrows the
+    // two members before it, so they must outlive it.
+    std::unique_ptr<DocIdSetIterator> approximation_;
+    std::unique_ptr<MaxScoreCache> max_score_cache_;
+    std::unique_ptr<ImpactsDISI> impacts_approximation_;
+
+    float min_competitive_score_{0.0F};
     int32_t doc_{-1};
     /// The phrase frequency of [`doc`]; `0` until [`matches`] ran.
     float freq_{0.0F};

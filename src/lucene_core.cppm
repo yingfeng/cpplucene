@@ -475,6 +475,7 @@ export import :query_parser_token;
 export import :query_parser_base;
 export import :query_parser;
 export import :phrase_matcher;
+export import :phrase_impacts;
 export import :phrase_positions;
 export import :exact_phrase_matcher;
 export import :sloppy_phrase_matcher;

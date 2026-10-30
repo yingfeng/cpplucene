@@ -45,7 +45,12 @@ public:
     /// NOTE: there is no guarantee that these impacts actually appear in the
     /// postings, only that they trigger scores greater than or equal to the
     /// impacts that do appear.
-    [[nodiscard]] virtual Result<std::vector<Impact>> get_impacts(size_t level) const = 0;
+    ///
+    /// **Deviation:** the reference implementation returns an owned `Impact[]`;
+    /// here the list is a view over storage owned by this instance, valid until
+    /// the next call on the same instance.  Impacts are decoded once per block
+    /// and the scoring loop would otherwise allocate a vector per block.
+    [[nodiscard]] virtual Result<std::span<const Impact>> get_impacts(size_t level) const = 0;
 };
 
 } // namespace lucene

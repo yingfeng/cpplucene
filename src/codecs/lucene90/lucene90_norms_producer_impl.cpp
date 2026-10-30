@@ -19,6 +19,7 @@ module lucene_core:lucene90_norms_producer.impl;
 
 import :lucene90_norms_producer;
 
+import :bit_util;
 import :codec_util;
 import :data_input;
 import :directory;
@@ -73,6 +74,10 @@ public:
         if (!slice.has_value()) {
             return std::unexpected(std::move(slice.error()));
         }
+        // A memory mapped slice hands out its bytes, which turns the per
+        // document read below into a plain load instead of a virtual call plus a
+        // bounds check plus a `memcpy`.
+        reader.bytes_ = slice.value()->contiguous_bytes().value_or(std::span<const uint8_t>{});
         reader.slice_ = std::move(slice.value());
         return reader;
     }
@@ -80,6 +85,9 @@ public:
     [[nodiscard]] Result<int64_t> value_at(size_t ordinal) const {
         if (bytes_per_norm_ == 0) {
             return singleton_;
+        }
+        if (!bytes_.empty()) {
+            return value_at_mapped(ordinal);
         }
         if (slice_ == nullptr) {
             return err(LuceneError::illegal_state("the norms values were never opened"));
@@ -116,7 +124,26 @@ public:
     }
 
 private:
+    /// [`value_at`] over the mapped bytes; `create` has already validated that
+    /// the slice holds `num_docs * bytes_per_norm` bytes, so no accessor can run
+    /// past its end for a valid ordinal.
+    [[nodiscard]] int64_t value_at_mapped(size_t ordinal) const noexcept {
+        const size_t offset = ordinal * static_cast<size_t>(bytes_per_norm_);
+        switch (bytes_per_norm_) {
+            case 1:
+                return static_cast<int64_t>(static_cast<int8_t>(bytes_[offset]));
+            case 2:
+                return static_cast<int64_t>(BitUtil::get_i16_le(bytes_, offset));
+            case 4:
+                return static_cast<int64_t>(BitUtil::get_i32_le(bytes_, offset));
+            default:
+                return BitUtil::get_i64_le(bytes_, offset);
+        }
+    }
+
     std::shared_ptr<RandomAccessInput> slice_;
+    /// The bytes of [`slice_`] when the directory maps the file.
+    std::span<const uint8_t> bytes_;
     int64_t singleton_{0};
     int8_t bytes_per_norm_{0};
 };

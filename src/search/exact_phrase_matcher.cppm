@@ -32,9 +32,10 @@ namespace lucene {
 /// The first posting leads: its positions are tried in order, and the other
 /// postings are advanced to the position the lead implies.
 ///
-/// **Deviation:** the reference implementation sorts the postings by frequency
-/// and wraps them in impacts enums; here the caller supplies the postings in
-/// ascending frequency order and the matcher advances them directly.
+/// **Deviation:** the reference implementation sorts the postings by position
+/// and wraps them in impacts enums at construction; here the caller supplies
+/// the postings in phrase order and the impacts are merged by the base class,
+/// which reads them from the postings themselves.
 export class ExactPhraseMatcher final : public PhraseMatcherBase {
 public:
     ExactPhraseMatcher(std::vector<PostingsAndFreq> postings, float match_cost);
@@ -70,6 +71,9 @@ private:
 
     std::vector<Slot> slots_;
     float match_cost_{0.0F};
+    /// Whether [`max_freq`] already loaded the frequencies of the current
+    /// document, so that [`reset`] only has to rewind the position cursors.
+    bool freqs_loaded_{false};
 };
 
 } // namespace lucene

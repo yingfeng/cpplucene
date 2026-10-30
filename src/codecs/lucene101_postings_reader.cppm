@@ -96,21 +96,37 @@ public:
     [[nodiscard]] static Result<MutableImpactList> decode(std::span<const uint8_t> serialized,
                                                          size_t level_impacts_len);
 
+    /// [`decode`] into caller-owned storage, so repeated calls do not allocate.
+    [[nodiscard]] static VoidResult decode_into(std::span<const uint8_t> serialized, size_t level_impacts_len,
+                                                MutableImpactList &reuse);
+
+    /// Moves the view on to the block the owning enum is positioned on.
+    ///
+    /// **Deviation:** the reference implementation constructs this object once
+    /// per enum and lets it read the enum's current state; here the state is
+    /// pushed in, which keeps the two classes independent.
+    void update(bool index_has_freq, int32_t level0_last_doc_id, int32_t level1_last_doc_id,
+                std::optional<std::span<const uint8_t>> level0_serialized_impacts,
+                std::optional<std::span<const uint8_t>> level1_serialized_impacts, size_t max_num_impacts_at_level0,
+                size_t max_num_impacts_at_level1);
+
     [[nodiscard]] size_t num_levels() const override;
     [[nodiscard]] int32_t get_doc_id_upto(size_t level) const override;
-    [[nodiscard]] Result<std::vector<Impact>> get_impacts(size_t level) const override;
+    [[nodiscard]] Result<std::span<const Impact>> get_impacts(size_t level) const override;
 
     /// The fallback impact the reference implementation returns when the field has no frequencies.
     [[nodiscard]] static Impact default_impact() noexcept { return Impact{std::numeric_limits<int32_t>::max(), 1}; }
 
 private:
-    bool index_has_freq_;
-    int32_t level0_last_doc_id_;
-    int32_t level1_last_doc_id_;
+    bool index_has_freq_{false};
+    int32_t level0_last_doc_id_{0};
+    int32_t level1_last_doc_id_{0};
     std::optional<std::span<const uint8_t>> level0_serialized_impacts_;
     std::optional<std::span<const uint8_t>> level1_serialized_impacts_;
-    size_t max_num_impacts_at_level0_;
-    size_t max_num_impacts_at_level1_;
+    size_t max_num_impacts_at_level0_{0};
+    size_t max_num_impacts_at_level1_{0};
+    /// Reused decode buffers, one per level.
+    mutable std::array<MutableImpactList, 2> decoded_;
 };
 
 /// Reader for [`Lucene101PostingsFormat`].
@@ -227,7 +243,8 @@ public:
     // ---- ImpactsSource / ImpactsEnum ----
 
     [[nodiscard]] VoidResult advance_shallow(int32_t target) override;
-    [[nodiscard]] Result<std::unique_ptr<Impacts>> get_impacts() const override;
+    /// The cached impacts view, re-pointed at the current block.
+    [[nodiscard]] Result<Impacts *> get_impacts() override;
 
 private:
     BlockPostingsEnum() = default;
@@ -336,6 +353,8 @@ private:
     int64_t level1_pay_end_fp_{0};
     int32_t level1_block_pay_upto_{0};
     std::vector<uint8_t> level1_serialized_impacts_;
+    /// The single [`ImpactsImpl`] this enum hands out; built on first use.
+    std::unique_ptr<ImpactsImpl> impacts_cache_;
 
     bool needs_refilling_{false};
 

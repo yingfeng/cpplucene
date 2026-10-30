@@ -58,6 +58,11 @@ VoidResult MemoryMapping::map(int fd, size_t size, size_t chunk_size) {
     } else if (page_size > 0 && chunk_size_ % page_size != 0) {
         chunk_size_ = ((chunk_size_ + page_size - 1) / page_size) * page_size;
     }
+    // Rounding the chunk size up to a power of two is invisible from the outside
+    // and lets every chunk lookup below be a shift instead of a division, which
+    // the per byte reads of the postings decoders would otherwise pay for.
+    chunk_size_ = std::bit_ceil(chunk_size_);
+    chunk_shift_ = std::countr_zero(chunk_size_);
     if (size == 0) {
         return {};
     }
@@ -98,14 +103,35 @@ VoidResult MemoryMapping::map(int fd, size_t size, size_t chunk_size) {
 void MemoryMapping::read(size_t pos, std::span<uint8_t> dst) const noexcept {
     size_t done = 0;
     while (done < dst.size()) {
-        const size_t chunk = pos / chunk_size_;
-        const size_t within = pos - (chunk * chunk_size_);
+        const size_t chunk = pos >> chunk_shift_;
+        const size_t within = pos - (chunk << chunk_shift_);
         const size_t available = segment_sizes_[chunk] - within;
         const size_t take = std::min(available, dst.size() - done);
         std::memcpy(dst.data() + done, segments_[chunk] + within, take);
         done += take;
         pos += take;
     }
+}
+
+const uint8_t *MemoryMapping::ptr_at(size_t pos, size_t len) const noexcept {
+    if (segments_.empty() || pos > size_ || len > size_ - pos) {
+        return nullptr;
+    }
+    const size_t chunk = pos >> chunk_shift_;
+    const size_t within = pos - (chunk << chunk_shift_);
+    if (len > segment_sizes_[chunk] - within) {
+        // The range straddles a chunk boundary.
+        return nullptr;
+    }
+    return segments_[chunk] + within;
+}
+
+std::optional<std::span<const uint8_t>> MemoryMapping::contiguous_span(size_t pos, size_t len) const noexcept {
+    const uint8_t *const pointer = ptr_at(pos, len);
+    if (pointer == nullptr) {
+        return std::nullopt;
+    }
+    return std::span<const uint8_t>(pointer, len);
 }
 
 void MemoryMapping::prefetch(size_t pos, size_t len) const noexcept {
@@ -164,6 +190,13 @@ VoidResult MemorySegmentIndexInput::seek(size_t pos) {
 }
 
 Result<uint8_t> MemorySegmentIndexInput::read_byte() {
+    // The pointer lookup covers both the slice bound and the mapping bound, and
+    // the postings decoders read one byte per call, so the diagnostics of
+    // `check_range` (a `std::format` per failure) stay off that path.
+    if (const uint8_t *const pointer = pointer_for(pos_, 1); pointer != nullptr) {
+        ++pos_;
+        return *pointer;
+    }
     if (auto r = check_range(pos_, 1); !r) {
         return std::unexpected(std::move(r.error()));
     }
@@ -180,7 +213,11 @@ VoidResult MemorySegmentIndexInput::read_bytes(std::span<uint8_t> b) {
     if (auto r = check_range(pos_, b.size()); !r) {
         return r;
     }
-    mapping_->read(offset_ + pos_, b);
+    if (const auto span = mapping_->contiguous_span(offset_ + pos_, b.size()); span.has_value()) {
+        std::memcpy(b.data(), span->data(), b.size());
+    } else {
+        mapping_->read(offset_ + pos_, b);
+    }
     pos_ += b.size();
     return {};
 }
@@ -202,7 +239,12 @@ VoidResult MemorySegmentIndexInput::skip_bytes(int64_t num_bytes) {
 }
 
 Result<int16_t> MemorySegmentIndexInput::read_short() {
-    std::array<uint8_t, BitUtil::SHORT_BYTES> bytes{};
+    constexpr size_t kBytes = BitUtil::SHORT_BYTES;
+    if (const uint8_t *const pointer = pointer_for(pos_, kBytes); pointer != nullptr) {
+        pos_ += kBytes;
+        return BitUtil::get_i16_le(std::span<const uint8_t>(pointer, kBytes), 0);
+    }
+    std::array<uint8_t, kBytes> bytes{};
     if (auto r = read_bytes(bytes); !r) {
         return std::unexpected(std::move(r.error()));
     }
@@ -210,7 +252,12 @@ Result<int16_t> MemorySegmentIndexInput::read_short() {
 }
 
 Result<int32_t> MemorySegmentIndexInput::read_int() {
-    std::array<uint8_t, BitUtil::INT_BYTES> bytes{};
+    constexpr size_t kBytes = BitUtil::INT_BYTES;
+    if (const uint8_t *const pointer = pointer_for(pos_, kBytes); pointer != nullptr) {
+        pos_ += kBytes;
+        return BitUtil::get_i32_le(std::span<const uint8_t>(pointer, kBytes), 0);
+    }
+    std::array<uint8_t, kBytes> bytes{};
     if (auto r = read_bytes(bytes); !r) {
         return std::unexpected(std::move(r.error()));
     }
@@ -218,7 +265,12 @@ Result<int32_t> MemorySegmentIndexInput::read_int() {
 }
 
 Result<int64_t> MemorySegmentIndexInput::read_long() {
-    std::array<uint8_t, BitUtil::LONG_BYTES> bytes{};
+    constexpr size_t kBytes = BitUtil::LONG_BYTES;
+    if (const uint8_t *const pointer = pointer_for(pos_, kBytes); pointer != nullptr) {
+        pos_ += kBytes;
+        return BitUtil::get_i64_le(std::span<const uint8_t>(pointer, kBytes), 0);
+    }
+    std::array<uint8_t, kBytes> bytes{};
     if (auto r = read_bytes(bytes); !r) {
         return std::unexpected(std::move(r.error()));
     }
@@ -288,8 +340,12 @@ Result<uint8_t> MemorySegmentIndexInput::read_byte(size_t pos) const {
 }
 
 Result<int16_t> MemorySegmentIndexInput::read_short(size_t pos) const {
-    std::array<uint8_t, BitUtil::SHORT_BYTES> bytes{};
-    if (auto r = check_range(pos, bytes.size()); !r) {
+    constexpr size_t kBytes = BitUtil::SHORT_BYTES;
+    if (const uint8_t *const pointer = pointer_for(pos, kBytes); pointer != nullptr) {
+        return BitUtil::get_i16_le(std::span<const uint8_t>(pointer, kBytes), 0);
+    }
+    std::array<uint8_t, kBytes> bytes{};
+    if (auto r = check_range(pos, kBytes); !r) {
         return std::unexpected(std::move(r.error()));
     }
     mapping_->read(offset_ + pos, bytes);
@@ -297,8 +353,12 @@ Result<int16_t> MemorySegmentIndexInput::read_short(size_t pos) const {
 }
 
 Result<int32_t> MemorySegmentIndexInput::read_int(size_t pos) const {
-    std::array<uint8_t, BitUtil::INT_BYTES> bytes{};
-    if (auto r = check_range(pos, bytes.size()); !r) {
+    constexpr size_t kBytes = BitUtil::INT_BYTES;
+    if (const uint8_t *const pointer = pointer_for(pos, kBytes); pointer != nullptr) {
+        return BitUtil::get_i32_le(std::span<const uint8_t>(pointer, kBytes), 0);
+    }
+    std::array<uint8_t, kBytes> bytes{};
+    if (auto r = check_range(pos, kBytes); !r) {
         return std::unexpected(std::move(r.error()));
     }
     mapping_->read(offset_ + pos, bytes);
@@ -306,8 +366,12 @@ Result<int32_t> MemorySegmentIndexInput::read_int(size_t pos) const {
 }
 
 Result<int64_t> MemorySegmentIndexInput::read_long(size_t pos) const {
-    std::array<uint8_t, BitUtil::LONG_BYTES> bytes{};
-    if (auto r = check_range(pos, bytes.size()); !r) {
+    constexpr size_t kBytes = BitUtil::LONG_BYTES;
+    if (const uint8_t *const pointer = pointer_for(pos, kBytes); pointer != nullptr) {
+        return BitUtil::get_i64_le(std::span<const uint8_t>(pointer, kBytes), 0);
+    }
+    std::array<uint8_t, kBytes> bytes{};
+    if (auto r = check_range(pos, kBytes); !r) {
         return std::unexpected(std::move(r.error()));
     }
     mapping_->read(offset_ + pos, bytes);
@@ -320,6 +384,10 @@ VoidResult MemorySegmentIndexInput::read_bytes(size_t pos, std::span<uint8_t> by
     }
     mapping_->read(offset_ + pos, bytes);
     return {};
+}
+
+std::optional<std::span<const uint8_t>> MemorySegmentIndexInput::contiguous_bytes() const {
+    return mapping_->contiguous_span(offset_, length_);
 }
 
 // ---------------- MemorySegmentRandomAccessInput ----------------
@@ -340,6 +408,9 @@ VoidResult MemorySegmentRandomAccessInput::check_range(size_t pos, size_t num_by
 }
 
 Result<uint8_t> MemorySegmentRandomAccessInput::read_byte(size_t pos) const {
+    if (const uint8_t *const pointer = pointer_for(pos, 1); pointer != nullptr) {
+        return *pointer;
+    }
     if (auto r = check_range(pos, 1); !r) {
         return std::unexpected(std::move(r.error()));
     }
@@ -349,8 +420,12 @@ Result<uint8_t> MemorySegmentRandomAccessInput::read_byte(size_t pos) const {
 }
 
 Result<int16_t> MemorySegmentRandomAccessInput::read_short(size_t pos) const {
-    std::array<uint8_t, BitUtil::SHORT_BYTES> bytes{};
-    if (auto r = check_range(pos, bytes.size()); !r) {
+    constexpr size_t kBytes = BitUtil::SHORT_BYTES;
+    if (const uint8_t *const pointer = pointer_for(pos, kBytes); pointer != nullptr) {
+        return BitUtil::get_i16_le(std::span<const uint8_t>(pointer, kBytes), 0);
+    }
+    std::array<uint8_t, kBytes> bytes{};
+    if (auto r = check_range(pos, kBytes); !r) {
         return std::unexpected(std::move(r.error()));
     }
     mapping_->read(offset_ + pos, bytes);
@@ -358,8 +433,12 @@ Result<int16_t> MemorySegmentRandomAccessInput::read_short(size_t pos) const {
 }
 
 Result<int32_t> MemorySegmentRandomAccessInput::read_int(size_t pos) const {
-    std::array<uint8_t, BitUtil::INT_BYTES> bytes{};
-    if (auto r = check_range(pos, bytes.size()); !r) {
+    constexpr size_t kBytes = BitUtil::INT_BYTES;
+    if (const uint8_t *const pointer = pointer_for(pos, kBytes); pointer != nullptr) {
+        return BitUtil::get_i32_le(std::span<const uint8_t>(pointer, kBytes), 0);
+    }
+    std::array<uint8_t, kBytes> bytes{};
+    if (auto r = check_range(pos, kBytes); !r) {
         return std::unexpected(std::move(r.error()));
     }
     mapping_->read(offset_ + pos, bytes);
@@ -367,8 +446,12 @@ Result<int32_t> MemorySegmentRandomAccessInput::read_int(size_t pos) const {
 }
 
 Result<int64_t> MemorySegmentRandomAccessInput::read_long(size_t pos) const {
-    std::array<uint8_t, BitUtil::LONG_BYTES> bytes{};
-    if (auto r = check_range(pos, bytes.size()); !r) {
+    constexpr size_t kBytes = BitUtil::LONG_BYTES;
+    if (const uint8_t *const pointer = pointer_for(pos, kBytes); pointer != nullptr) {
+        return BitUtil::get_i64_le(std::span<const uint8_t>(pointer, kBytes), 0);
+    }
+    std::array<uint8_t, kBytes> bytes{};
+    if (auto r = check_range(pos, kBytes); !r) {
         return std::unexpected(std::move(r.error()));
     }
     mapping_->read(offset_ + pos, bytes);
@@ -381,6 +464,10 @@ VoidResult MemorySegmentRandomAccessInput::read_bytes(size_t pos, std::span<uint
     }
     mapping_->read(offset_ + pos, bytes);
     return {};
+}
+
+std::optional<std::span<const uint8_t>> MemorySegmentRandomAccessInput::contiguous_bytes() const {
+    return mapping_->contiguous_span(offset_, length_);
 }
 
 } // namespace lucene

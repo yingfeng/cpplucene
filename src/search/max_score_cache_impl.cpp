@@ -30,7 +30,7 @@ import :types;
 
 namespace lucene {
 
-MaxScoreCache::MaxScoreCache(ImpactsSource *impacts_source, std::shared_ptr<SimScorer> scorer)
+MaxScoreCache::MaxScoreCache(ImpactsSource *impacts_source, std::shared_ptr<const SimScorer> scorer)
         : impacts_source_(impacts_source),
           scorer_(std::move(scorer)),
           global_max_score_(scorer_->score(std::numeric_limits<float>::max(), 1)) {}
