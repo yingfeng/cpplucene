@@ -54,10 +54,11 @@ target_sources(lucene_core
         ${lucene_core_impl_cpp}
 )
 
-# `include/` holds the small C API header; the module itself is the library.  The
-# install interface mirrors where `install()` below puts those headers.
-target_include_directories(lucene_core PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
+# The module interface units are the whole public interface (macros cannot be
+# exported from a module, and the one header that held them had no user).  The
+# install interface still points at the include directory, because the module
+# sources are installed there.
+target_include_directories(lucene_core INTERFACE
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 target_compile_options(lucene_core PRIVATE -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare)
 
@@ -136,9 +137,6 @@ install(TARGETS lucene_core
         RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
         FILE_SET cxx_modules DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/lucene_core"
 )
-
-install(DIRECTORY "${CMAKE_SOURCE_DIR}/include/lucene_core"
-        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
 
 install(EXPORT lucene_coreTargets
         FILE lucene_coreTargets.cmake
