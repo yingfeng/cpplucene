@@ -209,7 +209,7 @@ Result<Stats> compute_block_stats(SegmentTermsEnum &ste) {
         debug_check(ste.arcs()[0].is_final());
         arc = 0;
     }
-    auto pushed = ste.push_frame_with_data(arc, fr.root_code_, 0);
+    auto pushed = ste.push_frame_with_data(arc, fr.root_code(), 0);
     if (!pushed) {
         return std::unexpected(std::move(pushed.error()));
     }
@@ -250,7 +250,7 @@ Result<Stats> compute_block_stats(SegmentTermsEnum &ste) {
                     debug_check(ste.arcs()[0].is_final());
                     root_arc = 0;
                 }
-                auto rewound_push = ste.push_frame_with_data(root_arc, fr.root_code_, 0);
+                auto rewound_push = ste.push_frame_with_data(root_arc, fr.root_code(), 0);
                 if (!rewound_push) {
                     return std::unexpected(std::move(rewound_push.error()));
                 }

@@ -146,9 +146,30 @@ public:
     int64_t sum_doc_freq_{0};
     int32_t doc_count_{0};
     int64_t root_block_fp_{0};
-    BytesRef root_code_{};
-    BytesRef min_term_{};
-    BytesRef max_term_{};
+    /// Shared, not copied: `clone_for_enum` runs once per terms enumerator, which a
+    /// lookup creates several of, and these are the only byte strings a
+    /// `FieldReader` owns (the FST and the reader are shared already).
+    std::shared_ptr<const BytesRef> root_code_{};
+    std::shared_ptr<const BytesRef> min_term_{};
+    std::shared_ptr<const BytesRef> max_term_{};
+
+    [[nodiscard]] const BytesRef &root_code() const noexcept {
+        return root_code_ != nullptr ? *root_code_ : empty_code();
+    }
+    [[nodiscard]] const BytesRef &min_term() const noexcept {
+        return min_term_ != nullptr ? *min_term_ : empty_code();
+    }
+    [[nodiscard]] const BytesRef &max_term() const noexcept {
+        return max_term_ != nullptr ? *max_term_ : empty_code();
+    }
+
+private:
+    static const BytesRef &empty_code() noexcept {
+        static const BytesRef empty;
+        return empty;
+    }
+
+public:
     BlockTreeTermsParent *parent_{nullptr};
     std::shared_ptr<FST> index_{};
     /// `TmpData`: the metadata read by [`create`], consumed by

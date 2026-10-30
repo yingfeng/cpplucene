@@ -224,7 +224,7 @@ Result<const BytesRef *> SegmentTermsEnum::next() {
             debug_check(arcs_[0].is_final());
             arc = 0;
         }
-        auto pushed = push_frame_with_data(arc, fr_->root_code_, 0);
+        auto pushed = push_frame_with_data(arc, fr_->root_code(), 0);
         if (!pushed) {
             return std::unexpected(std::move(pushed.error()));
         }
@@ -369,8 +369,8 @@ Result<bool> SegmentTermsEnum::prepare_seek_exact_with_prefetch(std::span<const 
         return err(LuceneError::illegal_state("terms index was not loaded"));
     }
     if (fr_->num_terms_ > 0) {
-        const int32_t min_cmp = compare_spans(target, fr_->min_term_.as_slice());
-        const int32_t max_cmp = compare_spans(target, fr_->max_term_.as_slice());
+        const int32_t min_cmp = compare_spans(target, fr_->min_term().as_slice());
+        const int32_t max_cmp = compare_spans(target, fr_->max_term().as_slice());
         if (min_cmp < 0 || max_cmp > 0) {
             prepare_status_ = PrepareStatus::NotFound;
             return false;
@@ -1738,9 +1738,9 @@ Result<std::unique_ptr<FieldReader>> FieldReader::create(std::shared_ptr<const F
     reader->doc_count_ = doc_count;
     // Padding values, replaced by `init_field_reader`.
     reader->root_block_fp_ = 0;
-    reader->root_code_ = BytesRef{};
-    reader->min_term_ = std::move(min_term);
-    reader->max_term_ = std::move(max_term);
+    reader->root_code_.reset();
+    reader->min_term_ = std::make_shared<const BytesRef>(std::move(min_term));
+    reader->max_term_ = std::make_shared<const BytesRef>(std::move(max_term));
     reader->pending_metadata_ = std::move(metadata.value());
     reader->pending_index_start_fp_ = index_start_fp;
     reader->pending_root_code_ = std::move(root_code);
@@ -1793,12 +1793,12 @@ VoidResult FieldReader::init_field_reader(IndexInput &index_in, FieldReader &rea
     if (empty_output.has_value()) {
         const auto *empty = empty_output.value().as_ptr<BytesRef>();
         if (empty != nullptr && *empty == root_code) {
-            reader.root_code_ = *empty;
+            reader.root_code_ = std::make_shared<const BytesRef>(*empty);
             replaced = true;
         }
     }
     if (!replaced) {
-        reader.root_code_ = std::move(root_code);
+        reader.root_code_ = std::make_shared<const BytesRef>(std::move(root_code));
     }
     return {};
 }
@@ -1843,9 +1843,9 @@ bool FieldReader::has_positions() const { return field_info_->has_positions(); }
 
 bool FieldReader::has_payloads() const { return field_info_->has_payloads(); }
 
-Result<std::optional<BytesRef>> FieldReader::get_min() const { return std::optional<BytesRef>(min_term_); }
+Result<std::optional<BytesRef>> FieldReader::get_min() const { return std::optional<BytesRef>(min_term()); }
 
-Result<std::optional<BytesRef>> FieldReader::get_max() const { return std::optional<BytesRef>(max_term_); }
+Result<std::optional<BytesRef>> FieldReader::get_max() const { return std::optional<BytesRef>(max_term()); }
 
 std::string FieldReader::to_string() const {
     return std::format("FieldReader(field={},numTerms={},hasFreqs={},hasPositions={},hasOffsets={},"

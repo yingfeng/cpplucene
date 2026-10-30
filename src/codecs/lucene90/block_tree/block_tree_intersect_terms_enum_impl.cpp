@@ -557,7 +557,7 @@ Result<std::unique_ptr<IntersectTermsEnum>> IntersectTermsEnum::create(std::uniq
         frame.arc = first_arc_idx;
     }
 
-    if (auto loaded = IntersectTermsEnumFrame::load_from_frame_index_data(ite->fr_->root_code_, first_arc_idx, *ite);
+    if (auto loaded = IntersectTermsEnumFrame::load_from_frame_index_data(ite->fr_->root_code(), first_arc_idx, *ite);
         !loaded) {
         return std::unexpected(std::move(loaded.error()));
     }
