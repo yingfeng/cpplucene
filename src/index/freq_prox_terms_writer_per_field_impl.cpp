@@ -140,12 +140,26 @@ FreqProxTermsWriterPerField::FreqProxTermsWriterPerField(std::shared_ptr<FieldIn
     has_offsets_ = index_options >= IndexOptions::DocsAndFreqsAndPositionsAndOffsets;
 }
 
+const FreqProxTermsWriterPerField::ResolvedAttributes &
+FreqProxTermsWriterPerField::resolved_attributes(const AttributeSource &attributes) const {
+    if (resolved_.source != &attributes || resolved_.attribute_count != attributes.size()) {
+        resolved_.source = &attributes;
+        resolved_.attribute_count = attributes.size();
+        resolved_.bytes_term = attributes.get_attribute<BytesTermAttribute>();
+        resolved_.char_term = attributes.get_attribute<CharTermAttribute>();
+        resolved_.offset = attributes.get_attribute<OffsetAttribute>();
+        resolved_.term_frequency = attributes.get_attribute<TermFrequencyAttribute>();
+        resolved_.payload = attributes.get_attribute<PayloadAttribute>();
+    }
+    return resolved_;
+}
+
 VoidResult FreqProxTermsWriterPerField::write_prox(size_t term_id, int32_t prox_code,
                                                    const FieldInvertState &field_state,
                                                    const AttributeSource &attributes, IntBlockPool &int_pool,
                                                    ByteBlockPool &byte_pool) {
     const std::optional<BytesRef> *payload = nullptr;
-    if (const auto *attribute = attributes.get_attribute<PayloadAttribute>(); attribute != nullptr) {
+    if (const auto *attribute = resolved_attributes(attributes).payload; attribute != nullptr) {
         payload = &attribute->payload();
     }
 
@@ -185,7 +199,7 @@ VoidResult FreqProxTermsWriterPerField::write_offsets(size_t term_id, int32_t of
                                                       ByteBlockPool &byte_pool) {
     uint32_t start = 0;
     uint32_t end = 0;
-    if (const auto *attribute = attributes.get_attribute<OffsetAttribute>(); attribute != nullptr) {
+    if (const auto *attribute = resolved_attributes(attributes).offset; attribute != nullptr) {
         start = attribute->start_offset();
         end = attribute->end_offset();
     }
@@ -216,7 +230,7 @@ VoidResult FreqProxTermsWriterPerField::write_offsets(size_t term_id, int32_t of
 
 Result<int32_t> FreqProxTermsWriterPerField::get_term_freq(const AttributeSource &attributes) const {
     int32_t freq = 1;
-    if (const auto *attribute = attributes.get_attribute<TermFrequencyAttribute>(); attribute != nullptr) {
+    if (const auto *attribute = resolved_attributes(attributes).term_frequency; attribute != nullptr) {
         freq = static_cast<int32_t>(attribute->term_frequency());
     }
 
@@ -253,6 +267,7 @@ VoidResult FreqProxTermsWriterPerField::finish(int32_t field_index) {
 }
 
 void FreqProxTermsWriterPerField::reset(ByteBlockPool &byte_pool) {
+    resolved_ = ResolvedAttributes{};
     base_.reset(byte_pool);
     if (next_per_field_ != nullptr) {
         next_per_field_->reset(byte_pool);
@@ -273,20 +288,24 @@ VoidResult FreqProxTermsWriterPerField::add_with_bytes_ref(const BytesRef *term_
                                                            AttributeSource &attributes, IndexContext &context) {
     debug_check(base_.assert_doc_id(doc_id), "the document ids must be non-decreasing");
 
-    // This writer is first in the chain, so it must intern the term text.
+    // This writer is first in the chain, so it must intern the term text.  The
+    // scratch value keeps its allocation: this runs once per token, and a fresh
+    // `BytesRef` per token was the largest source of allocations in an index
+    // build.
     std::optional<BytesRef> fallback;
     const BytesRef *bytes = term_bytes;
     if (bytes == nullptr) {
-        if (const auto *bytes_attribute = attributes.get_attribute<BytesTermAttribute>(); bytes_attribute != nullptr) {
-            const auto slice = bytes_attribute->bytes_ref();
-            fallback.emplace(BytesRef(std::vector<uint8_t>(slice.begin(), slice.end())));
-        } else if (const auto *term_attribute = attributes.get_attribute<CharTermAttribute>();
-                   term_attribute != nullptr) {
-            fallback.emplace(BytesRef::from_string(term_attribute->text()));
+        const auto &resolved = resolved_attributes(attributes);
+        if (const auto *bytes_attribute = resolved.bytes_term; bytes_attribute != nullptr) {
+            scratch_term_.copy_from_slice(bytes_attribute->bytes_ref());
+        } else if (const auto *term_attribute = resolved.char_term; term_attribute != nullptr) {
+            const std::string_view text = term_attribute->text();
+            scratch_term_.copy_from_slice(
+                    std::span<const uint8_t>(reinterpret_cast<const uint8_t *>(text.data()), text.size()));
         } else {
             return err(LuceneError::illegal_state("term bytes and attribute source bytes are both missing"));
         }
-        bytes = &fallback.value();
+        bytes = &scratch_term_;
     }
 
     auto added = base_.bytes_hash().add(*bytes, context.byte_pool);

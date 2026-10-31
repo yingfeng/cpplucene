@@ -187,10 +187,36 @@ public:
     }
 
 private:
+    /// The per-token attributes read while inverting, resolved once per
+    /// [`AttributeSource`] rather than once per token.
+    ///
+    /// Inverting reads up to five of them (term text, offsets, term frequency,
+    /// payload), and each lookup is a linear scan of the source's attribute list,
+    /// so resolving per token was a measurable share of an index build.
+    struct ResolvedAttributes {
+        const AttributeSource *source{nullptr};
+        size_t attribute_count{0};
+        const BytesTermAttribute *bytes_term{nullptr};
+        const CharTermAttribute *char_term{nullptr};
+        const OffsetAttribute *offset{nullptr};
+        const TermFrequencyAttribute *term_frequency{nullptr};
+        const PayloadAttribute *payload{nullptr};
+    };
+
+    /// Returns the cached view of `attributes`, refreshing it when the source
+    /// differs or has gained attributes since it was resolved.
+    [[nodiscard]] const ResolvedAttributes &resolved_attributes(const AttributeSource &attributes) const;
+
     [[nodiscard]] Result<int32_t> get_term_freq(const AttributeSource &attributes) const;
     /// The postings array, checked to be a [`FreqProxPostingsArray`].
     [[nodiscard]] Result<FreqProxPostingsArray *> freq_prox_array();
 
+    /// Reset to the defaults on every [`reset`], so a stale pointer can never
+    /// outlive the segment that owned the attribute source.
+    mutable ResolvedAttributes resolved_;
+
+    /// Reused for the term text of the current token (see `add_with_bytes_ref`).
+    BytesRef scratch_term_;
     std::shared_ptr<FieldInfo> field_info_;
     /// Set when any token carried a payload in the current segment.
     bool saw_payloads_{false};
