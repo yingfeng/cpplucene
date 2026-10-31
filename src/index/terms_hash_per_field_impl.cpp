@@ -197,15 +197,35 @@ VoidResult TermsHashPerField::write_bytes(int32_t stream, std::span<const uint8_
     {
         auto &slice = byte_pool.mutable_buffer(block_index);
         // Fill the remaining room of the current slice; a non-zero byte marks its
-        // end (see `ByteSlicePool`).  The terminator is located once with
-        // `memchr` and the run is copied in one go: a postings stream writes a
-        // few bytes at a time and the byte-wise loop showed up as the hottest
-        // symbol of an indexing run.
-        while (offset < end && slice[slice_offset] == 0) {
-            slice[slice_offset] = b[offset];
-            slice_offset += 1;
-            offset += 1;
-            address_buffer[address_index] += 1;
+        // end (see `ByteSlicePool`), so the run to overwrite ends at the first
+        // non-zero byte.  That byte is located eight at a time and the run is
+        // copied in one call: the byte-wise probe was the hottest symbol of an
+        // index build.
+        const uint8_t *const first = slice.data() + slice_offset;
+        const size_t available = slice_offset < slice.size() ? slice.size() - slice_offset : 0;
+        size_t room = 0;
+        bool found = false;
+        while (room + 8 <= available) {
+            uint64_t word = 0;
+            std::memcpy(&word, first + room, sizeof(word));
+            if (word != 0) {
+                room += static_cast<size_t>(std::countr_zero(word)) >> 3;
+                found = true;
+                break;
+            }
+            room += 8;
+        }
+        if (!found) {
+            while (room < available && first[room] == 0) {
+                ++room;
+            }
+        }
+        const size_t take = std::min(room, len);
+        if (take > 0) {
+            std::memcpy(slice.data() + slice_offset, b.data() + offset, take);
+            slice_offset += take;
+            offset += take;
+            address_buffer[address_index] += static_cast<int32_t>(take);
         }
     }
 
@@ -237,14 +257,23 @@ VoidResult TermsHashPerField::write_bytes(int32_t stream, std::span<const uint8_
 VoidResult TermsHashPerField::write_vint(int32_t stream, int32_t i, IntBlockPool &int_pool,
                                          ByteBlockPool &byte_pool) const {
     debug_check(stream < stream_count_, "the stream index must be below the stream count");
-    while ((i & ~int32_t{0x7F}) != 0) {
-        if (auto written = write_byte(stream, static_cast<uint8_t>((i & 0x7F) | 0x80), int_pool, byte_pool);
-            !written.has_value()) {
-            return written;
-        }
-        i = static_cast<int32_t>(static_cast<uint32_t>(i) >> 7);
+    // Encode into a scratch buffer and store it with one call: the byte form pays
+    // the slice bookkeeping once per byte, and a postings stream writes one vint
+    // per document.
+    uint8_t encoded[5];
+    size_t length = 0;
+    uint32_t value = static_cast<uint32_t>(i);
+    while ((value & ~uint32_t{0x7F}) != 0) {
+        encoded[length++] = static_cast<uint8_t>((value & 0x7F) | 0x80);
+        value >>= 7;
     }
-    return write_byte(stream, static_cast<uint8_t>(i), int_pool, byte_pool);
+    encoded[length++] = static_cast<uint8_t>(value);
+    if (length == 1) {
+        // Almost every vint of a postings stream (a position delta, a freq of one)
+        // is a single byte; the bulk path costs more than it saves there.
+        return write_byte(stream, encoded[0], int_pool, byte_pool);
+    }
+    return write_bytes(stream, std::span<const uint8_t>(encoded, length), 0, length, int_pool, byte_pool);
 }
 
 void TermsHashPerField::reset(ByteBlockPool &byte_pool) {
