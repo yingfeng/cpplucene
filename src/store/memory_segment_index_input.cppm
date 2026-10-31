@@ -22,6 +22,7 @@ import :error;
 
 import std;
 
+import :bit_util;
 import :data_input;
 import :index_input;
 import :random_access_input;
@@ -67,6 +68,23 @@ public:
     /// This is the fast path of the fixed-width readers: a shifted chunk lookup
     /// and one load instead of a `memcpy` call per value.
     [[nodiscard]] const uint8_t *ptr_at(size_t pos, size_t len) const noexcept;
+
+    /// One mapping chunk, in mapping coordinates.
+    struct Window {
+        /// First byte of the chunk; `nullptr` when `pos` is outside the mapping.
+        const uint8_t *pointer{nullptr};
+        /// Mapping offset of `pointer`.
+        size_t begin{0};
+        /// Mapping offset one past the chunk's last byte.
+        size_t limit{0};
+    };
+
+    /// The chunk that holds `pos`.
+    ///
+    /// A sequential reader resolves its chunk once and then addresses bytes
+    /// relative to [`Window::pointer`], which removes the shifted lookup and the
+    /// bounds comparisons of [`ptr_at`] from every single value it reads.
+    [[nodiscard]] Window window_at(size_t pos) const noexcept;
 
     /// `[pos, pos + len)` as one contiguous block, or nothing when it straddles
     /// two mapping chunks.
@@ -115,9 +133,10 @@ public:
     /// read; the diagnostics of `check_range` (a `std::format` per failure) stay
     /// off that path.
     [[gnu::always_inline]] [[nodiscard]] Result<uint8_t> read_byte() override {
-        if (const uint8_t *const pointer = pointer_for(pos_, 1); pointer != nullptr) {
+        if (pos_ < window_end_pos_) {
+            const uint8_t value = window_[offset_ + pos_ - window_begin_];
             ++pos_;
-            return *pointer;
+            return value;
         }
         return slow_read_byte();
     }
@@ -126,67 +145,85 @@ public:
     /// varint at a time.  Inline so that a caller holding the concrete type (the
     /// postings decoders do, through `PostingDecodingUtil`) reads the bytes
     /// without a call.
-    [[nodiscard]] Result<int32_t> read_vint() override {
+    [[gnu::always_inline]] [[nodiscard]] Result<int32_t> read_vint() override {
         const size_t available = pos_ <= length_ ? std::min<size_t>(length_ - pos_, 5) : 0;
-        if (available >= 1) {
-            if (const uint8_t *const pointer = mapping_->ptr_at(offset_ + pos_, available); pointer != nullptr) {
-                int32_t value = 0;
-                int32_t shift = 0;
-                for (size_t used = 0; used < available; ++used) {
-                    const int32_t byte = pointer[used];
-                    value |= static_cast<int32_t>(static_cast<uint32_t>(byte & 0x7F) << shift);
-                    if ((byte & 0x80) == 0) {
-                        pos_ += used + 1;
-                        return value;
-                    }
-                    shift += 7;
+        if (available >= 1 && pos_ + available <= window_end_pos_) {
+            const uint8_t *const pointer = window_ + (offset_ + pos_ - window_begin_);
+            int32_t value = 0;
+            int32_t shift = 0;
+            for (size_t used = 0; used < available; ++used) {
+                const int32_t byte = pointer[used];
+                value |= static_cast<int32_t>(static_cast<uint32_t>(byte & 0x7F) << shift);
+                if ((byte & 0x80) == 0) {
+                    pos_ += used + 1;
+                    return value;
                 }
+                shift += 7;
             }
         }
-        // Straddling a chunk boundary, or a malformed varint: the generic decoder
-        // reports it.
-        return DataInput::read_vint();
+        // Straddling a chunk boundary, or a malformed varint: the slow path
+        // re-resolves the window and lets the generic decoder report it.
+        return slow_read_vint();
     }
 
-    [[nodiscard]] Result<int64_t> read_vlong() override {
+    [[gnu::always_inline]] [[nodiscard]] Result<int64_t> read_vlong() override {
         const size_t available = pos_ <= length_ ? std::min<size_t>(length_ - pos_, 10) : 0;
-        if (available >= 1) {
-            if (const uint8_t *const pointer = mapping_->ptr_at(offset_ + pos_, available); pointer != nullptr) {
-                int64_t value = 0;
-                int64_t shift = 0;
-                for (size_t used = 0; used < available; ++used) {
-                    const int64_t byte = pointer[used];
-                    value |= (byte & 0x7F) << shift;
-                    if ((byte & 0x80) == 0) {
-                        pos_ += used + 1;
-                        return value;
-                    }
-                    shift += 7;
+        if (available >= 1 && pos_ + available <= window_end_pos_) {
+            const uint8_t *const pointer = window_ + (offset_ + pos_ - window_begin_);
+            int64_t value = 0;
+            int64_t shift = 0;
+            for (size_t used = 0; used < available; ++used) {
+                const int64_t byte = pointer[used];
+                value |= (byte & 0x7F) << shift;
+                if ((byte & 0x80) == 0) {
+                    pos_ += used + 1;
+                    return value;
                 }
+                shift += 7;
             }
         }
-        return DataInput::read_vlong();
+        return slow_read_vlong();
     }
     [[gnu::always_inline]] [[nodiscard]] VoidResult read_bytes(std::span<uint8_t> b) override {
         if (b.empty()) {
             return {};
         }
-        if (auto r = check_range(pos_, b.size()); !r.has_value()) {
-            return r;
+        if (pos_ + b.size() <= window_end_pos_) {
+            std::memcpy(b.data(), window_ + (offset_ + pos_ - window_begin_), b.size());
+            pos_ += b.size();
+            return {};
         }
-        if (const auto span = mapping_->contiguous_span(offset_ + pos_, b.size()); span.has_value()) {
-            std::memcpy(b.data(), span->data(), b.size());
-        } else {
-            mapping_->read(offset_ + pos_, b);
-        }
-        pos_ += b.size();
-        return {};
+        return slow_read_bytes(b);
     }
     [[nodiscard]] VoidResult skip_bytes(int64_t num_bytes) override;
 
-    [[nodiscard]] Result<int16_t> read_short() override;
-    [[nodiscard]] Result<int32_t> read_int() override;
-    [[nodiscard]] Result<int64_t> read_long() override;
+    [[gnu::always_inline]] [[nodiscard]] Result<int16_t> read_short() override {
+        constexpr size_t kBytes = BitUtil::SHORT_BYTES;
+        if (pos_ + kBytes <= window_end_pos_) {
+            const uint8_t *const pointer = window_ + (offset_ + pos_ - window_begin_);
+            pos_ += kBytes;
+            return BitUtil::get_i16_le(std::span<const uint8_t>(pointer, kBytes), 0);
+        }
+        return slow_read_short();
+    }
+    [[gnu::always_inline]] [[nodiscard]] Result<int32_t> read_int() override {
+        constexpr size_t kBytes = BitUtil::INT_BYTES;
+        if (pos_ + kBytes <= window_end_pos_) {
+            const uint8_t *const pointer = window_ + (offset_ + pos_ - window_begin_);
+            pos_ += kBytes;
+            return BitUtil::get_i32_le(std::span<const uint8_t>(pointer, kBytes), 0);
+        }
+        return slow_read_int();
+    }
+    [[gnu::always_inline]] [[nodiscard]] Result<int64_t> read_long() override {
+        constexpr size_t kBytes = BitUtil::LONG_BYTES;
+        if (pos_ + kBytes <= window_end_pos_) {
+            const uint8_t *const pointer = window_ + (offset_ + pos_ - window_begin_);
+            pos_ += kBytes;
+            return BitUtil::get_i64_le(std::span<const uint8_t>(pointer, kBytes), 0);
+        }
+        return slow_read_long();
+    }
     [[nodiscard]] VoidResult read_ints(std::span<int32_t> dst, size_t offset, size_t len) override;
 
     [[nodiscard]] Result<std::unique_ptr<IndexInput>> slice(std::string_view slice_description,
@@ -213,8 +250,19 @@ public:
 private:
     /// [`read_byte`] when the byte is not directly addressable.
     [[nodiscard]] Result<uint8_t> slow_read_byte();
+    [[nodiscard]] Result<int16_t> slow_read_short();
+    [[nodiscard]] Result<int32_t> slow_read_int();
+    [[nodiscard]] Result<int64_t> slow_read_long();
+    [[nodiscard]] Result<int32_t> slow_read_vint();
+    [[nodiscard]] Result<int64_t> slow_read_vlong();
+    [[nodiscard]] VoidResult slow_read_bytes(std::span<uint8_t> b);
 
     [[nodiscard]] VoidResult check_range(size_t pos, size_t num_bytes) const;
+
+    /// Re-resolves [`window_`] so that it holds `pos`, and reports whether it
+    /// does.  The readers call this only when the cached window does not cover
+    /// the read, i.e. on a chunk boundary or on the first read after a seek.
+    [[nodiscard]] bool resync_window(size_t pos) noexcept;
 
     /// `num_bytes` bytes at `pos`, when they lie inside this slice and inside one
     /// mapping chunk; `nullptr` otherwise, so the caller can report the error.
@@ -229,6 +277,18 @@ private:
     size_t offset_{0};
     size_t length_{0};
     size_t pos_{0};
+
+    /// The chunk `pos_` currently reads from: `window_` is the chunk's first
+    /// byte, `window_begin_` its mapping offset, and `window_end_pos_` the first
+    /// slice position the window no longer covers (a slice position, so that the
+    /// readers compare against `pos_` without any arithmetic).
+    const uint8_t *window_{nullptr};
+    size_t window_begin_{0};
+    size_t window_limit_{0};
+    /// First slice position the window covers; non zero only when the slice
+    /// starts before the chunk that holds `window_`.
+    size_t window_start_pos_{0};
+    size_t window_end_pos_{0};
 };
 
 /// Absolute-position read-only view over a [`MemoryMapping`] region.

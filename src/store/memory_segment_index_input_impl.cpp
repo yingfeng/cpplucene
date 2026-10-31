@@ -126,6 +126,18 @@ const uint8_t *MemoryMapping::ptr_at(size_t pos, size_t len) const noexcept {
     return segments_[chunk] + within;
 }
 
+MemoryMapping::Window MemoryMapping::window_at(size_t pos) const noexcept {
+    Window window;
+    if (segments_.empty() || pos >= size_) {
+        return window;
+    }
+    const size_t chunk = pos >> chunk_shift_;
+    window.pointer = segments_[chunk];
+    window.begin = chunk << chunk_shift_;
+    window.limit = window.begin + segment_sizes_[chunk];
+    return window;
+}
+
 std::optional<std::span<const uint8_t>> MemoryMapping::contiguous_span(size_t pos, size_t len) const noexcept {
     const uint8_t *const pointer = ptr_at(pos, len);
     if (pointer == nullptr) {
@@ -160,6 +172,30 @@ MemorySegmentIndexInput::MemorySegmentIndexInput(std::shared_ptr<MemoryMapping> 
                                                  std::string description)
     : mapping_(std::move(mapping)), offset_(offset), length_(length) {
     set_description(std::move(description));
+    resync_window(0);
+}
+
+bool MemorySegmentIndexInput::resync_window(size_t pos) noexcept {
+    const size_t absolute = offset_ + pos;
+    if (window_ != nullptr && absolute >= window_begin_ && absolute < window_limit_) {
+        // Still the cached chunk: only the slice-side bounds have to be recomputed.
+        window_start_pos_ = window_begin_ > offset_ ? window_begin_ - offset_ : 0;
+        window_end_pos_ = window_limit_ > offset_ ? std::min(length_, window_limit_ - offset_) : 0;
+        return pos >= window_start_pos_ && pos < window_end_pos_;
+    }
+    const MemoryMapping::Window window = mapping_->window_at(absolute);
+    if (window.pointer == nullptr) {
+        window_ = nullptr;
+        window_end_pos_ = 0;
+        return false;
+    }
+    window_ = window.pointer;
+    window_begin_ = window.begin;
+    window_limit_ = window.limit;
+    // Only the part of the chunk that lies inside this slice is readable.
+    window_start_pos_ = window_begin_ > offset_ ? window_begin_ - offset_ : 0;
+    window_end_pos_ = window_limit_ > offset_ ? std::min(length_, window_limit_ - offset_) : 0;
+    return pos >= window_start_pos_ && pos < window_end_pos_;
 }
 
 VoidResult MemorySegmentIndexInput::check_range(size_t pos, size_t num_bytes) const {
@@ -186,10 +222,20 @@ VoidResult MemorySegmentIndexInput::seek(size_t pos) {
             std::format("seek target {} is beyond the input length {}", pos, length_)));
     }
     pos_ = pos;
+    if (pos >= window_end_pos_ || pos < window_start_pos_) {
+        // Only a target outside the cached chunk needs the chunk lookup again; a
+        // seek inside it (the skip lists do plenty of those) costs one compare.
+        resync_window(pos);
+    }
     return {};
 }
 
 Result<uint8_t> MemorySegmentIndexInput::slow_read_byte() {
+    if (resync_window(pos_)) {
+        const uint8_t value = window_[offset_ + pos_ - window_begin_];
+        ++pos_;
+        return value;
+    }
     // The pointer lookup covers both the slice bound and the mapping bound, and
     // the postings decoders read one byte per call, so the diagnostics of
     // `check_range` (a `std::format` per failure) stay off that path.
@@ -225,43 +271,123 @@ VoidResult MemorySegmentIndexInput::skip_bytes(int64_t num_bytes) {
     return {};
 }
 
-Result<int16_t> MemorySegmentIndexInput::read_short() {
+Result<int16_t> MemorySegmentIndexInput::slow_read_short() {
     constexpr size_t kBytes = BitUtil::SHORT_BYTES;
+    if (resync_window(pos_) && pos_ + kBytes <= window_end_pos_) {
+        const uint8_t *const pointer = window_ + (offset_ + pos_ - window_begin_);
+        pos_ += kBytes;
+        return BitUtil::get_i16_le(std::span<const uint8_t>(pointer, kBytes), 0);
+    }
     if (const uint8_t *const pointer = pointer_for(pos_, kBytes); pointer != nullptr) {
         pos_ += kBytes;
         return BitUtil::get_i16_le(std::span<const uint8_t>(pointer, kBytes), 0);
     }
     std::array<uint8_t, kBytes> bytes{};
-    if (auto r = read_bytes(bytes); !r) {
+    if (auto r = slow_read_bytes(bytes); !r) {
         return std::unexpected(std::move(r.error()));
     }
     return BitUtil::get_i16_le(bytes, 0);
 }
 
-Result<int32_t> MemorySegmentIndexInput::read_int() {
+Result<int32_t> MemorySegmentIndexInput::slow_read_int() {
     constexpr size_t kBytes = BitUtil::INT_BYTES;
+    if (resync_window(pos_) && pos_ + kBytes <= window_end_pos_) {
+        const uint8_t *const pointer = window_ + (offset_ + pos_ - window_begin_);
+        pos_ += kBytes;
+        return BitUtil::get_i32_le(std::span<const uint8_t>(pointer, kBytes), 0);
+    }
     if (const uint8_t *const pointer = pointer_for(pos_, kBytes); pointer != nullptr) {
         pos_ += kBytes;
         return BitUtil::get_i32_le(std::span<const uint8_t>(pointer, kBytes), 0);
     }
     std::array<uint8_t, kBytes> bytes{};
-    if (auto r = read_bytes(bytes); !r) {
+    if (auto r = slow_read_bytes(bytes); !r) {
         return std::unexpected(std::move(r.error()));
     }
     return BitUtil::get_i32_le(bytes, 0);
 }
 
-Result<int64_t> MemorySegmentIndexInput::read_long() {
+Result<int64_t> MemorySegmentIndexInput::slow_read_long() {
     constexpr size_t kBytes = BitUtil::LONG_BYTES;
+    if (resync_window(pos_) && pos_ + kBytes <= window_end_pos_) {
+        const uint8_t *const pointer = window_ + (offset_ + pos_ - window_begin_);
+        pos_ += kBytes;
+        return BitUtil::get_i64_le(std::span<const uint8_t>(pointer, kBytes), 0);
+    }
     if (const uint8_t *const pointer = pointer_for(pos_, kBytes); pointer != nullptr) {
         pos_ += kBytes;
         return BitUtil::get_i64_le(std::span<const uint8_t>(pointer, kBytes), 0);
     }
     std::array<uint8_t, kBytes> bytes{};
-    if (auto r = read_bytes(bytes); !r) {
+    if (auto r = slow_read_bytes(bytes); !r) {
         return std::unexpected(std::move(r.error()));
     }
     return BitUtil::get_i64_le(bytes, 0);
+}
+
+Result<int32_t> MemorySegmentIndexInput::slow_read_vint() {
+    if (resync_window(pos_)) {
+        const size_t available = pos_ <= length_ ? std::min<size_t>(length_ - pos_, 5) : 0;
+        if (available >= 1 && pos_ + available <= window_end_pos_) {
+            const uint8_t *const pointer = window_ + (offset_ + pos_ - window_begin_);
+            int32_t value = 0;
+            int32_t shift = 0;
+            for (size_t used = 0; used < available; ++used) {
+                const int32_t byte = pointer[used];
+                value |= static_cast<int32_t>(static_cast<uint32_t>(byte & 0x7F) << shift);
+                if ((byte & 0x80) == 0) {
+                    pos_ += used + 1;
+                    return value;
+                }
+                shift += 7;
+            }
+        }
+    }
+    // Straddling a chunk boundary, or a malformed varint: the generic decoder
+    // reports it.
+    return DataInput::read_vint();
+}
+
+Result<int64_t> MemorySegmentIndexInput::slow_read_vlong() {
+    if (resync_window(pos_)) {
+        const size_t available = pos_ <= length_ ? std::min<size_t>(length_ - pos_, 10) : 0;
+        if (available >= 1 && pos_ + available <= window_end_pos_) {
+            const uint8_t *const pointer = window_ + (offset_ + pos_ - window_begin_);
+            int64_t value = 0;
+            int64_t shift = 0;
+            for (size_t used = 0; used < available; ++used) {
+                const int64_t byte = pointer[used];
+                value |= (byte & 0x7F) << shift;
+                if ((byte & 0x80) == 0) {
+                    pos_ += used + 1;
+                    return value;
+                }
+                shift += 7;
+            }
+        }
+    }
+    return DataInput::read_vlong();
+}
+
+VoidResult MemorySegmentIndexInput::slow_read_bytes(std::span<uint8_t> b) {
+    if (b.empty()) {
+        return {};
+    }
+    if (resync_window(pos_) && pos_ + b.size() <= window_end_pos_) {
+        std::memcpy(b.data(), window_ + (offset_ + pos_ - window_begin_), b.size());
+        pos_ += b.size();
+        return {};
+    }
+    if (auto r = check_range(pos_, b.size()); !r.has_value()) {
+        return r;
+    }
+    if (const auto span = mapping_->contiguous_span(offset_ + pos_, b.size()); span.has_value()) {
+        std::memcpy(b.data(), span->data(), b.size());
+    } else {
+        mapping_->read(offset_ + pos_, b);
+    }
+    pos_ += b.size();
+    return {};
 }
 
 VoidResult MemorySegmentIndexInput::read_ints(std::span<int32_t> dst, size_t offset, size_t len) {
@@ -298,7 +424,9 @@ Result<std::unique_ptr<RandomAccessInput>> MemorySegmentIndexInput::random_acces
 Result<std::unique_ptr<IndexInput>> MemorySegmentIndexInput::clone() const {
     std::unique_ptr<IndexInput> copy(
         new MemorySegmentIndexInput(mapping_, offset_, length_, description()));
-    static_cast<MemorySegmentIndexInput *>(copy.get())->pos_ = pos_;
+    auto *const clone = static_cast<MemorySegmentIndexInput *>(copy.get());
+    clone->pos_ = pos_;
+    clone->resync_window(pos_);
     return copy;
 }
 
