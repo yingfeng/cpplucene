@@ -70,6 +70,15 @@ VoidResult DataOutput::write_vint(int32_t i) {
     return write_byte(static_cast<uint8_t>(value));
 }
 
+VoidResult DataOutput::write_ints(std::span<const int32_t> values) {
+    for (const int32_t value : values) {
+        if (auto r = write_int(value); !r) {
+            return r;
+        }
+    }
+    return {};
+}
+
 VoidResult DataOutput::write_zint(int32_t i) { return write_vint(BitUtil::zig_zag_encode_i32(i)); }
 
 VoidResult DataOutput::write_vlong(int64_t i) {

@@ -317,6 +317,28 @@ private:
 };
 
 /// A buffered sequential [`IndexOutput`] over an open file descriptor.
+/// Encodes `value` in the vint format, returning the number of bytes written.
+[[nodiscard]] size_t encode_vint(uint32_t value, std::span<uint8_t> out) noexcept {
+    size_t length = 0;
+    while ((value & ~0x7Fu) != 0) {
+        out[length++] = static_cast<uint8_t>((value & 0x7F) | 0x80);
+        value >>= 7;
+    }
+    out[length++] = static_cast<uint8_t>(value);
+    return length;
+}
+
+/// Encodes `value` in the vlong format, returning the number of bytes written.
+[[nodiscard]] size_t encode_vlong(uint64_t value, std::span<uint8_t> out) noexcept {
+    size_t length = 0;
+    while ((value & ~0x7Full) != 0) {
+        out[length++] = static_cast<uint8_t>((value & 0x7F) | 0x80);
+        value >>= 7;
+    }
+    out[length++] = static_cast<uint8_t>(value);
+    return length;
+}
+
 class FSIndexOutput : public IndexOutput {
 public:
     FSIndexOutput(int fd, std::string name) : fd_(fd), name_(std::move(name)), buffer_(WRITE_BUFFER_SIZE) {}
@@ -340,6 +362,60 @@ public:
         buffer_[buffered_++] = b;
         crc_.update(b);
         return {};
+    }
+
+    // The fixed-width and variable-width writers encode into a stack buffer and
+    // hand the bytes to `write_bytes`: one CRC update and one buffer check for the
+    // whole value instead of one per byte.
+    [[nodiscard]] VoidResult write_short(int16_t i) override {
+        uint8_t bytes[BitUtil::SHORT_BYTES];
+        BitUtil::set_i16_le(bytes, 0, i);
+        return write_small(std::span<const uint8_t>(bytes));
+    }
+
+    [[nodiscard]] VoidResult write_int(int32_t i) override {
+        uint8_t bytes[BitUtil::INT_BYTES];
+        BitUtil::set_i32_le(bytes, 0, i);
+        return write_small(std::span<const uint8_t>(bytes));
+    }
+
+    [[nodiscard]] VoidResult write_long(int64_t i) override {
+        uint8_t bytes[BitUtil::LONG_BYTES];
+        BitUtil::set_i64_le(bytes, 0, i);
+        return write_small(std::span<const uint8_t>(bytes));
+    }
+
+    [[nodiscard]] VoidResult write_ints(std::span<const int32_t> values) override {
+        // 64 values (256 bytes) per trip through `write_bytes`.
+        constexpr size_t kBatch = 64;
+        uint8_t bytes[kBatch * BitUtil::INT_BYTES];
+        size_t position = 0;
+        while (position < values.size()) {
+            const size_t count = std::min(kBatch, values.size() - position);
+            for (size_t i = 0; i < count; ++i) {
+                BitUtil::set_i32_le(bytes, i * BitUtil::INT_BYTES, values[position + i]);
+            }
+            if (auto r = write_small(std::span<const uint8_t>(bytes, count * BitUtil::INT_BYTES)); !r) {
+                return r;
+            }
+            position += count;
+        }
+        return {};
+    }
+
+    [[nodiscard]] VoidResult write_vint(int32_t i) override {
+        uint8_t bytes[5];
+        const size_t length = encode_vint(static_cast<uint32_t>(i), bytes);
+        return write_small(std::span<const uint8_t>(bytes, length));
+    }
+
+    [[nodiscard]] VoidResult write_vlong(int64_t i) override {
+        if (i < 0) {
+            return err(LuceneError::illegal_argument(std::format("cannot write negative vLong (got: {})", i)));
+        }
+        uint8_t bytes[9];
+        const size_t length = encode_vlong(static_cast<uint64_t>(i), bytes);
+        return write_small(std::span<const uint8_t>(bytes, length));
     }
 
     [[nodiscard]] VoidResult write_bytes(std::span<const uint8_t> b, size_t offset, size_t length) override {
@@ -391,6 +467,18 @@ public:
     }
 
 private:
+    /// Appends a short run of bytes to the write buffer; falls back to
+    /// [`write_bytes`] (which flushes and writes whole chunks) when it does not fit.
+    [[nodiscard]] VoidResult write_small(std::span<const uint8_t> bytes) {
+        if (buffered_ + bytes.size() > buffer_.size()) {
+            return write_bytes(bytes, 0, bytes.size());
+        }
+        std::copy(bytes.begin(), bytes.end(), buffer_.begin() + static_cast<std::ptrdiff_t>(buffered_));
+        buffered_ += bytes.size();
+        crc_.update(bytes);
+        return {};
+    }
+
     [[nodiscard]] VoidResult flush() {
         if (buffered_ == 0) {
             return {};

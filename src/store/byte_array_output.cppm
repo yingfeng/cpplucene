@@ -20,6 +20,7 @@ export module lucene_core:byte_array_output;
 import :types;
 import std;
 
+import :bit_util;
 import :data_output;
 import :error;
 import :index_output;
@@ -58,6 +59,18 @@ public:
         }
         std::copy_n(b.begin() + static_cast<std::ptrdiff_t>(offset), length,
                     bytes_.begin() + static_cast<std::ptrdiff_t>(position_));
+        position_ += length;
+        return {};
+    }
+
+    [[nodiscard]] VoidResult write_ints(std::span<const int32_t> values) override {
+        const size_t length = values.size() * BitUtil::INT_BYTES;
+        if (bytes_.size() < position_ + length) {
+            bytes_.resize(position_ + length, 0);
+        }
+        for (size_t i = 0; i < values.size(); ++i) {
+            BitUtil::set_i32_le(bytes_, position_ + i * BitUtil::INT_BYTES, values[i]);
+        }
         position_ += length;
         return {};
     }

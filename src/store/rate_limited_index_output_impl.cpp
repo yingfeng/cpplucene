@@ -69,6 +69,14 @@ VoidResult RateLimitedIndexOutput::write_int(int32_t i) {
     return out_->write_int(i);
 }
 
+VoidResult RateLimitedIndexOutput::write_ints(std::span<const int32_t> values) {
+    bytes_since_last_pause_ += static_cast<int64_t>(values.size()) * BitUtil::INT_BYTES;
+    if (auto r = check_rate(); !r) {
+        return r;
+    }
+    return out_->write_ints(values);
+}
+
 VoidResult RateLimitedIndexOutput::write_short(int16_t i) {
     bytes_since_last_pause_ += static_cast<int64_t>(BitUtil::SHORT_BYTES);
     if (auto r = check_rate(); !r) {

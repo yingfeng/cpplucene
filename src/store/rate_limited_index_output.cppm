@@ -50,6 +50,7 @@ public:
     [[nodiscard]] VoidResult write_int(int32_t i) override;
     [[nodiscard]] VoidResult write_short(int16_t i) override;
     [[nodiscard]] VoidResult write_long(int64_t i) override;
+    [[nodiscard]] VoidResult write_ints(std::span<const int32_t> values) override;
 
     // ---- IndexOutput ----
 

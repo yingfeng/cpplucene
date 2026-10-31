@@ -48,6 +48,12 @@ public:
     [[nodiscard]] virtual VoidResult write_short(int16_t i);
     [[nodiscard]] virtual VoidResult write_long(int64_t i);
 
+    /// Writes `values` as little-endian `int32_t`, the bulk form of
+    /// [`write_int`].  The postings writers emit a whole block of packed
+    /// integers at a time, and the default (one `write_int` per value) pays the
+    /// per-call bookkeeping — CRC update, buffer check — for every four bytes.
+    [[nodiscard]] virtual VoidResult write_ints(std::span<const int32_t> values);
+
     /// Writes an `int32_t` in a variable-length format (1 to 5 bytes).
     [[nodiscard]] virtual VoidResult write_vint(int32_t i);
     /// Writes a zig-zag encoded vint.

@@ -504,13 +504,7 @@ VoidResult ForUtil::encode_with_tmp(std::span<const int32_t> ints,
         }
     }
 
-    for (size_t t = 0; t < num_ints_per_shift; ++t) {
-        auto written = out.write_int(tmp[t]);
-        if (!written) {
-            return written;
-        }
-    }
-    return {};
+    return out.write_ints(tmp.first(num_ints_per_shift));
 }
 
 VoidResult ForUtil::decode_slow(int32_t bits_per_value,
