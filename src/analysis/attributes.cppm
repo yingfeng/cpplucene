@@ -49,7 +49,11 @@ public:
     virtual ~Attribute() = default;
 
     /// The address of this attribute's [`attribute_type_tag`].
-    [[nodiscard]] virtual const void *type_tag() const noexcept = 0;
+    ///
+    /// Stored rather than computed by a virtual call: [`AttributeSource`] reads it
+    /// once per attribute per token, and a virtual call there showed up as four
+    /// percent of an index build.
+    [[nodiscard]] const void *type_tag() const noexcept { return type_tag_; }
 
     /// A deep copy with the same state.
     [[nodiscard]] virtual std::unique_ptr<Attribute> clone() const = 0;
@@ -67,14 +71,22 @@ public:
 
     /// The attribute name used in debug output.
     [[nodiscard]] virtual std::string_view name() const = 0;
+
+protected:
+    explicit Attribute(const void *type_tag) noexcept : type_tag_(type_tag) {}
+    Attribute(const Attribute &) = default;
+    Attribute &operator=(const Attribute &) = default;
+    Attribute(Attribute &&) noexcept = default;
+    Attribute &operator=(Attribute &&) noexcept = default;
+
+private:
+    const void *type_tag_;
 };
 
 /// The token text.  Port of `CharTermAttribute`.
 export class CharTermAttribute : public Attribute {
 public:
-    [[nodiscard]] const void *type_tag() const noexcept override {
-        return attribute_type_tag<CharTermAttribute>();
-    }
+    CharTermAttribute() : Attribute(attribute_type_tag<CharTermAttribute>()) {}
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
     void copy_from(const Attribute &other) override;
     void clear() override;
@@ -112,9 +124,7 @@ private:
 /// Byte-level term, used by `TermToBytesRefAttribute` implementations.
 export class BytesTermAttribute : public Attribute {
 public:
-    [[nodiscard]] const void *type_tag() const noexcept override {
-        return attribute_type_tag<BytesTermAttribute>();
-    }
+    BytesTermAttribute() : Attribute(attribute_type_tag<BytesTermAttribute>()) {}
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
     void copy_from(const Attribute &other) override;
     void clear() override;
@@ -130,9 +140,7 @@ private:
 /// `[start_offset, end_offset)` of the token in the original text.
 export class OffsetAttribute : public Attribute {
 public:
-    [[nodiscard]] const void *type_tag() const noexcept override {
-        return attribute_type_tag<OffsetAttribute>();
-    }
+    OffsetAttribute() : Attribute(attribute_type_tag<OffsetAttribute>()) {}
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
     void copy_from(const Attribute &other) override;
     void clear() override;
@@ -153,9 +161,7 @@ private:
 /// Difference between the token's position and the previous token's.
 export class PositionIncrementAttribute : public Attribute {
 public:
-    [[nodiscard]] const void *type_tag() const noexcept override {
-        return attribute_type_tag<PositionIncrementAttribute>();
-    }
+    PositionIncrementAttribute() : Attribute(attribute_type_tag<PositionIncrementAttribute>()) {}
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
     void copy_from(const Attribute &other) override;
     void clear() override;
@@ -171,9 +177,7 @@ private:
 /// Number of positions spanned by the token (default 1).
 export class PositionLengthAttribute : public Attribute {
 public:
-    [[nodiscard]] const void *type_tag() const noexcept override {
-        return attribute_type_tag<PositionLengthAttribute>();
-    }
+    PositionLengthAttribute() : Attribute(attribute_type_tag<PositionLengthAttribute>()) {}
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
     void copy_from(const Attribute &other) override;
     void clear() override;
@@ -189,16 +193,16 @@ private:
 /// Lexical type of the token, e.g. `<ALPHANUM>`.
 export class TypeAttribute : public Attribute {
 public:
-    [[nodiscard]] const void *type_tag() const noexcept override {
-        return attribute_type_tag<TypeAttribute>();
-    }
+    TypeAttribute() : Attribute(attribute_type_tag<TypeAttribute>()) {}
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
     void copy_from(const Attribute &other) override;
     void clear() override;
     [[nodiscard]] std::string_view name() const override { return "TypeAttribute"; }
 
     [[nodiscard]] std::string_view type() const noexcept { return type_; }
-    void set_type(std::string_view type) { type_ = std::string(type); }
+    /// Assigns the token type; the buffer is reused, so a token stream does not
+    /// allocate once per token.
+    void set_type(std::string_view type) { type_.assign(type); }
 
 private:
     std::string type_{"word"};
@@ -207,9 +211,7 @@ private:
 /// Marks a token as a keyword (searchable verbatim, not stemmed).
 export class KeywordAttribute : public Attribute {
 public:
-    [[nodiscard]] const void *type_tag() const noexcept override {
-        return attribute_type_tag<KeywordAttribute>();
-    }
+    KeywordAttribute() : Attribute(attribute_type_tag<KeywordAttribute>()) {}
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
     void copy_from(const Attribute &other) override;
     void clear() override;
@@ -225,9 +227,7 @@ private:
 /// Optional per-token payload.
 export class PayloadAttribute : public Attribute {
 public:
-    [[nodiscard]] const void *type_tag() const noexcept override {
-        return attribute_type_tag<PayloadAttribute>();
-    }
+    PayloadAttribute() : Attribute(attribute_type_tag<PayloadAttribute>()) {}
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
     void copy_from(const Attribute &other) override;
     void clear() override;
@@ -243,9 +243,7 @@ private:
 /// Scaled term frequency (used by `DelimitedTermFrequencyTokenFilter`).
 export class TermFrequencyAttribute : public Attribute {
 public:
-    [[nodiscard]] const void *type_tag() const noexcept override {
-        return attribute_type_tag<TermFrequencyAttribute>();
-    }
+    TermFrequencyAttribute() : Attribute(attribute_type_tag<TermFrequencyAttribute>()) {}
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
     void copy_from(const Attribute &other) override;
     void clear() override;
@@ -261,9 +259,7 @@ private:
 /// Arbitrary per-token flags (`FlagsAttribute`).
 export class FlagsAttribute : public Attribute {
 public:
-    [[nodiscard]] const void *type_tag() const noexcept override {
-        return attribute_type_tag<FlagsAttribute>();
-    }
+    FlagsAttribute() : Attribute(attribute_type_tag<FlagsAttribute>()) {}
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
     void copy_from(const Attribute &other) override;
     void clear() override;

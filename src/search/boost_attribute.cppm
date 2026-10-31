@@ -37,11 +37,9 @@ namespace lucene {
 /// **Deviation:** the reference implementation splits the trait from its
 /// implementation; the port has one concrete attribute class.
 export class BoostAttribute final : public Attribute {
-    [[nodiscard]] const void *type_tag() const noexcept override {
-        return attribute_type_tag<BoostAttribute>();
-    }
-
 public:
+    BoostAttribute() : Attribute(attribute_type_tag<BoostAttribute>()) {}
+
     /// The boost of a term that does not set one.
     static constexpr float kDefaultBoost = 1.0F;
 
