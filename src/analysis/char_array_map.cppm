@@ -72,14 +72,23 @@ public:
 
     /// The value of the `[offset, offset + length)` slice of `key`.
     [[nodiscard]] const T *get(const std::u32string &key, size_t offset, size_t length) const {
-        if (offset > key.size() || length > key.size() - offset) {
+        if (map_.empty() || offset > key.size() || length > key.size() - offset) {
             return nullptr;
         }
         return get_normalized(normalize(std::u32string_view(key).substr(offset, length)));
     }
 
     /// The value of the UTF-8 `key`, or null when absent.
-    [[nodiscard]] const T *get_str(std::string_view key) const { return get(decode(key)); }
+    ///
+    /// The empty-map check comes first because the lookup runs once per token:
+    /// without it every token of an analyzer with an empty stop set pays a UTF-8
+    /// decode plus a hash of the decoded text to answer "no".
+    [[nodiscard]] const T *get_str(std::string_view key) const {
+        if (map_.empty()) {
+            return nullptr;
+        }
+        return get(decode(key));
+    }
 
     /// The value of the `[offset, offset + length)` slice of the UTF-8 `key`,
     /// where the offsets count **code points**, not bytes.

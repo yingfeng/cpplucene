@@ -28,9 +28,8 @@ import std;
 
 namespace lucene {
 
-LowerCaseFilter::LowerCaseFilter(std::unique_ptr<TokenStream> input) : TokenFilter(std::move(input)) {
-    attributes().add_attribute<CharTermAttribute>();
-}
+LowerCaseFilter::LowerCaseFilter(std::unique_ptr<TokenStream> input)
+    : TokenFilter(std::move(input)), term_(attributes().add_attribute<CharTermAttribute>()) {}
 
 Result<bool> LowerCaseFilter::increment_token() {
     auto more = input_->increment_token();
@@ -40,7 +39,7 @@ Result<bool> LowerCaseFilter::increment_token() {
     if (!more.value()) {
         return false;
     }
-    auto *term = attributes().get_attribute<CharTermAttribute>();
+    CharTermAttribute *const term = term_;
     debug_check(term != nullptr);
 
     // ASCII fast path: lower case in place.  Decoding to UTF-32 and encoding back
@@ -49,17 +48,18 @@ Result<bool> LowerCaseFilter::increment_token() {
     {
         const std::string_view text = term->text();
         const auto *const bytes = reinterpret_cast<const unsigned char *>(text.data());
-        bool ascii = true;
+        // An OR reduction (no early exit) vectorises; a `break` on the first
+        // non-ASCII byte does not, and this runs once per token.
+        unsigned char high = 0;
         for (size_t i = 0; i < text.size(); ++i) {
-            if (bytes[i] >= 0x80) {
-                ascii = false;
-                break;
-            }
+            high |= bytes[i];
         }
-        if (ascii) {
+        if ((high & 0x80u) == 0) {
+            // One pointer: the source and the destination are the same buffer, and
+            // spelling it that way lets the loop vectorise.
             char *const writable = term->mutable_buffer();
             for (size_t i = 0; i < text.size(); ++i) {
-                const unsigned char ch = bytes[i];
+                const unsigned char ch = static_cast<unsigned char>(writable[i]);
                 writable[i] = static_cast<char>(ch >= 'A' && ch <= 'Z' ? ch | 0x20 : ch);
             }
             return true;

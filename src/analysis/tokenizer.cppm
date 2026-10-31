@@ -68,6 +68,13 @@ protected:
     bool emit_token(size_t start, size_t end);
 
     AttributeSource attributes_;
+    /// Resolved once in the constructor: `emit_token` runs per token, and three
+    /// `add_attribute` scans per token were measurable overhead.  The instances
+    /// live in `attributes_` for the whole life of the stream (nobody replaces or
+    /// removes them), so the pointers stay valid.
+    CharTermAttribute *term_attribute_{};
+    OffsetAttribute *offset_attribute_{};
+    PositionIncrementAttribute *position_increment_attribute_{};
     std::string input_;
     size_t position_{0};
     std::u32string code_points_{};

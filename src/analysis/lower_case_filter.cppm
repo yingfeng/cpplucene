@@ -36,6 +36,11 @@ public:
     explicit LowerCaseFilter(std::unique_ptr<TokenStream> input);
 
     [[nodiscard]] Result<bool> increment_token() override;
+
+private:
+    /// Resolved once in the constructor instead of once per token; the instance
+    /// lives in the shared [`AttributeSource`] for the whole stream.
+    CharTermAttribute *term_{};
 };
 
 /// Lower-cases a single code point (simple case mapping).

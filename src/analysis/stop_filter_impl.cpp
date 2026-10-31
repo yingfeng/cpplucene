@@ -28,7 +28,10 @@ import std;
 namespace lucene {
 
 StopFilter::StopFilter(std::unique_ptr<TokenStream> input, const CharArraySet &stop_words)
-        : TokenFilter(std::move(input)), char_stop_words_(stop_words) {}
+        : TokenFilter(std::move(input)),
+          term_(attributes().add_attribute<CharTermAttribute>()),
+          position_increment_(attributes().add_attribute<PositionIncrementAttribute>()),
+          char_stop_words_(stop_words) {}
 
 bool StopFilter::is_stop_word(std::string_view word) const {
     if (char_stop_words_.has_value()) {
@@ -38,10 +41,10 @@ bool StopFilter::is_stop_word(std::string_view word) const {
 }
 
 StopFilter::StopFilter(std::unique_ptr<TokenStream> input, std::set<std::string, std::less<>> stop_words)
-    : TokenFilter(std::move(input)), stop_words_(std::move(stop_words)) {
-    attributes().add_attribute<CharTermAttribute>();
-    attributes().add_attribute<PositionIncrementAttribute>();
-}
+    : TokenFilter(std::move(input)),
+      term_(attributes().add_attribute<CharTermAttribute>()),
+      position_increment_(attributes().add_attribute<PositionIncrementAttribute>()),
+      stop_words_(std::move(stop_words)) {}
 
 Result<bool> StopFilter::increment_token() {
     while (true) {
@@ -52,19 +55,17 @@ Result<bool> StopFilter::increment_token() {
         if (!more.value()) {
             return false;
         }
-        auto *term = attributes().get_attribute<CharTermAttribute>();
-        auto *position_increment = attributes().get_attribute<PositionIncrementAttribute>();
-        const std::string_view text = term->text();
+        const std::string_view text = term_->text();
         if (!is_stop_word(text)) {
             if (skipped_positions_ != 0) {
-                position_increment->set_position_increment(position_increment->position_increment() +
-                                                           skipped_positions_);
+                position_increment_->set_position_increment(position_increment_->position_increment() +
+                                                            skipped_positions_);
                 skipped_positions_ = 0;
             }
             return true;
         }
         // Drop the token but remember its position increment.
-        skipped_positions_ += position_increment->position_increment();
+        skipped_positions_ += position_increment_->position_increment();
     }
 }
 

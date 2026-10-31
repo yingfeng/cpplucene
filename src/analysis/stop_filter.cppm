@@ -58,6 +58,12 @@ private:
     /// Whether `word` is a stop word.
     [[nodiscard]] bool is_stop_word(std::string_view word) const;
 
+    /// Resolved once in the constructor.  `increment_token` runs per token, and
+    /// going through `attributes()` costs a virtual call per filter level plus a
+    /// linear scan per lookup, which showed up as 2.7% of an index build.
+    CharTermAttribute *term_{};
+    PositionIncrementAttribute *position_increment_{};
+
     std::set<std::string, std::less<>> stop_words_;
     /// The set a caller handed in, kept as it is so its case folding applies.
     std::optional<CharArraySet> char_stop_words_;

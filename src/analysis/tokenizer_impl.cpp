@@ -35,6 +35,28 @@ namespace {
 void decode(std::string_view input, std::u32string &code_points, std::vector<uint32_t> &byte_offsets) {
     code_points.clear();
     byte_offsets.clear();
+
+    // ASCII fast path: one code point per byte, so the offset table is the
+    // identity and no UTF-8 state machine is needed.  English text — every
+    // document of the benchmark corpus — never takes the slow path, and the loop
+    // vectorises because the two buffers cannot alias the input's result.
+    {
+        unsigned char high = 0;
+        for (size_t k = 0; k < input.size(); ++k) {
+            high |= static_cast<unsigned char>(input[k]);
+        }
+        if ((high & 0x80u) == 0) {
+            code_points.resize(input.size());
+            byte_offsets.resize(input.size() + 1);
+            for (size_t k = 0; k < input.size(); ++k) {
+                code_points[k] = static_cast<char32_t>(static_cast<unsigned char>(input[k]));
+                byte_offsets[k] = static_cast<uint32_t>(k);
+            }
+            byte_offsets[input.size()] = static_cast<uint32_t>(input.size());
+            return;
+        }
+    }
+
     code_points.reserve(input.size());
     byte_offsets.reserve(input.size() + 1);
 
@@ -68,10 +90,10 @@ void decode(std::string_view input, std::u32string &code_points, std::vector<uin
 
 } // namespace
 
-Tokenizer::Tokenizer() {
-    attributes_.add_attribute<CharTermAttribute>();
-    attributes_.add_attribute<OffsetAttribute>();
-    attributes_.add_attribute<PositionIncrementAttribute>();
+Tokenizer::Tokenizer()
+    : term_attribute_(attributes_.add_attribute<CharTermAttribute>()),
+      offset_attribute_(attributes_.add_attribute<OffsetAttribute>()),
+      position_increment_attribute_(attributes_.add_attribute<PositionIncrementAttribute>()) {
     attributes_.add_attribute<PositionLengthAttribute>();
     attributes_.add_attribute<TypeAttribute>();
 }
@@ -103,13 +125,9 @@ std::string_view Tokenizer::text_of(size_t start, size_t end) const noexcept {
 }
 
 bool Tokenizer::emit_token(size_t start, size_t end) {
-    auto *term = attributes_.add_attribute<CharTermAttribute>();
-    auto *offset = attributes_.add_attribute<OffsetAttribute>();
-    auto *position_increment = attributes_.add_attribute<PositionIncrementAttribute>();
-
-    term->set_text(text_of(start, end));
-    offset->set_offset(byte_offset_at(start), byte_offset_at(end));
-    position_increment->set_position_increment(1);
+    term_attribute_->set_text(text_of(start, end));
+    offset_attribute_->set_offset(byte_offset_at(start), byte_offset_at(end));
+    position_increment_attribute_->set_position_increment(1);
     return true;
 }
 
