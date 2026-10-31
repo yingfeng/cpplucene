@@ -24,12 +24,12 @@ Examples
 --------
     python3 benchmark/sbg/run_bench.py verify \
         --driver clucene=build-rel/benchmark/clucene_sbg \
-        --driver rlucene=/path/to/the-cost-diagnostic \
-        --index clucene=/data/index-clucene --index rlucene=/data/index-rlucene \
+        --driver rust=/path/to/the-cost-diagnostic \
+        --index clucene=/data/index-clucene --index rust=/data/index-rust \
         --queries /path/to/queries.jsonl
 
     python3 benchmark/sbg/run_bench.py bench \
-        --driver clucene=... --driver rlucene=... \
+        --driver clucene=... --driver rust=... \
         --index clucene=/data/index-clucene \
         --queries /path/to/queries.jsonl --rounds 12
 """
@@ -40,6 +40,7 @@ import argparse
 import json
 import os
 import random
+import shlex
 import statistics
 import subprocess
 import sys
@@ -54,6 +55,11 @@ def parse_pairs(values: list[str], what: str) -> list[tuple[str, str]]:
         name, sep, path = value.partition("=")
         if not sep or not name or not path:
             raise SystemExit(f"--{what} expects name=path, got {value!r}")
+        if what == "driver":
+            # A driver may carry arguments (`sh /path/java_sbg.sh`,
+            # `java -cp <jars> java_sbg`), so it is not a plain path to resolve.
+            pairs.append((name, path))
+            continue
         if not os.path.exists(path):
             raise SystemExit(f"--{what} {name}: {path} does not exist")
         pairs.append((name, os.path.abspath(path)))
@@ -81,8 +87,10 @@ class Driver:
     def __init__(self, name: str, binary: str, mode: str, index: str):
         self.name = name
         self.mode = mode
+        # `binary` may carry arguments (`sh /path/java_sbg.sh`, `java -cp ...`), so
+        # it is split like a shell word list rather than exec'ed as a single path.
         self.process = subprocess.Popen(
-            [binary, mode, index],
+            [*shlex.split(binary), mode, index],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

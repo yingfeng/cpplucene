@@ -7,3 +7,8 @@ compile_commands.json
 *.pcm
 *.o
 tools
+
+# Benchmark scratch: compiled Java driver classes and raw timing samples.  The
+# pinned query set and the analysis script next to them are tracked.
+benchmark/sbg/classes/
+benchmark/sbg/results/*.csv
