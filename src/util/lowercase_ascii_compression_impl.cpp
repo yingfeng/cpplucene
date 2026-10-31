@@ -50,18 +50,37 @@ Result<bool> LowercaseAsciiCompression::compress(std::span<const uint8_t> input,
     const size_t max_exceptions = len >> 5;
     size_t previous_exception_index = 0;
     size_t num_exceptions = 0;
-    for (size_t i = 0; i < len; ++i) {
-        if (!is_compressible(static_cast<int32_t>(input[i]))) {
-            while (i - previous_exception_index > 0xFF) {
-                ++num_exceptions;
-                previous_exception_index += 0xFF;
+    // Classify sixteen bytes at a time: a block whose bytes all satisfy the
+    // compressible test contributes no exceptions, and the reduction over a block
+    // is the only work it needs.  Any block with a candidate falls back to the
+    // indexed loop, so the count and the failure point stay exactly as before.
+    size_t block_start = 0;
+    while (block_start < len) {
+        const size_t block_end = block_start + std::min<size_t>(16, len - block_start);
+        bool clean_block = block_end - block_start == 16;
+        if (clean_block) {
+            uint8_t bad = 0;
+            for (size_t i = block_start; i < block_end; ++i) {
+                bad |= static_cast<uint8_t>(((static_cast<uint32_t>(input[i]) + 1u) & 0xA0u) != 0x20u);
             }
-            ++num_exceptions;
-            if (num_exceptions > max_exceptions) {
-                return false;
-            }
-            previous_exception_index = i;
+            clean_block = bad == 0;
         }
+        if (!clean_block) {
+            for (size_t i = block_start; i < block_end; ++i) {
+                if (!is_compressible(static_cast<int32_t>(input[i]))) {
+                    while (i - previous_exception_index > 0xFF) {
+                        ++num_exceptions;
+                        previous_exception_index += 0xFF;
+                    }
+                    ++num_exceptions;
+                    if (num_exceptions > max_exceptions) {
+                        return false;
+                    }
+                    previous_exception_index = i;
+                }
+            }
+        }
+        block_start = block_end;
     }
 
     // 2. Move to 6-bit space.
@@ -73,21 +92,26 @@ Result<bool> LowercaseAsciiCompression::compress(std::span<const uint8_t> input,
     }
 
     // 3. Pack the exception bits into `tmp[0..compressed_len]`.
+    //
+    // The three passes write disjoint quarters of the packed area, so they are
+    // expressed as three non-overlapping slices instead of a running cursor.
     {
-        size_t o = 0;
-        for (size_t i = compressed_len; i < len; ++i) {
-            tmp[o] |= static_cast<uint8_t>((tmp[i] & 0x30) << 2); // bits 4-5
-            ++o;
+        const size_t saved = len >> 2;
+        std::span<uint8_t> packed = tmp.first(compressed_len);
+        const std::span<const uint8_t> tail = tmp.subspan(compressed_len, len - compressed_len);
+        const std::span<uint8_t> first = packed.first(saved);
+        const std::span<uint8_t> second = packed.subspan(saved, saved);
+        const std::span<uint8_t> third = packed.subspan(2 * saved, saved);
+        for (size_t i = 0; i < saved; ++i) {
+            first[i] |= static_cast<uint8_t>((tail[i] & 0x30) << 2); // bits 4-5
         }
-        for (size_t i = compressed_len; i < len; ++i) {
-            tmp[o] |= static_cast<uint8_t>((tmp[i] & 0x0C) << 4); // bits 2-3
-            ++o;
+        for (size_t i = 0; i < saved; ++i) {
+            second[i] |= static_cast<uint8_t>((tail[i] & 0x0C) << 4); // bits 2-3
         }
-        for (size_t i = compressed_len; i < len; ++i) {
-            tmp[o] |= static_cast<uint8_t>((tmp[i] & 0x03) << 6); // bits 0-1
-            ++o;
+        for (size_t i = 0; i < saved; ++i) {
+            third[i] |= static_cast<uint8_t>((tail[i] & 0x03) << 6); // bits 0-1
         }
-        debug_check(o <= compressed_len, "the packed bitmap must fit the compressed length");
+        debug_check(saved * 3 <= compressed_len, "the packed bitmap must fit the compressed length");
     }
     if (auto result = out.write_bytes(tmp, 0, compressed_len); !result.has_value()) {
         return err(result.error());

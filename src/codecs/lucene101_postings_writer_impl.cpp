@@ -433,7 +433,8 @@ VoidResult Lucene101PostingsWriter::flush_doc_block(bool finish_term, const Fiel
         }
     } else {
         if (options.write_freqs) {
-            const std::vector<Impact> impacts = level0_freq_norm_accumulator_.get_competitive_freq_norm_pairs();
+            const std::span<const Impact> impacts =
+                    level0_freq_norm_accumulator_.get_competitive_freq_norm_pairs();
             const auto n = static_cast<int32_t>(impacts.size());
             if (n > max_num_impacts_at_level0_) {
                 max_num_impacts_at_level0_ = n;
@@ -558,7 +559,7 @@ VoidResult Lucene101PostingsWriter::write_level1_skip_data(const FieldWriteOptio
 
     uint64_t level1_end = 0;
     if (options.write_freqs) {
-        const std::vector<Impact> impacts =
+        const std::span<const Impact> impacts =
                 level1_competitive_freq_norm_accumulator_.get_competitive_freq_norm_pairs();
         const auto n = static_cast<int32_t>(impacts.size());
         if (n > max_num_impacts_at_level1_) {

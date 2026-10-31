@@ -166,8 +166,12 @@ VoidResult PackedLongValues::Builder::pack(std::vector<int64_t> &pending, size_t
         for (const auto value : pending) {
             min = std::min(min, value);
         }
-        for (auto &value : pending) {
-            value = wrapping_sub(value, min);
+        if (min != 0) {
+            // Subtracting a zero minimum is a full pass over the page for
+            // nothing; monotonic sequences (doc ids, offsets) often start at 0.
+            for (auto &value : pending) {
+                value = wrapping_sub(value, min);
+            }
         }
         mins_.push_back(min);
     }

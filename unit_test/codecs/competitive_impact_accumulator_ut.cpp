@@ -25,6 +25,17 @@ import lucene_core;
 
 using namespace lucene;
 
+namespace {
+
+/// The accumulator hands out a view of its own buffer; the assertions compare
+/// values, so copy them out first.
+std::vector<Impact> pairs(const CompetitiveImpactAccumulator &accumulator) {
+    const std::span<const Impact> impacts = accumulator.get_competitive_freq_norm_pairs();
+    return std::vector<Impact>(impacts.begin(), impacts.end());
+}
+
+} // namespace
+
 TEST(ImpactTest, OrdersByFreqThenDecreasingUnsignedNorm) {
     const Impact low_freq{1, 10};
     const Impact high_freq{2, 1};
@@ -41,15 +52,15 @@ TEST(CompetitiveImpactAccumulatorTest, KeepsOnlyCompetitivePairs) {
     acc.add(2, 10);
     acc.add(3, 10);
     // A lower frequency with the same norm is dropped, so only (3, 10) is left.
-    EXPECT_EQ(acc.get_competitive_freq_norm_pairs(), std::vector<Impact>({Impact{3, 10}}));
+    EXPECT_EQ(pairs(acc), std::vector<Impact>({Impact{3, 10}}));
 
     acc.add(2, 5);
     // Both survive: (2, 5) is more competitive than (3, 10) thanks to its norm.
-    EXPECT_EQ(acc.get_competitive_freq_norm_pairs(), std::vector<Impact>({Impact{2, 5}, Impact{3, 10}}));
+    EXPECT_EQ(pairs(acc), std::vector<Impact>({Impact{2, 5}, Impact{3, 10}}));
 
     acc.add(1, 5);
     // (1, 5) is dominated by (2, 5) — same norm, lower frequency.
-    EXPECT_EQ(acc.get_competitive_freq_norm_pairs(), std::vector<Impact>({Impact{2, 5}, Impact{3, 10}}));
+    EXPECT_EQ(pairs(acc), std::vector<Impact>({Impact{2, 5}, Impact{3, 10}}));
 }
 
 TEST(CompetitiveImpactAccumulatorTest, ByteNormsKeepTheLowestNormOfEachFrequency) {
@@ -59,11 +70,11 @@ TEST(CompetitiveImpactAccumulatorTest, ByteNormsKeepTheLowestNormOfEachFrequency
     acc.add(1, 3);
     // A single frequency is reported at the *lowest* norm that reaches it,
     // because the pairs are emitted in increasing (unsigned) norm order.
-    EXPECT_EQ(acc.get_competitive_freq_norm_pairs(), std::vector<Impact>({Impact{1, 1}}));
+    EXPECT_EQ(pairs(acc), std::vector<Impact>({Impact{1, 1}}));
 
     // A higher frequency at a higher norm is emitted afterwards.
     acc.add(2, 7);
-    EXPECT_EQ(acc.get_competitive_freq_norm_pairs(), std::vector<Impact>({Impact{1, 1}, Impact{2, 7}}));
+    EXPECT_EQ(pairs(acc), std::vector<Impact>({Impact{1, 1}, Impact{2, 7}}));
 }
 
 TEST(CompetitiveImpactAccumulatorTest, HandlesWideNormsOutsideByteRange) {
@@ -72,7 +83,7 @@ TEST(CompetitiveImpactAccumulatorTest, HandlesWideNormsOutsideByteRange) {
     acc.add(2, 2000);   // wide norm, higher freq and higher norm
     acc.add(1, 42);     // byte norm
 
-    const std::vector<Impact> impacts = acc.get_competitive_freq_norm_pairs();
+    const std::vector<Impact> impacts = pairs(acc);
     // (1, 2000) would be dominated by (2, 2000); the byte range entry (1, 42)
     // only remains if a higher norm shows up at a lower frequency.
     EXPECT_EQ(impacts.size(), 2u);
@@ -90,16 +101,16 @@ TEST(CompetitiveImpactAccumulatorTest, AddAllMergesAndCopyFromReplaces) {
     CompetitiveImpactAccumulator merged;
     merged.add_all(first);
     merged.add_all(second);
-    EXPECT_EQ(merged.get_competitive_freq_norm_pairs(),
+    EXPECT_EQ(pairs(merged),
               std::vector<Impact>({Impact{1, 1}, Impact{3, 5}}));
 
     CompetitiveImpactAccumulator copied;
     copied.add(9, 9);
     copied.copy_from(first);
-    EXPECT_EQ(copied.get_competitive_freq_norm_pairs(), std::vector<Impact>({Impact{1, 1}}));
+    EXPECT_EQ(pairs(copied), std::vector<Impact>({Impact{1, 1}}));
 
     copied.clear();
-    EXPECT_TRUE(copied.get_competitive_freq_norm_pairs().empty());
+    EXPECT_TRUE(pairs(copied).empty());
 }
 
 TEST(CompetitiveImpactAccumulatorTest, ToStringMatchesReferenceFormat) {
@@ -126,6 +137,6 @@ TEST(CompetitiveImpactAccumulatorTest, KeepsOnePairPerNormByte) {
     acc.add(20, 64);
     acc.add(19, 64);
 
-    EXPECT_EQ(acc.get_competitive_freq_norm_pairs(),
+    EXPECT_EQ(pairs(acc),
               std::vector<Impact>({Impact{10, 60}, Impact{14, 61}, Impact{16, 62}, Impact{20, 64}}));
 }

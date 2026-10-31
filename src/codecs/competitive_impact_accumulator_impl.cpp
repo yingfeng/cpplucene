@@ -47,27 +47,67 @@ void CompetitiveImpactAccumulator::add_all(const CompetitiveImpactAccumulator &a
     debug_check(assert_consistent(), "competitive impact accumulator is inconsistent");
 }
 
-std::vector<Impact> CompetitiveImpactAccumulator::get_competitive_freq_norm_pairs() const {
-    std::vector<Impact> impacts;
+namespace {
+
+/// Calls `record(i, freq)` for the entries of `max_freqs` that raise the running
+/// maximum, scanning sixteen norms at a time: a block whose maximum does not beat
+/// the current frontier cannot contribute one, so the per-entry test is skipped
+/// for it.
+template <class Record>
+void for_each_record_freq(const std::array<int32_t, 256> &max_freqs, Record &&record) {
+    constexpr size_t kBlock = 16;
     int32_t max_freq_for_lower_norms = 0;
-    for (size_t i = 0; i < max_freqs_.size(); ++i) {
-        const int32_t freq = max_freqs_[i];
-        if (freq > max_freq_for_lower_norms) {
-            // Byte norms are read back as signed values.
-            impacts.push_back(Impact{freq, static_cast<int64_t>(static_cast<int8_t>(static_cast<uint8_t>(i)))});
-            max_freq_for_lower_norms = freq;
+    for (size_t block_start = 0; block_start < max_freqs.size(); block_start += kBlock) {
+        int32_t block_max = 0;
+        for (size_t i = block_start; i < block_start + kBlock; ++i) {
+            block_max = std::max(block_max, max_freqs[i]);
+        }
+        if (block_max <= max_freq_for_lower_norms) {
+            continue;
+        }
+        for (size_t i = block_start; i < block_start + kBlock; ++i) {
+            const int32_t freq = max_freqs[i];
+            if (freq > max_freq_for_lower_norms) {
+                record(i, freq);
+                max_freq_for_lower_norms = freq;
+            }
         }
     }
+}
 
-    if (other_freq_norm_pairs_.empty()) {
-        return impacts;
+} // namespace
+
+std::span<const Impact> CompetitiveImpactAccumulator::get_competitive_freq_norm_pairs() const {
+    if (!other_freq_norm_pairs_.empty()) {
+        // Norms outside byte range: rare enough that the ordered set is fine.
+        std::set<Impact> freq_norm_pairs = other_freq_norm_pairs_;
+        for_each_record_freq(max_freqs_, [&](size_t i, int32_t freq) {
+            add_entry(
+                Impact{freq, static_cast<int64_t>(static_cast<int8_t>(static_cast<uint8_t>(i)))},
+                freq_norm_pairs);
+        });
+        spilled_pairs_.assign(freq_norm_pairs.begin(), freq_norm_pairs.end());
+        return spilled_pairs_;
     }
 
-    std::set<Impact> freq_norm_pairs = other_freq_norm_pairs_;
-    for (const Impact &impact : impacts) {
-        add_entry(impact, freq_norm_pairs);
+    size_t size = 0;
+    for_each_record_freq(max_freqs_, [&](size_t i, int32_t freq) {
+        // Byte norms are read back as signed values.
+        const Impact impact{freq, static_cast<int64_t>(static_cast<int8_t>(static_cast<uint8_t>(i)))};
+        if (size < kInlineCapacity) {
+            inline_pairs_[size] = impact;
+        } else {
+            if (size == kInlineCapacity) {
+                spilled_pairs_.assign(inline_pairs_.begin(), inline_pairs_.end());
+            }
+            spilled_pairs_.push_back(impact);
+        }
+        ++size;
+    });
+    if (size > kInlineCapacity) {
+        return spilled_pairs_;
     }
-    return std::vector<Impact>(freq_norm_pairs.begin(), freq_norm_pairs.end());
+    return std::span<const Impact>(inline_pairs_.data(), size);
 }
 
 std::string CompetitiveImpactAccumulator::to_string() const {

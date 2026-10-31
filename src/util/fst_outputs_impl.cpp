@@ -27,6 +27,10 @@ import std;
 
 namespace lucene {
 
+void FstOutputs::subtract_assign(FstOutput &output, const FstOutput &inc) const {
+    output = subtract(output, inc);
+}
+
 void FstOutputs::add_assign(FstOutput &prefix, FstOutput &output) const {
     prefix = add(prefix, output);
 }

@@ -688,14 +688,16 @@ VoidResult Lucene90CompressingTermVectorsWriter::flush_offsets() {
                 return err(LuceneError::illegal_state("field_num " + std::to_string(field.field_num) + " not found"));
             }
             const float chars_per_term_field = chars_per_term[static_cast<size_t>(position - field_nums_.begin())];
+            // Hoisted out of the per-position loop: the mode is a property of the
+            // field, and this is the innermost loop of the term vector writer.
+            const bool has_positions = field.has_positions;
             size_t pos = 0;
             for (size_t i = 0; i < field.num_terms; ++i) {
                 const int32_t freq = field.freqs[i];
                 int32_t previous_pos = 0;
                 int32_t previous_off = 0;
                 for (int32_t f = 0; f < freq; ++f) {
-                    const int32_t current_position =
-                            field.has_positions ? positions_buf_[field.pos_start + pos] : 0;
+                    const int32_t current_position = has_positions ? positions_buf_[field.pos_start + pos] : 0;
                     const int32_t start_offset = start_offsets_buf_[field.off_start + pos];
                     const int32_t predicted =
                             static_cast<int32_t>(chars_per_term_field *

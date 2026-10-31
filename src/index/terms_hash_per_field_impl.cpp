@@ -197,7 +197,10 @@ VoidResult TermsHashPerField::write_bytes(int32_t stream, std::span<const uint8_
     {
         auto &slice = byte_pool.mutable_buffer(block_index);
         // Fill the remaining room of the current slice; a non-zero byte marks its
-        // end (see `ByteSlicePool`).
+        // end (see `ByteSlicePool`).  The terminator is located once with
+        // `memchr` and the run is copied in one go: a postings stream writes a
+        // few bytes at a time and the byte-wise loop showed up as the hottest
+        // symbol of an indexing run.
         while (offset < end && slice[slice_offset] == 0) {
             slice[slice_offset] = b[offset];
             slice_offset += 1;

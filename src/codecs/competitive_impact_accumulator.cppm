@@ -52,7 +52,12 @@ public:
 
     /// The set of competitive `(freq, norm)` pairs, ordered by `freq` then by
     /// decreasing unsigned `norm`.
-    [[nodiscard]] std::vector<Impact> get_competitive_freq_norm_pairs() const;
+    ///
+    /// The pairs are kept in a buffer owned by this accumulator — an inline
+    /// array for the common case of at most eight pairs, a vector only when a
+    /// term has more — and the view is invalidated by the next call.  Callers
+    /// copy them into an output buffer right away (the postings writer does).
+    [[nodiscard]] std::span<const Impact> get_competitive_freq_norm_pairs() const;
 
     /// `[{freq=..,norm=..}, ...]`, the `Display` implementation of the reference implementation.
     [[nodiscard]] std::string to_string() const;
@@ -68,6 +73,11 @@ private:
     /// always absent with the default similarity, which encodes norms as bytes.
     std::array<int32_t, 256> max_freqs_{};
     std::set<Impact> other_freq_norm_pairs_{};
+
+    /// Where [`get_competitive_freq_norm_pairs`] builds its result.
+    static constexpr size_t kInlineCapacity = 8;
+    mutable std::array<Impact, kInlineCapacity> inline_pairs_{};
+    mutable std::vector<Impact> spilled_pairs_{};
 };
 
 } // namespace lucene

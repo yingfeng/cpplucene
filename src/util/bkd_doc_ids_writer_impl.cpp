@@ -15,6 +15,12 @@
  * limitations under the License.
  */
 
+module;
+
+#if defined(__SSSE3__)
+#include <immintrin.h>
+#endif
+
 module lucene_core:bkd_doc_ids_writer.impl;
 
 import :bkd_doc_ids_writer;
@@ -161,6 +167,40 @@ Result<int8_t> BkdDocIdsWriter::write_doc_ids(std::span<const int32_t> doc_ids, 
             return err(written.error());
         }
         size_t i = 0;
+        // Eight DocIDs are packed into three longs (24 bytes) whose byte order is
+        // the same on every platform.  The scalar version below needs a handful of
+        // shifts and ors per output byte; the shuffle version moves the low three
+        // bytes of each DocID into place with one instruction per output vector.
+#if defined(__SSSE3__)
+        for (; i + 7 < count; i += 8) {
+            const __m128i first = _mm_loadu_si128(reinterpret_cast<const __m128i *>(doc_ids.data() + i));
+            const __m128i second =
+                _mm_loadu_si128(reinterpret_cast<const __m128i *>(doc_ids.data() + i + 4));
+            // `l1`'s eight bytes, then `l2`'s low four.
+            const __m128i first_two = _mm_or_si128(
+                _mm_shuffle_epi8(first, _mm_setr_epi8(9, 10, 4, 5, 6, 0, 1, 2, -1, -1, -1, -1, 12, 13,
+                                                      14, 8)),
+                _mm_shuffle_epi8(second, _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1, 6, 0, 1, 2, -1,
+                                                       -1, -1, -1)));
+            // `l3`'s eight bytes.
+            const __m128i last =
+                _mm_shuffle_epi8(second, _mm_setr_epi8(12, 13, 14, 8, 9, 10, 4, 5, -1, -1, -1, -1, -1,
+                                                       -1, -1, -1));
+            int64_t head[2];
+            int64_t tail[2];
+            _mm_storeu_si128(reinterpret_cast<__m128i *>(head), first_two);
+            _mm_storeu_si128(reinterpret_cast<__m128i *>(tail), last);
+            if (auto written = out.write_long(head[0]); !written.has_value()) {
+                return err(written.error());
+            }
+            if (auto written = out.write_long(head[1]); !written.has_value()) {
+                return err(written.error());
+            }
+            if (auto written = out.write_long(tail[0]); !written.has_value()) {
+                return err(written.error());
+            }
+        }
+#endif
         for (; i + 7 < count; i += 8) {
             const int64_t d1 = doc_ids[i];
             const int64_t d2 = doc_ids[i + 1];
@@ -251,6 +291,17 @@ VoidResult BkdDocIdsWriter::read_ints(DataInput &input, size_t count, std::span<
             size_t position = 0;
             for (size_t word_index = 0; word_index < words.size(); ++word_index) {
                 uint64_t bits = static_cast<uint64_t>(words[word_index]);
+                if (bits == ~uint64_t{0} && position + 64 <= count) {
+                    // A full word means 64 consecutive ids: fill them without
+                    // walking the bits one by one.
+                    const int32_t base =
+                        static_cast<int32_t>(doc_base + static_cast<int64_t>(word_index << 6));
+                    for (size_t bit = 0; bit < 64; ++bit) {
+                        doc_ids[position + bit] = base + static_cast<int32_t>(bit);
+                    }
+                    position += 64;
+                    continue;
+                }
                 while (bits != 0) {
                     const size_t bit = static_cast<size_t>(std::countr_zero(bits));
                     if (position >= count) {

@@ -567,10 +567,15 @@ public:
         size_t next_block_start = start;
         int32_t next_floor_lead_label = -1;
 
+        // Iterate the bounded slice through a pointer: the loop body is the hot
+        // part of flushing a block, and `pending_[i]` carries a bounds check.
+        using PendingEntry = std::variant<PendingTerm, PendingBlock>;
+        const PendingEntry *const pending_entries = pending_.data();
         for (size_t i = start; i < end; ++i) {
+            const PendingEntry &entry = pending_entries[i];
             int32_t suffix_lead_label = -1;
             bool is_term = false;
-            if (const auto *term = std::get_if<PendingTerm>(&pending_[i]); term != nullptr) {
+            if (const auto *term = std::get_if<PendingTerm>(&entry); term != nullptr) {
                 if (term->term.length() == prefix_length) {
                     // Suffix is 0: the term *is* the prefix, so it has an empty
                     // suffix in this block.
@@ -580,7 +585,7 @@ public:
                 }
                 is_term = true;
             } else {
-                const PendingBlock &block = std::get<PendingBlock>(pending_[i]);
+                const PendingBlock &block = std::get<PendingBlock>(entry);
                 debug_check(block.prefix.length() > prefix_length, "a sub block extends the prefix");
                 suffix_lead_label = block.prefix.as_slice()[prefix_length];
             }
@@ -651,6 +656,11 @@ public:
                                                    size_t start, size_t end, bool has_terms, bool has_sub_blocks) {
         debug_check(end > start, "a block holds at least one entry");
 
+        // The bounded slice is walked through a pointer: this loop is the hot
+        // part of flushing a block and `pending_[i]` carries a bounds check.
+        using PendingEntry = std::variant<PendingTerm, PendingBlock>;
+        PendingEntry *const pending_entries = pending_.data();
+
         auto start_fp = terms_out_->get_file_pointer();
         if (!start_fp) {
             return err(std::move(start_fp.error()));
@@ -691,7 +701,7 @@ public:
         if (is_leaf_block) {
             StatsWriter stats_writer(stats_writer_, has_freqs);
             for (size_t i = start; i < end; ++i) {
-                auto *term = std::get_if<PendingTerm>(&pending_[i]);
+                auto *term = std::get_if<PendingTerm>(&pending_entries[i]);
                 if (term == nullptr) {
                     return err(LuceneError::illegal_state("Expected PendingTerm"));
                 }
@@ -724,7 +734,7 @@ public:
         } else {
             StatsWriter stats_writer(stats_writer_, has_freqs);
             for (size_t i = start; i < end; ++i) {
-                if (auto *term = std::get_if<PendingTerm>(&pending_[i]); term != nullptr) {
+                if (auto *term = std::get_if<PendingTerm>(&pending_entries[i]); term != nullptr) {
                     debug_check(StringHelper::starts_with(term->term.as_slice(), prefix.as_slice()),
                                 "the term starts with the block prefix");
                     const size_t suffix_len = term->term.length() - prefix_length;
@@ -746,7 +756,7 @@ public:
                     }
                     absolute = false;
                 } else {
-                    auto &block = std::get<PendingBlock>(pending_[i]);
+                    auto &block = std::get<PendingBlock>(pending_entries[i]);
                     debug_check(StringHelper::starts_with(block.prefix.as_slice(), prefix.as_slice()),
                                 "the sub block starts with the block prefix");
                     const size_t suffix = block.prefix.length() - prefix_length;

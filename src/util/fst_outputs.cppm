@@ -54,6 +54,12 @@ public:
     /// is `"bar"`.
     [[nodiscard]] virtual FstOutput subtract(const FstOutput &output, const FstOutput &inc) const = 0;
 
+    /// `output = subtract(output, inc)`, where the old value of `output` is a
+    /// disposable slot: an implementation may shrink the slice it holds instead of
+    /// copying the remaining bytes into a new container (the compiler calls this
+    /// once per arc, and a term lookup walks hundreds of arcs).
+    virtual void subtract_assign(FstOutput &output, const FstOutput &inc) const;
+
     /// Prepends `prefix`, e.g. `add("foo", "bar")` is `"foobar"`.
     [[nodiscard]] virtual FstOutput add(const FstOutput &prefix, const FstOutput &output) const = 0;
 

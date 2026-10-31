@@ -244,9 +244,13 @@ void HeapPointWriter::swap(size_t i, size_t j) {
     const size_t index_i = bytes_per_doc * i;
     const size_t index_j = bytes_per_doc * j;
     std::copy_n(value.begin() + static_cast<std::ptrdiff_t>(index_i), bytes_per_doc, scratch_.begin());
-    std::copy_n(value.begin() + static_cast<std::ptrdiff_t>(index_j), bytes_per_doc,
-                value.begin() + static_cast<std::ptrdiff_t>(index_i));
-    std::copy_n(scratch_.begin(), bytes_per_doc, value.begin() + static_cast<std::ptrdiff_t>(index_j));
+    if (i != j) {
+        // Swapping a point with itself would otherwise move it through the scratch
+        // buffer for nothing.
+        std::copy_n(value.begin() + static_cast<std::ptrdiff_t>(index_j), bytes_per_doc,
+                    value.begin() + static_cast<std::ptrdiff_t>(index_i));
+        std::copy_n(scratch_.begin(), bytes_per_doc, value.begin() + static_cast<std::ptrdiff_t>(index_j));
+    }
 }
 
 Result<HeapPointReader> HeapPointWriter::make_reader(size_t start, size_t length) {

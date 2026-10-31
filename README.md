@@ -176,10 +176,11 @@ Known gaps, all outside the supported scope or performance-only:
   reference implementation has no such writer either).
 * **Debug/test codecs**: `DirectPostingsFormat` and the `SimpleText` codec are not ported.
 * **Performance-only**: most of the hand-written SIMD kernels (`internal/vectorization`) are
-  absent — the port uses the generic direct-writer/direct-reader paths instead. The two that
-  mattered for the benchmark corpus are implemented with compiler vector extensions
-  (`splitInts` for 1- and 2-bit blocks, `findNextGEQ` over a decoded block). `-march=native`
-  code generation is used, but there is no runtime feature dispatch and no PGO.
+  absent — the port uses the generic direct-writer/direct-reader paths instead. The three that
+  mattered for this workload are implemented explicitly: `splitInts` for 1- and 2-bit blocks
+  and `findNextGEQ` over a decoded block (compiler vector extensions), and the 24-bit BKD
+  document id packing (an SSSE3 byte shuffle, with the portable loop as the fallback).
+  `-march=native` code generation is used, but there is no runtime feature dispatch and no PGO.
 * **Smaller deviations**: index sorting is applied by reordering documents before the segment
   is written rather than through sorting stored-fields/term-vectors consumers, which means a
   `StringIndexSorter` cannot take part in a merge (numeric sorters can); merge temporary files
@@ -264,6 +265,25 @@ A two-word phrase costs an order of magnitude more than either of its terms on t
 (compare 3.5 ms with 0.08 ms in `TOP_10`), and the port's advantage over Java is wider here
 than on single terms, because the work is dominated by the engine rather than by the driver's
 IPC round trip.
+
+### Indexing
+
+Same corpus, same schema, one thread per driver, the 1M documents of the table above (the
+287 MB index it reads):
+
+| | clucene | Apache Lucene 10.1 |
+| --- | ---: | ---: |
+| wall time | 64.8 s | 63.3 s |
+| throughput | 15 400 docs/s | 15 800 docs/s |
+
+Indexing was about twice as slow as Lucene before, and not because of the postings: the
+analysis chain looked an attribute up with `dynamic_cast` once per attribute per token, and
+`dynamic_cast` ends up comparing type names with `strcmp` — a quarter of the whole run. The
+lookup is a pointer compare now (every attribute type carries a tag), the buffered index output
+encodes a value into a scratch buffer and hands the bytes over in one call instead of one CRC
+update per byte, and the lower case filter rewrites ASCII tokens in place. What is left in the
+profile is the work an index build is supposed to do: the term hash, the byte block pool and
+the tokenizer.
 
 ### Correctness
 

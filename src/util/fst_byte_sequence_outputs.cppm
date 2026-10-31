@@ -42,6 +42,10 @@ public:
 
     [[nodiscard]] FstOutput common(const FstOutput &output1, const FstOutput &output2) const override;
     [[nodiscard]] FstOutput subtract(const FstOutput &output, const FstOutput &inc) const override;
+
+    /// Shrinks the slice in place: the bytes after the removed prefix are already
+    /// in the same container.
+    void subtract_assign(FstOutput &output, const FstOutput &inc) const override;
     [[nodiscard]] FstOutput add(const FstOutput &prefix, const FstOutput &output) const override;
 
     [[nodiscard]] VoidResult write(const FstOutput &output, DataOutput &out) const override;

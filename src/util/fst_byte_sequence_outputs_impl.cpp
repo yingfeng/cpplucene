@@ -87,6 +87,28 @@ FstOutput FstByteSequenceOutputs::subtract(const FstOutput &output, const FstOut
     return FstOutput{copy_of(value.subspan(increment.size()))};
 }
 
+void FstByteSequenceOutputs::subtract_assign(FstOutput &output, const FstOutput &inc) const {
+    const auto increment = as_bytes_ref(inc).as_slice();
+    if (increment.empty()) {
+        // No prefix removed.
+        return;
+    }
+    BytesRef *const value = output.as_ptr<BytesRef>();
+    if (value == nullptr) {
+        // Already NO_OUTPUT.
+        return;
+    }
+    const auto bytes = value->as_slice();
+    debug_check(starts_with(bytes, increment), "the subtracted output must be a prefix of the output");
+    if (increment.size() == bytes.size()) {
+        output = get_no_output();
+        return;
+    }
+    debug_check(increment.size() < bytes.size(), "the increment must be shorter than the output");
+    value->set_offset(value->offset() + increment.size());
+    value->set_length(value->length() - increment.size());
+}
+
 FstOutput FstByteSequenceOutputs::add(const FstOutput &prefix, const FstOutput &output) const {
     const auto first = as_bytes_ref(prefix).as_slice();
     const auto second = as_bytes_ref(output).as_slice();

@@ -165,9 +165,14 @@ VoidResult Lucene90CompressingStoredFieldsWriter::flush(bool force) {
         return written;
     }
 
-    // The lengths are stored cumulatively; the header wants the deltas.
-    for (size_t i = num_buffered_docs_; i > 1; --i) {
-        end_offsets_[i - 1] -= end_offsets_[i - 2];
+    // The lengths are stored cumulatively; the header wants the deltas.  Walking
+    // with two cursors over the bounded prefix keeps the indexed access (and its
+    // bounds check) out of the loop.
+    if (num_buffered_docs_ > 1) {
+        int32_t *const offsets = end_offsets_.data();
+        for (size_t i = num_buffered_docs_ - 1; i >= 1; --i) {
+            offsets[i] -= offsets[i - 1];
+        }
     }
 
     const bool sliced = buffered_docs_.size() >= 2 * static_cast<size_t>(chunk_size_);

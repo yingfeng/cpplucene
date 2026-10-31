@@ -120,7 +120,8 @@ void FstBuilder::compute_outputs(Node &node, bool is_root) {
     // Each arc carries only the part of its child's output that is not already
     // accumulated on the way to this node.
     for (auto &arc : node.arcs) {
-        arc.output = outputs_->subtract(arc.child->output, node.output);
+        arc.output = arc.child->output;
+        outputs_->subtract_assign(arc.output, node.output);
     }
 }
 

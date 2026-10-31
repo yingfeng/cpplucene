@@ -45,10 +45,6 @@ void set_bit(BitBuffer &buffer, int32_t bit) {
     buffer[static_cast<size_t>(bit) >> 6] |= uint64_t{1} << (static_cast<uint64_t>(bit) & 63);
 }
 
-[[nodiscard]] bool get_bit(const BitBuffer &buffer, int32_t bit) {
-    return ((buffer[static_cast<size_t>(bit) >> 6] >> (static_cast<uint64_t>(bit) & 63)) & 1) != 0;
-}
-
 [[nodiscard]] bool valid_dense_rank_power(int8_t dense_rank_power) {
     return (dense_rank_power >= 7 && dense_rank_power <= 15) || dense_rank_power == -1;
 }
@@ -102,13 +98,17 @@ void set_bit(BitBuffer &buffer, int32_t bit) {
         return {};
     }
 
-    // SPARSE: the low 16 bits of every doc id in the block.
-    for (int32_t bit = 0; bit < DISI_BLOCK_SIZE; ++bit) {
-        if (!get_bit(bits, bit)) {
-            continue;
-        }
-        if (auto written = out.write_short(static_cast<int16_t>(bit)); !written.has_value()) {
-            return written;
+    // SPARSE: the low 16 bits of every doc id in the block.  Walk the set bits
+    // word by word — a scan of all 65536 positions costs 1024 words per block
+    // even when the block holds a few hundred documents.
+    for (size_t word = 0; word < DENSE_BLOCK_LONGS; ++word) {
+        uint64_t set_bits = bits[word];
+        while (set_bits != 0) {
+            const size_t bit = (word << 6) + static_cast<size_t>(std::countr_zero(set_bits));
+            if (auto written = out.write_short(static_cast<int16_t>(bit)); !written.has_value()) {
+                return written;
+            }
+            set_bits &= set_bits - 1;
         }
     }
     return {};

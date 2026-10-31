@@ -175,9 +175,13 @@ int32_t StringHelper::murmurhash3_x86_32(std::span<const uint8_t> data, size_t o
     uint32_t h1 = static_cast<uint32_t>(seed);
     const size_t rounded_end = offset + (len & 0xfffffffcull);
 
-    size_t i = offset;
-    while (i < rounded_end) {
-        uint32_t k1 = static_cast<uint32_t>(BitUtil::get_i32_le(data, i));
+    // Walk the validated prefix as fixed four-byte blocks: the loop bound is a
+    // counter instead of a comparison against the end offset, so the address is
+    // a simple increment and the caller's bounds check is not repeated per word.
+    const uint8_t *cursor = data.data() + offset;
+    for (size_t blocks = len >> 2; blocks > 0; --blocks, cursor += 4) {
+        uint32_t k1 =
+            static_cast<uint32_t>(BitUtil::get_i32_le(std::span<const uint8_t>(cursor, 4), 0));
         k1 *= c1;
         k1 = std::rotl(k1, 15);
         k1 *= c2;
@@ -185,8 +189,6 @@ int32_t StringHelper::murmurhash3_x86_32(std::span<const uint8_t> data, size_t o
         h1 ^= k1;
         h1 = std::rotl(h1, 13);
         h1 = h1 * 5u + 0xe6546b64u;
-
-        i += 4;
     }
 
     // Tail.
