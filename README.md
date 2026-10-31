@@ -189,67 +189,81 @@ Known gaps, all outside the supported scope or performance-only:
 
 The harness is [search-benchmark-game](benchmark/sbg): every driver speaks the same line
 protocol (`<driver> <index|serve|verify> <index-dir>`, one `COMMAND<TAB>QUERY` per request), so
-the port, Apache Lucene and any other implementation can be compared on the *same* corpus,
-index and query stream.
+the port and Apache Lucene are compared on the *same* corpus, index and query stream.
 
 **Machine** AMD Ryzen 7 5800H (8 cores / 16 threads), Linux, single process per driver.
 **Build** clang 20.1.8, `-O3 -march=native`, release with ThinLTO.
-**Compared with** Apache Lucene 10.1.0 on OpenJDK 21 (`benchmark/sbg/java_sbg.java`). Same schema, analyzer (standard, empty stop set) and
-similarity (BM25) on all three sides.
+**Compared with** Apache Lucene 10.1.0 on OpenJDK 21 (`benchmark/sbg/java_sbg.java`). Same schema,
+analyzer (standard, empty stop set) and similarity (BM25) on both sides.
 **Queries** the pinned 223-query set of the game — 123 single terms, 60 `+a +b`
 intersections and 40 quoted phrases — in five modes: `COUNT`, `TOP_10`, `TOP_100`,
 `TOP_1000`, `TOP_100_COUNT`. `run_bench.py bench` reports every mode twice: once over the
 whole set, once split by query form, because a phrase costs an order of magnitude more than
-a term and averaging the two hides which engine decodes positions faster.
+a term and averaging the two hides where the time goes.
 
 ### 33.3M documents (8.0 GB index, single segment)
 
-Lucene and the port read the **same physical index** here, so the numbers compare engines, not
-index layouts. Three rounds, 669 samples per engine per mode after a 30 s warm-up. Times in
+Both engines read the **same physical index** here, so the numbers compare engines, not index
+layouts. Three rounds, 669 samples per engine per mode after a 30 s warm-up. Times in
 milliseconds; `mean` is dominated by the expensive queries, `p50` by the cheap ones.
 
 | mode | Java p50 | Java p90 | Java mean | clucene p50 | clucene p90 | clucene mean | speed-up (mean) |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `COUNT` | 0.092 | 5.208 | 8.874 | 0.061 | 3.986 | 7.346 | **1.21x** |
-| `TOP_10` | 0.160 | 4.833 | 2.325 | 0.120 | 3.979 | 1.859 | **1.25x** |
-| `TOP_100` | 0.160 | 5.487 | 3.091 | 0.121 | 4.195 | 2.413 | **1.28x** |
-| `TOP_1000` | 0.304 | 6.199 | 4.363 | 0.237 | 4.494 | 3.353 | **1.30x** |
-| `TOP_100_COUNT` | 0.154 | 7.696 | 10.747 | 0.110 | 6.146 | 9.141 | **1.18x** |
+| `COUNT` | 0.090 | 5.347 | 8.850 | 0.062 | 3.748 | 7.091 | **1.25x** |
+| `TOP_10` | 0.157 | 4.696 | 2.333 | 0.113 | 3.476 | 1.697 | **1.38x** |
+| `TOP_100` | 0.163 | 5.641 | 3.089 | 0.117 | 3.767 | 2.217 | **1.39x** |
+| `TOP_1000` | 0.303 | 6.084 | 4.345 | 0.234 | 4.340 | 3.127 | **1.39x** |
+| `TOP_100_COUNT` | 0.154 | 6.833 | 10.626 | 0.107 | 5.216 | 8.860 | **1.20x** |
 
-The port is 18–30% faster than Java on the mean and 20–25% on `p90`. Small-query `p50` is not a
+The port is 20–39% faster than Java on the mean and 31–50% on `p90`. Small-query `p50` is not a
 useful signal at this scale: the driver's IPC round trip alone costs tens of microseconds.
+
+**Which queries cost what.** The same samples, split by query form, `p50` in microseconds:
+
+| band | queries | `COUNT` clucene / Java | `TOP_10` clucene / Java | `TOP_100` clucene / Java |
+| --- | ---: | ---: | ---: | ---: |
+| single term | 123 | 38 / 51 | 76 / 95 | 94 / 119 |
+| `+a +b` intersection | 60 | 234 / 441 | 263 / 419 | 235 / 376 |
+| quoted phrase | 40 | 4 324 / 5 892 | 3 481 / 4 821 | 4 345 / 6 044 |
+
+The advantage is largest where the port's conjunction and competitive skipping pay off:
+intersections are 1.6–1.9x faster than Java, single terms 1.3x (they are dominated by the IPC
+round trip), phrases 1.4x.
 
 ### 1M documents (287 MB index, single segment)
 
-Three engines, each on its own index (the indexes are interchangeable — see
+Each engine on its own index (the indexes are interchangeable — see
 [Correctness](#correctness)). Five rounds × two batches, 2230 samples per engine per mode;
 `mean`, milliseconds.
 
 | mode | clucene | Apache Lucene 10.1 | vs Java |
 | --- | ---: | ---: | ---: |
-| `COUNT` | 0.395 | 0.469 | **1.19x** |
-| `TOP_10` | 0.179 | 0.213 | **1.19x** |
-| `TOP_100` | 0.223 | 0.270 | **1.21x** |
-| `TOP_1000` | 0.335 | 0.414 | **1.24x** |
-| `TOP_100_COUNT` | 0.490 | 0.558 | **1.14x** |
-
-
+| `COUNT` | 0.380 | 0.448 | **1.18x** |
+| `TOP_10` | 0.163 | 0.200 | **1.23x** |
+| `TOP_100` | 0.206 | 0.260 | **1.27x** |
+| `TOP_1000` | 0.317 | 0.401 | **1.27x** |
+| `TOP_100_COUNT` | 0.469 | 0.532 | **1.13x** |
 
 ### Phrase queries
 
-Phrases are the one band where the port does not lead, so the harness now measures them on
-their own: `benchmark/sbg/results/queries-phrase.jsonl` is exactly the 40 quoted queries of the
-pinned set (`make_queries.py subset --band phrase`), and the same protocol applies. 1M
-documents, eight rounds × two batches, 640 samples per engine per mode, `mean` in milliseconds:
+A phrase is the only query form whose cost is dominated by positions decoding plus a
+per-candidate verification, so the harness measures it on its own as well:
+`benchmark/sbg/results/queries-phrase.jsonl` is exactly the 40 quoted queries of the pinned set
+(`make_queries.py subset --band phrase`). 33.3M corpus, the same physical index, five rounds,
+200 samples per engine per mode, `mean` in milliseconds:
 
 | mode | clucene | Apache Lucene 10.1 | vs Java |
 | --- | ---: | ---: | ---: |
-| `COUNT` | 1.978 | 2.371 | **1.20x** |
-| `TOP_10` | 0.727 | 0.871 | **1.20x** |
-| `TOP_100` | 0.941 | 1.153 | **1.23x** |
-| `TOP_1000` | 1.422 | 1.778 | **1.25x** |
-| `TOP_100_COUNT` | 2.418 | 2.834 | **1.17x** |
+| `COUNT` | 38.321 | 48.177 | **1.26x** |
+| `TOP_10` | 8.309 | 12.038 | **1.45x** |
+| `TOP_100` | 11.170 | 16.410 | **1.47x** |
+| `TOP_1000` | 15.163 | 22.493 | **1.48x** |
+| `TOP_100_COUNT` | 47.618 | 57.018 | **1.20x** |
 
+A two-word phrase costs an order of magnitude more than either of its terms on their own
+(compare 3.5 ms with 0.08 ms in `TOP_10`), and the port's advantage over Java is wider here
+than on single terms, because the work is dominated by the engine rather than by the driver's
+IPC round trip.
 
 ### Correctness
 
@@ -259,12 +273,16 @@ ordered stored ids, internal doc ids, **raw f32 score bits**, hit count and its 
 * 1M corpus, 223 queries × 3 modes: the 4 `(driver, index)` pairs of clucene and Lucene agree on
   **all 669 responses, byte for byte** — each engine produces identical results from either
   engine's index, i.e. the index format is interchangeable in both directions.
-* 33.3M corpus: the port and Lucene agree on all responses apart from one hit whose BM25 score
-  differs in the last float bit (`'begun'`, `TOP_10`).
-* Phrase subset, 1M corpus, 40 queries × 3 modes: all 9 `(driver, index)` pairs of the three
-  engines agree on **all 120 responses, byte for byte** — phrase matching is where the
-  implementations could diverge most easily (positions, offsets, phrase frequency), so it is
-  verified separately.
+* 33.3M corpus: 20 of the 669 responses differ in the last bits of one BM25 score; the hit
+  ids, their order and the hit counts are identical, and `--ignore-score-bits` makes all 669
+  responses compare equal.
+* Phrase subset, 1M corpus, 40 queries × 3 modes: all 4 `(driver, index)` pairs agree on
+  **all 120 responses, byte for byte** — phrase matching is where the implementations could
+  diverge most easily (positions, offsets, phrase frequency), so it is verified separately.
+
+`benchmark/sbg/compare_index.py <index-a> <index-b>` checks the other direction: it hashes every
+codec file of two index directories and reports whether the two builds are byte-identical,
+skipping only `segments_N` and `.si`, which carry per-run ids and the commit generation.
 
 `benchmark/sbg/compare_index.py <index-a> <index-b>` checks the other direction: it hashes every
 codec file of two index directories and reports whether the two builds are byte-identical,

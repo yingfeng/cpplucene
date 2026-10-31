@@ -18,7 +18,10 @@ indexes proves two things at once:
   * each engine produces the same results from either engine's index,
     i.e. the indexes are interchangeable.
 
-`bench` then times one index per driver with the same request stream.
+`bench` then times one index per driver with the same request stream, and splits
+the timings by query form (`term`, `+a +b` intersection, quoted `phrase`): a
+phrase is the only form whose cost is dominated by positions decoding, so it is
+reported apart instead of being averaged into the single-term numbers.
 
 Examples
 --------
@@ -43,10 +46,22 @@ import random
 import shlex
 import statistics
 import subprocess
-import sys
 import time
 
 MODES = ["COUNT", "TOP_10", "TOP_100", "TOP_1000", "TOP_100_COUNT"]
+
+#: Query forms, in reporting order.  The pinned set mixes all three, and they
+#: cost very different amounts of work, so `bench` reports them separately.
+BANDS = ["term", "intersection", "phrase"]
+
+
+def query_band(query: str) -> str:
+    """Classifies a request by the form of its query."""
+    if query.startswith('"'):
+        return "phrase"
+    if query.startswith("+"):
+        return "intersection"
+    return "term"
 
 
 def parse_pairs(values: list[str], what: str) -> list[tuple[str, str]]:
@@ -205,6 +220,16 @@ def run_bench(args) -> int:
     timings: dict[str, dict[str, list[float]]] = {
         name: {mode: [] for mode in modes} for name, _ in drivers
     }
+    # `band_timings[band][mode][engine]`: the same measurements, grouped by the
+    # form of the query, so phrases are not averaged in with single terms.
+    band_queries: dict[str, list[str]] = {band: [] for band in BANDS}
+    for query in queries:
+        band_queries[query_band(query)].append(query)
+    band_timings: dict[str, dict[str, dict[str, list[float]]]] = {
+        band: {mode: {name: [] for name, _ in drivers} for mode in modes}
+        for band in BANDS
+        if band_queries[band]
+    }
     samples: list[tuple[int, str, str, str, float]] = []
 
     for batch in range(args.batches):
@@ -240,8 +265,10 @@ def run_bench(args) -> int:
                         for name, session in rotated:
                             _, elapsed = session.ask(mode, query)
                             measurements.append((name, elapsed))
+                        band = query_band(query)
                         for name, elapsed in measurements:
                             timings[name][mode].append(elapsed)
+                            band_timings[band][mode][name].append(elapsed)
                             samples.append((batch, mode, query, name, elapsed))
                 print(f"batch {batch + 1}: round {round_index + 1}/{rounds}", flush=True)
         finally:
@@ -262,14 +289,14 @@ def run_bench(args) -> int:
     summary: dict[tuple[str, str], float] = {}
     for mode in modes:
         for name, _ in drivers:
-            samples = sorted(timings[name][mode])
-            if not samples:
+            values = sorted(timings[name][mode])
+            if not values:
                 continue
-            p50 = statistics.median(samples)
-            p90 = samples[min(len(samples) - 1, int(len(samples) * 0.9))]
-            mean = statistics.fmean(samples)
+            p50 = statistics.median(values)
+            p90 = values[min(len(values) - 1, int(len(values) * 0.9))]
+            mean = statistics.fmean(values)
             summary[(name, mode)] = p50
-            print(f"{mode:<15} {name:<12} {len(samples):>9} {p50 * 1e3:9.3f} {p90 * 1e3:9.3f} {mean * 1e3:9.3f}")
+            print(f"{mode:<15} {name:<12} {len(values):>9} {p50 * 1e3:9.3f} {p90 * 1e3:9.3f} {mean * 1e3:9.3f}")
 
     names = [name for name, _ in drivers]
     if len(names) == 2:
@@ -279,6 +306,34 @@ def run_bench(args) -> int:
             if (first, mode) in summary and (second, mode) in summary:
                 ratio = summary[(second, mode)] / summary[(first, mode)]
                 print(f"  {mode:<15} {ratio:6.3f}x")
+
+    # The pinned set is ~123 terms, 60 intersections and 40 phrases.  A phrase
+    # costs an order of magnitude more than a term, so a single averaged row
+    # hides which of the two engines decodes positions faster.
+    present_bands = [band for band in BANDS if band_queries[band]]
+    if len(present_bands) > 1:
+        print("\np50 ms by query form")
+        header = f"{'band':<14}{'n':>4}  {'mode':<15}"
+        for name in names:
+            header += f"{name + ' p50':>16}"
+        if len(names) > 1:
+            header += "   ratio to " + names[0]
+        print(header)
+        for band in present_bands:
+            for mode in modes:
+                line = f"{band:<14}{len(band_queries[band]):>4}  {mode:<15}"
+                p50s: dict[str, float] = {}
+                for name in names:
+                    values = sorted(band_timings[band][mode][name])
+                    p50s[name] = statistics.median(values) if values else 0.0
+                    line += f"{p50s[name] * 1e3:16.3f}" if values else f"{'-':>16}"
+                if len(names) > 1 and p50s[names[0]] > 0:
+                    line += "   " + " ".join(
+                        f"{name}={p50s[name] / p50s[names[0]]:.2f}"
+                        for name in names[1:]
+                        if p50s[name] > 0
+                    )
+                print(line)
     return 0
 
 

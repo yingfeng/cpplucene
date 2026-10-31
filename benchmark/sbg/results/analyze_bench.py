@@ -55,6 +55,9 @@ def vals_for(mode, engine, band_name):
 
 
 def pct(vals, p):
+    if not vals:
+        # A band with no query in this run (the 1M set has no >=100k-doc term).
+        return 0.0
     s = sorted(vals)
     return s[min(len(s) - 1, int(len(s) * p))]
 

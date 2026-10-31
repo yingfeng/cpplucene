@@ -18,10 +18,17 @@ Two stages:
     ``COUNT``, then keeps a spread of rare / mid / frequent terms so that the
     benchmark exercises both the exhaustive and the competitive-skipping paths.
 
+``subset``
+    Extracts one query form from a pinned set, so a driver comparison can be
+    run on phrases alone (or on intersections alone) with the same protocol.
+
     python3 benchmark/sbg/make_queries.py candidates --corpus corpus-1m.jsonl \
         --out /tmp/candidates.jsonl
     python3 benchmark/sbg/make_queries.py final --candidates /tmp/candidates.jsonl \
         --driver ./clucene_sbg --index /data/index --out queries.jsonl
+    python3 benchmark/sbg/make_queries.py subset \
+        --queries benchmark/sbg/results/queries-enwiki.jsonl --band phrase \
+        --out benchmark/sbg/results/queries-phrase.jsonl
 """
 
 from __future__ import annotations
@@ -35,6 +42,19 @@ import subprocess
 import sys
 
 WORD = re.compile("[a-z]{3,}")
+
+#: The query forms every driver's parser understands: a single term, a `+a +b`
+#: intersection and a quoted phrase.
+BANDS = ("term", "intersection", "phrase")
+
+
+def query_band(query: str) -> str:
+    """Classifies a pinned query by the form it uses."""
+    if query.startswith('"'):
+        return "phrase"
+    if query.startswith("+"):
+        return "intersection"
+    return "term"
 
 
 def read_docs(path: str, limit: int) -> list[list[str]]:
@@ -182,6 +202,27 @@ def final(args: argparse.Namespace) -> int:
     return 0
 
 
+def subset(args: argparse.Namespace) -> int:
+    """Keeps one query form so that form can be timed on its own."""
+    kept: list[str] = []
+    with open(args.queries, "r", encoding="utf-8") as source:
+        for line in source:
+            line = line.strip()
+            if not line:
+                continue
+            query = json.loads(line)["query"]
+            if query_band(query) == args.band:
+                kept.append(query)
+    if not kept:
+        print(f"no {args.band} query in {args.queries}", file=sys.stderr)
+        return 1
+    with open(args.out, "w", encoding="utf-8") as sink:
+        for query in kept:
+            sink.write(json.dumps({"query": query}) + "\n")
+    print(f"{len(kept)} {args.band} queries -> {args.out}", file=sys.stderr)
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -209,6 +250,12 @@ def main() -> int:
     fin.add_argument("--n-phrases", type=int, default=40)
     fin.add_argument("--out", required=True)
     fin.set_defaults(func=final)
+
+    sub = subparsers.add_parser("subset", help="keep one query form of a pinned set")
+    sub.add_argument("--queries", required=True)
+    sub.add_argument("--band", choices=BANDS, default="phrase")
+    sub.add_argument("--out", required=True)
+    sub.set_defaults(func=subset)
 
     args = parser.parse_args()
     return args.func(args)
