@@ -42,6 +42,30 @@ Result<bool> LowerCaseFilter::increment_token() {
     }
     auto *term = attributes().get_attribute<CharTermAttribute>();
     debug_check(term != nullptr);
+
+    // ASCII fast path: lower case in place.  Decoding to UTF-32 and encoding back
+    // is only needed for code points above 0x7F, and English text (the common
+    // case) never takes it.
+    {
+        const std::string_view text = term->text();
+        const auto *const bytes = reinterpret_cast<const unsigned char *>(text.data());
+        bool ascii = true;
+        for (size_t i = 0; i < text.size(); ++i) {
+            if (bytes[i] >= 0x80) {
+                ascii = false;
+                break;
+            }
+        }
+        if (ascii) {
+            char *const writable = term->mutable_buffer();
+            for (size_t i = 0; i < text.size(); ++i) {
+                const unsigned char ch = bytes[i];
+                writable[i] = static_cast<char>(ch >= 'A' && ch <= 'Z' ? ch | 0x20 : ch);
+            }
+            return true;
+        }
+    }
+
     const std::u32string code_points = term->to_u32string();
     std::string lowered;
     lowered.reserve(term->length());

@@ -40,6 +40,10 @@ namespace lucene {
 /// **Deviation:** the reference implementation splits the trait from its
 /// implementation; the port has one concrete attribute class.
 export class MaxNonCompetitiveBoostAttribute final : public Attribute {
+    [[nodiscard]] const void *type_tag() const noexcept override {
+        return attribute_type_tag<MaxNonCompetitiveBoostAttribute>();
+    }
+
 public:
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override {
         return std::make_unique<MaxNonCompetitiveBoostAttribute>(*this);

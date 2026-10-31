@@ -31,9 +31,25 @@ namespace lucene {
 /// Java design is used instead (one polymorphic implementation per attribute,
 /// looked up by type in an [`AttributeSource`]), which maps 1:1 onto the same
 /// observable behaviour without the borrow gymnastics.
+/// The address of a per-type tag, used by [`AttributeSource`] to look an
+/// attribute up by its concrete type.
+///
+/// The lookup runs once per attribute per token, and a `dynamic_cast` per
+/// candidate dominated an indexing run (it compares type names through
+/// `strcmp`).  Comparing these addresses is a pointer compare, and each type has
+/// exactly one tag for the whole program.
+template <class T>
+[[nodiscard]] const void *attribute_type_tag() noexcept {
+    static const char tag = 0;
+    return &tag;
+}
+
 export class Attribute {
 public:
     virtual ~Attribute() = default;
+
+    /// The address of this attribute's [`attribute_type_tag`].
+    [[nodiscard]] virtual const void *type_tag() const noexcept = 0;
 
     /// A deep copy with the same state.
     [[nodiscard]] virtual std::unique_ptr<Attribute> clone() const = 0;
@@ -56,6 +72,9 @@ public:
 /// The token text.  Port of `CharTermAttribute`.
 export class CharTermAttribute : public Attribute {
 public:
+    [[nodiscard]] const void *type_tag() const noexcept override {
+        return attribute_type_tag<CharTermAttribute>();
+    }
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
     void copy_from(const Attribute &other) override;
     void clear() override;
@@ -64,6 +83,11 @@ public:
     [[nodiscard]] std::string_view text() const noexcept { return std::string_view(buffer_.data(), length_); }
     [[nodiscard]] std::string to_string() const { return std::string(text()); }
     [[nodiscard]] const char *buffer() const noexcept { return buffer_.data(); }
+    /// The text buffer, writable up to [`length`].
+    ///
+    /// Filters that rewrite a token in place (`LowerCaseFilter` for ASCII) use
+    /// this to avoid building a second string per token.
+    [[nodiscard]] char *mutable_buffer() noexcept { return buffer_.data(); }
     [[nodiscard]] size_t length() const noexcept { return length_; }
     [[nodiscard]] bool empty() const noexcept { return length_ == 0; }
     [[nodiscard]] char32_t char_at(size_t index) const;
@@ -88,6 +112,9 @@ private:
 /// Byte-level term, used by `TermToBytesRefAttribute` implementations.
 export class BytesTermAttribute : public Attribute {
 public:
+    [[nodiscard]] const void *type_tag() const noexcept override {
+        return attribute_type_tag<BytesTermAttribute>();
+    }
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
     void copy_from(const Attribute &other) override;
     void clear() override;
@@ -103,6 +130,9 @@ private:
 /// `[start_offset, end_offset)` of the token in the original text.
 export class OffsetAttribute : public Attribute {
 public:
+    [[nodiscard]] const void *type_tag() const noexcept override {
+        return attribute_type_tag<OffsetAttribute>();
+    }
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
     void copy_from(const Attribute &other) override;
     void clear() override;
@@ -123,6 +153,9 @@ private:
 /// Difference between the token's position and the previous token's.
 export class PositionIncrementAttribute : public Attribute {
 public:
+    [[nodiscard]] const void *type_tag() const noexcept override {
+        return attribute_type_tag<PositionIncrementAttribute>();
+    }
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
     void copy_from(const Attribute &other) override;
     void clear() override;
@@ -138,6 +171,9 @@ private:
 /// Number of positions spanned by the token (default 1).
 export class PositionLengthAttribute : public Attribute {
 public:
+    [[nodiscard]] const void *type_tag() const noexcept override {
+        return attribute_type_tag<PositionLengthAttribute>();
+    }
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
     void copy_from(const Attribute &other) override;
     void clear() override;
@@ -153,6 +189,9 @@ private:
 /// Lexical type of the token, e.g. `<ALPHANUM>`.
 export class TypeAttribute : public Attribute {
 public:
+    [[nodiscard]] const void *type_tag() const noexcept override {
+        return attribute_type_tag<TypeAttribute>();
+    }
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
     void copy_from(const Attribute &other) override;
     void clear() override;
@@ -168,6 +207,9 @@ private:
 /// Marks a token as a keyword (searchable verbatim, not stemmed).
 export class KeywordAttribute : public Attribute {
 public:
+    [[nodiscard]] const void *type_tag() const noexcept override {
+        return attribute_type_tag<KeywordAttribute>();
+    }
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
     void copy_from(const Attribute &other) override;
     void clear() override;
@@ -183,6 +225,9 @@ private:
 /// Optional per-token payload.
 export class PayloadAttribute : public Attribute {
 public:
+    [[nodiscard]] const void *type_tag() const noexcept override {
+        return attribute_type_tag<PayloadAttribute>();
+    }
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
     void copy_from(const Attribute &other) override;
     void clear() override;
@@ -198,6 +243,9 @@ private:
 /// Scaled term frequency (used by `DelimitedTermFrequencyTokenFilter`).
 export class TermFrequencyAttribute : public Attribute {
 public:
+    [[nodiscard]] const void *type_tag() const noexcept override {
+        return attribute_type_tag<TermFrequencyAttribute>();
+    }
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
     void copy_from(const Attribute &other) override;
     void clear() override;
@@ -213,6 +261,9 @@ private:
 /// Arbitrary per-token flags (`FlagsAttribute`).
 export class FlagsAttribute : public Attribute {
 public:
+    [[nodiscard]] const void *type_tag() const noexcept override {
+        return attribute_type_tag<FlagsAttribute>();
+    }
     [[nodiscard]] std::unique_ptr<Attribute> clone() const override;
     void copy_from(const Attribute &other) override;
     void clear() override;

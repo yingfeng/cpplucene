@@ -43,9 +43,10 @@ public:
     template <class T>
     T *add_attribute() {
         static_assert(std::is_base_of_v<Attribute, T>, "T must derive from Attribute");
+        const void *const tag = attribute_type_tag<T>();
         for (const auto &attribute : attributes_) {
-            if (auto *typed = dynamic_cast<T *>(attribute.get()); typed != nullptr) {
-                return typed;
+            if (attribute->type_tag() == tag) {
+                return static_cast<T *>(attribute.get());
             }
         }
         attributes_.push_back(std::make_unique<T>());
@@ -55,9 +56,10 @@ public:
     /// Returns the attribute of type `T`, or `nullptr` when absent.
     template <class T>
     [[nodiscard]] T *get_attribute() {
+        const void *const tag = attribute_type_tag<T>();
         for (const auto &attribute : attributes_) {
-            if (auto *typed = dynamic_cast<T *>(attribute.get()); typed != nullptr) {
-                return typed;
+            if (attribute->type_tag() == tag) {
+                return static_cast<T *>(attribute.get());
             }
         }
         return nullptr;
@@ -66,9 +68,10 @@ public:
     /// Const overload of [`get_attribute`].
     template <class T>
     [[nodiscard]] const T *get_attribute() const {
+        const void *const tag = attribute_type_tag<T>();
         for (const auto &attribute : attributes_) {
-            if (const auto *typed = dynamic_cast<const T *>(attribute.get()); typed != nullptr) {
-                return typed;
+            if (attribute->type_tag() == tag) {
+                return static_cast<const T *>(attribute.get());
             }
         }
         return nullptr;
